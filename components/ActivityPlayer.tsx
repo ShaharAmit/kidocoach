@@ -26,8 +26,18 @@ interface ActivityPlayerProps {
   childName: string;
   avatarId: string;
   segment: DaySegment;
+  /**
+   * 1-based progress position within the segment, derived from how many activities are actually
+   * done (this in-progress one included) rather than the card's position in the list. Keeps the
+   * dots and the "Step X of Y" counter consistent with `isFinalRemainingStep`.
+   */
   stepNumber: number;
   totalSteps: number;
+  /**
+   * Whether finishing this step completes every remaining activity in the segment. Derived from
+   * actual completion state, not list position, so an out-of-order step never claims to be last.
+   */
+  isFinalRemainingStep: boolean;
   showCaptions?: boolean;
   onComplete: () => void;
 }
@@ -233,6 +243,7 @@ export default function ActivityPlayer({
   segment,
   stepNumber,
   totalSteps,
+  isFinalRemainingStep,
   showCaptions = false,
   onComplete,
 }: ActivityPlayerProps) {
@@ -471,7 +482,7 @@ export default function ActivityPlayer({
           <Text style={styles.doneButtonText}>
             {activityIndex < normalizedSteps.length - 1
               ? '➡️ Next Activity'
-              : stepNumber === totalSteps
+              : isFinalRemainingStep
                 ? '🎉 All Done!'
                 : 'Complete Mission!'}
           </Text>

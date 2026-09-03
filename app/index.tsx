@@ -115,6 +115,13 @@ export default function HomeScreen() {
   const [activityListHeight, setActivityListHeight] = useState(0);
   const [activityContentHeight, setActivityContentHeight] = useState(0);
   const [activityListHasScrolled, setActivityListHasScrolled] = useState(false);
+  // Bumped on focus and on app foreground to force the activity card <Image>s to remount, which
+  // re-issues their source request. Mitigation for activity photos going blank after the app has
+  // been open for a long stretch. Deliberately tied to those two boundaries only: remounting on a
+  // timer while the list is interactive can cancel an in-flight tap on the surrounding
+  // TouchableOpacity. Note this cannot recover a Metro-served asset in a dev build when the dev
+  // server is unreachable (laptop asleep, IP change) — that case needs a full reload.
+  const [activityImagesRevision, setActivityImagesRevision] = useState(0);
   const [trophyShownThisSession, setTrophyShownThisSession] = useState<Record<'morning' | 'evening', boolean>>({
     morning: false,
     evening: false,
@@ -149,6 +156,7 @@ export default function HomeScreen() {
     completedEveningStepIds,
     markStepDone,
     loading: completionLoading,
+    activeDate,
   } = useLocalDailyCompletion(
     userId,
     primaryRoutine?.id ?? '',
@@ -201,6 +209,7 @@ export default function HomeScreen() {
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         setSegment(getCurrentSegment());
+        setActivityImagesRevision((revision) => revision + 1);
         loadCaptionPreference().catch((err) => {
           console.warn('[Home] failed to refresh caption preference:', err);
         });
@@ -224,6 +233,7 @@ export default function HomeScreen() {
     useCallback(() => {
       let mounted = true;
       setActivityListHasScrolled(false);
+      setActivityImagesRevision((revision) => revision + 1);
 
       getChildProfile()
         .then((profile) => {
@@ -287,6 +297,21 @@ export default function HomeScreen() {
   }, [primaryRoutine, visibleStepIndexes]);
 
   const completedStepIds = segment === 'morning' ? completedMorningStepIds : completedEveningStepIds;
+
+  const currentStepId = useMemo(
+    () => primaryRoutine?.stepIds?.[currentStepIndex] ?? `step_${currentStepIndex}`,
+    [primaryRoutine, currentStepIndex]
+  );
+
+  // Positional "last in the list" is not the same as "last one left": opening the bottom activity
+  // first must not claim the whole segment is finished. Drives both the button label and the
+  // trophy, so the two can never disagree.
+  const isFinalRemainingStep = useMemo(
+    () =>
+      visibleStepIds.length > 0 &&
+      visibleStepIds.every((id) => id === currentStepId || completedStepIds.has(id)),
+    [visibleStepIds, currentStepId, completedStepIds]
+  );
 
   useEffect(() => {
     setActivityListHasScrolled(false);
@@ -370,6 +395,14 @@ export default function HomeScreen() {
     prepareAssets();
   }, [primaryRoutine]);
 
+  // `trophyShownThisSession` is a per-day guard, but this screen can stay mounted across midnight.
+  // Without clearing it on rollover the allScopedDone effect early-returns for the new day, which
+  // skips `awardRoutineStepStar` entirely — the trophy still shows (handleStepComplete forces it)
+  // so the missing star would go unnoticed.
+  useEffect(() => {
+    setTrophyShownThisSession({ morning: false, evening: false });
+  }, [activeDate]);
+
   const allScopedDone = useMemo(() => {
     if (visibleStepIds.length === 0) return false;
     return visibleStepIds.every((id) => completedStepIds.has(id));
@@ -413,30 +446,28 @@ export default function HomeScreen() {
 
   const handleStepComplete = useCallback(async () => {
     if (!primaryRoutine || visibleStepIndexes.length === 0) return;
-    const currentStepId = primaryRoutine.stepIds?.[currentStepIndex] ?? `step_${currentStepIndex}`;
 
+    const completesSegment = isFinalRemainingStep;
     const newlyCompleted = await markStepDone(segment, currentStepId, visibleStepIndexes.length);
 
     // Star awarding now happens in the allScopedDone effect,
     // so we don't award here anymore. Show the completion message immediately after the final
     // step is persisted; the effect still handles the idempotent star award.
-    if (newlyCompleted) {
-      const completesSegment =
-        visibleStepIds.length > 0 &&
-        visibleStepIds.every((stepId) => stepId === currentStepId || completedStepIds.has(stepId));
-      if (completesSegment) {
-        setTrophyVisible(true);
-      }
-      setViewMode('activities');
+    if (newlyCompleted && completesSegment) {
+      setTrophyVisible(true);
     }
+
+    // Always leave the player, including when this step was already completed earlier today.
+    // `markStepDone` reports `false` for that re-watch case, and gating the transition on it made
+    // the Done button silently do nothing whenever a finished activity was replayed.
+    setViewMode('activities');
   }, [
     primaryRoutine,
     visibleStepIndexes,
-    visibleStepIds,
-    completedStepIds,
+    isFinalRemainingStep,
+    currentStepId,
     markStepDone,
     segment,
-    currentStepIndex,
   ]);
 
 
@@ -473,7 +504,10 @@ export default function HomeScreen() {
   const completedCount = visibleStepIds.filter((id) => completedStepIds.has(id)).length;
 
   const currentActivityStep = primaryRoutine.activityStack[currentStepIndex] ?? [];
-  const scopedPosition = Math.max(0, visibleStepIndexes.indexOf(currentStepIndex));
+  // Progress reflects how many activities are actually finished, not where the opened card sits
+  // in the list, so the dots and counter can't fill up ahead of the real state when the child
+  // starts from the bottom of the list. Reaches `totalSteps` exactly when `isFinalRemainingStep`.
+  const scopedProgress = completedCount + (completedStepIds.has(currentStepId) ? 0 : 1);
 
   return (
     <View style={[styles.container, isEvening ? styles.containerEvening : styles.containerMorning]}>
@@ -534,7 +568,12 @@ export default function HomeScreen() {
                       }}
                     >
                       <View style={styles.activityImageWrap}>
-                        <Image source={activityImage} style={styles.activityImage} resizeMode="contain" />
+                        <Image
+                          key={`${stepId}-${activityImagesRevision}`}
+                          source={activityImage}
+                          style={styles.activityImage}
+                          resizeMode="contain"
+                        />
                       </View>
 
                       <View style={styles.activityTextWrap}>
@@ -588,8 +627,9 @@ export default function HomeScreen() {
             childName={primaryRoutine.childName || ''}
             avatarId={primaryRoutine.avatarId || 'becky'}
             segment={segment}
-            stepNumber={scopedPosition + 1}
+            stepNumber={scopedProgress}
             totalSteps={visibleStepIndexes.length}
+            isFinalRemainingStep={isFinalRemainingStep}
             showCaptions={showCaptions}
             onComplete={handleStepComplete}
           />
