@@ -23,13 +23,13 @@ import { ACTIVITIES, ACTIVITY_KEYS } from '../../constants/activities';
 import { db, ensureAuth } from '../../services/firebase';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { colors, fs, ms, s, vs } from '../../theme';
+import { retryLocalImage, useLocalImage } from '../../utils/localImages';
 import { getTodayISO } from '../../utils/date';
 import { isMorningTime } from '../../utils/timeOfDay';
 import PageBackground from '../../components/PageBackground';
 import { InPageHeader } from '../../components/ScreenHeader';
+import { MOON_IMAGE, SUN_IMAGE } from '../../constants/images';
 
-const SUN_IMAGE = require('../../assets/images/sun.png');
-const MOON_IMAGE = require('../../assets/images/moon.png');
 
 type DaySegment = 'morning' | 'evening';
 type TimePickerMode = 'add' | 'edit';
@@ -216,6 +216,8 @@ async function remapLocalDailyCompletionForUpdatedActivities(
 
 export default function CreateRoutineScreen() {
   const insets = useSafeAreaInsets();
+  const sunSource = useLocalImage(SUN_IMAGE);
+  const moonSource = useLocalImage(MOON_IMAGE);
   const [activeSegment, setActiveSegment] = useState<DaySegment>('morning');
   const [profile, setProfile] = useState<ChildProfile | null>(null);
   const [drafts, setDrafts] = useState<SegmentDrafts>({
@@ -535,9 +537,12 @@ export default function CreateRoutineScreen() {
               evening={isEvening}
               icon={
                 <Image
-                  source={activeSegment === 'morning' ? SUN_IMAGE : MOON_IMAGE}
+                  source={activeSegment === 'morning' ? sunSource : moonSource}
                   style={styles.headerSegmentIcon}
                   resizeMode="contain"
+                  onError={() =>
+                    retryLocalImage(activeSegment === 'morning' ? SUN_IMAGE : MOON_IMAGE)
+                  }
                 />
               }
               right={
@@ -582,7 +587,12 @@ export default function CreateRoutineScreen() {
                       disabled={activeSegment === 'morning'}
                       onPress={() => setActiveSegment('morning')}
                     >
-                      <Image source={SUN_IMAGE} style={styles.segmentIconLarge} resizeMode="contain" />
+                      <Image
+                        source={sunSource}
+                        style={styles.segmentIconLarge}
+                        resizeMode="contain"
+                        onError={() => retryLocalImage(SUN_IMAGE)}
+                      />
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -595,7 +605,12 @@ export default function CreateRoutineScreen() {
                       disabled={activeSegment === 'evening'}
                       onPress={() => setActiveSegment('evening')}
                     >
-                      <Image source={MOON_IMAGE} style={styles.segmentIconLarge} resizeMode="contain" />
+                      <Image
+                        source={moonSource}
+                        style={styles.segmentIconLarge}
+                        resizeMode="contain"
+                        onError={() => retryLocalImage(MOON_IMAGE)}
+                      />
                     </TouchableOpacity>
                   </View>
             </View>

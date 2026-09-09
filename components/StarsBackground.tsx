@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, ImageSourcePropType, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { colors, s, vs } from '../theme';
+import { retryLocalImage, useLocalImage } from '../utils/localImages';
+import { STAR_IMAGE as STAR } from '../constants/images';
 
-const STAR = require('../assets/images/star.png');
 
 interface StarConfig {
   top: number;
@@ -13,7 +14,15 @@ interface StarConfig {
   twinkleDuration: number;
 }
 
-function DriftingStar({ config, screenWidth }: { config: StarConfig; screenWidth: number }) {
+function DriftingStar({
+  config,
+  screenWidth,
+  source,
+}: {
+  config: StarConfig;
+  screenWidth: number;
+  source: ImageSourcePropType;
+}) {
   const translateX = useRef(new Animated.Value(-config.size)).current;
   const twinkle = useRef(new Animated.Value(config.opacity)).current;
 
@@ -69,9 +78,10 @@ function DriftingStar({ config, screenWidth }: { config: StarConfig; screenWidth
       ]}
     >
       <Image
-        source={STAR}
+        source={source}
         style={{ width: config.size, height: config.size }}
         resizeMode="contain"
+        onError={() => retryLocalImage(STAR)}
       />
     </Animated.View>
   );
@@ -79,6 +89,7 @@ function DriftingStar({ config, screenWidth }: { config: StarConfig; screenWidth
 
 export default function StarsBackground({ children }: { children?: React.ReactNode }) {
   const { width } = useWindowDimensions();
+  const starSource = useLocalImage(STAR);
 
   const stars = useMemo<StarConfig[]>(
     () => [
@@ -99,7 +110,7 @@ export default function StarsBackground({ children }: { children?: React.ReactNo
   return (
     <View style={styles.root} pointerEvents="none">
       {stars.map((config, index) => (
-        <DriftingStar key={index} config={config} screenWidth={width} />
+        <DriftingStar key={index} config={config} screenWidth={width} source={starSource} />
       ))}
       {children}
     </View>

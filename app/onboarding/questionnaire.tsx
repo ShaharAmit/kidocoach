@@ -36,8 +36,9 @@ import { preloadRoutineAssetsInBackground } from '../../services/assetCacheServi
 import { grantDebugHomeAccess } from '../../services/debugFlow';
 import { calculateAgeFromISO, formatBirthDate, getTodayISO, isoDateYearsAgo } from '../../utils/date';
 import { colors, fs, ms, s, vs } from '../../theme';
+import { retryLocalImage, useLocalImage } from '../../utils/localImages';
+import { GRASS_IMAGE as GRASS } from '../../constants/images';
 
-const GRASS = require('../../assets/images/grass.png');
 
 const DEFAULT_AVATAR_ID = 'becky';
 const DEFAULT_VOICE = 'woman' as const;
@@ -191,6 +192,7 @@ function toneFromMotivation(style: MotivationStyle | undefined): ToneOption {
 const QUESTION_STEP_COUNT = 6;
 
 export default function QuestionnaireScreen() {
+  const grassSource = useLocalImage(GRASS);
   const [stepIndex, setStepIndex] = useState(0);
   const [showFinal, setShowFinal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -436,7 +438,12 @@ export default function QuestionnaireScreen() {
                   )}
                 </ScrollView>
                 <View style={styles.grassScene} pointerEvents="none">
-                  <Image source={GRASS} style={styles.grass} resizeMode="stretch" />
+                  <Image
+            source={grassSource}
+            style={styles.grass}
+            resizeMode="stretch"
+            onError={() => retryLocalImage(GRASS)}
+          />
                 </View>
               </View>
 
@@ -628,6 +635,8 @@ function FinalCard({
   saving: boolean;
   onStart: () => void;
 }) {
+  const grassSource = useLocalImage(GRASS);
+
   return (
     <View style={styles.cardWrap}>
       <View style={styles.card}>
@@ -642,7 +651,12 @@ function FinalCard({
           <Text style={styles.finalCta}>Let&apos;s go!</Text>
         </View>
         <View style={styles.grassScene} pointerEvents="none">
-          <Image source={GRASS} style={styles.grass} resizeMode="stretch" />
+          <Image
+            source={grassSource}
+            style={styles.grass}
+            resizeMode="stretch"
+            onError={() => retryLocalImage(GRASS)}
+          />
         </View>
       </View>
 

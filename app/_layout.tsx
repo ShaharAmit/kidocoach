@@ -8,6 +8,10 @@ import { clearDebugHomeAccess, hasDebugHomeAccess } from '../services/debugFlow'
 import { getHomeViewMode, subscribeHomeViewMode } from '../services/homeViewState';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
 import { colors, fs, ms, s, vs } from '../theme';
+import { preloadLocalImages, retryLocalImage, useLocalImage } from '../utils/localImages';
+import { ALL_BUNDLED_IMAGES, MOON_IMAGE, SUN_IMAGE } from '../constants/images';
+
+
 
 function HeaderTitle({ segment }: { segment: DaySegment }) {
   return (
@@ -63,10 +67,29 @@ export default function RootLayout() {
   const [segment, setSegment] = useState<DaySegment>(getCurrentSegment);
   const [showDecorations, setShowDecorations] = useState(false);
   const [homeViewMode, setHomeViewModeLocal] = useState(getHomeViewMode);
+  const sunSource = useLocalImage(SUN_IMAGE);
+  const moonSource = useLocalImage(MOON_IMAGE);
   const tabBarHorizontalInset = Math.round(screenWidth * 0.05);
 
   useEffect(() => {
     return subscribeHomeViewMode(setHomeViewModeLocal);
+  }, []);
+
+  // Resolve every bundled image to a stable local file URI up front. Without this, dev-build
+  // artwork keeps pointing at packager URLs that stop resolving once the dev server goes away,
+  // which is what leaves activity icons and sky decorations blank after a long session.
+  useEffect(() => {
+    preloadLocalImages(ALL_BUNDLED_IMAGES).catch((err) => {
+      console.warn('[RootLayout] Image preload failed:', err);
+    });
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        preloadLocalImages(ALL_BUNDLED_IMAGES).catch(() => undefined);
+      }
+    });
+
+    return () => sub.remove();
   }, []);
 
   // Re-evaluate segment when app returns to foreground
@@ -162,15 +185,17 @@ export default function RootLayout() {
         <View style={{ position: 'absolute', right: s(16), top: vs(80), zIndex: 50, pointerEvents: 'none' }}>
           {segment === 'evening' ? (
             <Image
-              source={require('../assets/images/moon.png')}
+              source={moonSource}
               style={{ width: s(90), height: s(90) }}
               resizeMode="contain"
+              onError={() => retryLocalImage(MOON_IMAGE)}
             />
           ) : (
             <Image
-              source={require('../assets/images/sun.png')}
+              source={sunSource}
               style={{ width: s(90), height: s(90) }}
               resizeMode="contain"
+              onError={() => retryLocalImage(SUN_IMAGE)}
             />
           )}
         </View>

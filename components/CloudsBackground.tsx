@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, ImageSourcePropType, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { colors, s, vs } from '../theme';
+import { retryLocalImage, useLocalImage } from '../utils/localImages';
+import { CLOUD_IMAGE as CLOUD } from '../constants/images';
 
-const CLOUD = require('../assets/images/cloud.png');
 
 interface CloudConfig {
   top: number;
@@ -12,7 +13,15 @@ interface CloudConfig {
   opacity: number;
 }
 
-function DriftingCloud({ config, screenWidth }: { config: CloudConfig; screenWidth: number }) {
+function DriftingCloud({
+  config,
+  screenWidth,
+  source,
+}: {
+  config: CloudConfig;
+  screenWidth: number;
+  source: ImageSourcePropType;
+}) {
   const translateX = useRef(new Animated.Value(-config.size)).current;
 
   useEffect(() => {
@@ -46,9 +55,10 @@ function DriftingCloud({ config, screenWidth }: { config: CloudConfig; screenWid
       ]}
     >
       <Image
-        source={CLOUD}
+        source={source}
         style={{ width: config.size, height: config.size * 0.45 }}
         resizeMode="contain"
+        onError={() => retryLocalImage(CLOUD)}
       />
     </Animated.View>
   );
@@ -56,6 +66,7 @@ function DriftingCloud({ config, screenWidth }: { config: CloudConfig; screenWid
 
 export default function CloudsBackground({ children }: { children?: React.ReactNode }) {
   const { width } = useWindowDimensions();
+  const cloudSource = useLocalImage(CLOUD);
 
   const clouds = useMemo<CloudConfig[]>(
     () => [
@@ -72,7 +83,7 @@ export default function CloudsBackground({ children }: { children?: React.ReactN
   return (
     <View style={styles.root} pointerEvents="none">
       {clouds.map((config, index) => (
-        <DriftingCloud key={index} config={config} screenWidth={width} />
+        <DriftingCloud key={index} config={config} screenWidth={width} source={cloudSource} />
       ))}
       {children}
     </View>

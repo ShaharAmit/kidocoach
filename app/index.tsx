@@ -18,6 +18,11 @@ import ActivityPlayer from '../components/ActivityPlayer';
 import StarsBackground from '../components/StarsBackground';
 import CloudsBackground from '../components/CloudsBackground';
 import { ACTIVITIES } from '../constants/activities';
+import {
+  ACTIVITY_FALLBACK_IMAGE,
+  ACTIVITY_IMAGES,
+  ALL_BUNDLED_IMAGES,
+} from '../constants/images';
 import { useLocalDailyCompletion } from '../hooks/useLocalDailyCompletion';
 import { useUserRoutines } from '../hooks/useRoutine';
 import { subscribeAssetCacheStatus } from '../services/assetCacheService';
@@ -31,31 +36,15 @@ import { ensureAudioForRoutine } from '../services/tts';
 import { Routine } from '../types';
 import { getCurrentSegment, isMorningTime } from '../utils/timeOfDay';
 import { getTodayISO } from '../utils/date';
+import {
+  localImageSource,
+  preloadLocalImages,
+  retryLocalImage,
+  useLocalImagesRevision,
+} from '../utils/localImages';
 import { colors, fs, ms, ROUNDED_FONT, s, vs } from '../theme';
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const ACTIVITY_IMAGES: Record<string, ReturnType<typeof require>> = {
-  brush_teeth: require('../assets/images/tooth_brush.png'),
-  get_dressed: require('../assets/images/get_dressed.png'),
-  eat_breakfast: require('../assets/images/eat_breakfast.png'),
-  pack_backpack: require('../assets/images/pack_backpack.png'),
-  wash_face: require('../assets/images/wash_face.png'),
-  comb_hair: require('../assets/images/comb_hair.png'),
-  put_shoes_on: require('../assets/images/put_shoes_on.png'),
-  drink_water: require('../assets/images/drink_water.png'),
-  tidy_room: require('../assets/images/tidy_room.png'),
-  read_book: require('../assets/images/read_book.png'),
-  put_on_pajamas: require('../assets/images/put_on_pajamas.png'),
-  bedtime_story: require('../assets/images/read_book.png'),
-  eat_dinner: require('../assets/images/eat_dinner.png'),
-  go_to_sleep: require('../assets/images/go_to_sleep.png'),
-  homework: require('../assets/images/homework.png'),
-  make_bed: require('../assets/images/make_bed.png'),
-  wake_up: require('../assets/images/wake_up.png'),
-};
-
-const ACTIVITY_FALLBACK_IMAGE = require('../assets/images/sun.png');
 
 const ACTIVITY_SUBTITLES: Record<string, string> = {
   brush_teeth: "Let's make those teeth sparkle!",
@@ -122,6 +111,8 @@ export default function HomeScreen() {
   // TouchableOpacity. Note this cannot recover a Metro-served asset in a dev build when the dev
   // server is unreachable (laptop asleep, IP change) — that case needs a full reload.
   const [activityImagesRevision, setActivityImagesRevision] = useState(0);
+  // Re-renders this screen as bundled activity artwork finishes resolving to local file URIs.
+  const localImagesRevision = useLocalImagesRevision(ALL_BUNDLED_IMAGES);
   const [trophyShownThisSession, setTrophyShownThisSession] = useState<Record<'morning' | 'evening', boolean>>({
     morning: false,
     evening: false,
@@ -210,6 +201,7 @@ export default function HomeScreen() {
       if (state === 'active') {
         setSegment(getCurrentSegment());
         setActivityImagesRevision((revision) => revision + 1);
+        preloadLocalImages(ALL_BUNDLED_IMAGES).catch(() => undefined);
         loadCaptionPreference().catch((err) => {
           console.warn('[Home] failed to refresh caption preference:', err);
         });
@@ -569,10 +561,11 @@ export default function HomeScreen() {
                     >
                       <View style={styles.activityImageWrap}>
                         <Image
-                          key={`${stepId}-${activityImagesRevision}`}
-                          source={activityImage}
+                          key={`${stepId}-${activityImagesRevision}-${localImagesRevision}`}
+                          source={localImageSource(activityImage)}
                           style={styles.activityImage}
                           resizeMode="contain"
+                          onError={() => retryLocalImage(activityImage)}
                         />
                       </View>
 

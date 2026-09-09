@@ -14,6 +14,7 @@ import { hasDebugHomeAccess } from '../services/debugFlow';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
 import { colors, fs, ms, s, vs } from '../theme';
 import { isMorningTime } from '../utils/timeOfDay';
+import DayNightTransition from '../components/DayNightTransition';
 
 export default function LoadingScreen() {
   const params = useLocalSearchParams<{ mode?: string }>();
@@ -131,7 +132,7 @@ export default function LoadingScreen() {
     outputRange: ['0%', '100%'],
   });
 
-  return (
+  const content = (
     <View style={styles.container}>
       <Text style={styles.title}>Kids Routine Coach</Text>
       <Text style={styles.stage}>{stage}</Text>
@@ -142,6 +143,27 @@ export default function LoadingScreen() {
 
       <Text style={styles.percent}>{Math.round(progress)}%</Text>
     </View>
+  );
+
+  if (!isPostQuestionnaire) {
+    return content;
+  }
+
+  return (
+    <DayNightTransition>
+      <View style={styles.sceneContent}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Building {'\n'}your day &amp; night</Text>
+          <Text style={styles.cardStage}>{stage}</Text>
+
+          <View style={styles.barTrack}>
+            <Animated.View style={[styles.barFill, { width }]} />
+          </View>
+
+          <Text style={styles.percent}>{Math.round(progress)}%</Text>
+        </View>
+      </View>
+    </DayNightTransition>
   );
 }
 
@@ -180,5 +202,37 @@ const styles = StyleSheet.create({
     fontSize: fs(14),
     color: '#667085',
     fontWeight: '700',
+  },
+  sceneContent: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: s(24),
+    paddingBottom: vs(80),
+  },
+  card: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: vs(24),
+    paddingHorizontal: s(22),
+    borderRadius: ms(24),
+    backgroundColor: colors.surfaceTranslucent,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: vs(6) },
+    shadowOpacity: 0.16,
+    shadowRadius: ms(14),
+    elevation: 8,
+  },
+  cardTitle: {
+    fontSize: fs(24),
+    fontWeight: '800',
+    color: colors.textInk,
+    textAlign: 'center',
+    marginBottom: vs(10),
+  },
+  cardStage: {
+    fontSize: fs(15),
+    color: colors.textSlate,
+    textAlign: 'center',
+    marginBottom: vs(20),
   },
 });
