@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { DailyProgress } from '../types';
 import { colors, fs, ms, s, vs } from '../theme';
+import StarProgress from './StarProgress';
 
 interface DailyProgressCardProps {
   segment: 'morning' | 'evening';
@@ -12,13 +13,12 @@ export default function DailyProgressCard({ segment, progress }: DailyProgressCa
   const isSegmentMorning = segment === 'morning';
   const completed = isSegmentMorning ? progress.morningCompleted : progress.eveningCompleted;
   const total = isSegmentMorning ? progress.morningTotal : progress.eveningTotal;
-  const percentage = total === 0 ? 0 : Math.round((completed / total) * 100);
+  const completion = total === 0 ? 0 : completed / total;
   const isComplete = completed === total && total > 0;
 
   const emoji = isSegmentMorning ? '🌅' : '🌙';
   const label = isSegmentMorning ? 'Morning' : 'Evening';
   const bgColor = isSegmentMorning ? '#FFF8E6' : '#E6F2FF';
-  const accentColor = isSegmentMorning ? colors.star : colors.primary;
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
@@ -29,20 +29,10 @@ export default function DailyProgressCard({ segment, progress }: DailyProgressCa
       </View>
 
       <View style={styles.progressSection}>
-        <View style={styles.progressBarContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              { width: `${percentage}%`, backgroundColor: accentColor },
-            ]}
-          />
-        </View>
-        <View style={styles.statsRow}>
-          <Text style={styles.statsText}>
-            <Text style={styles.statsBold}>{completed}</Text> / {total} completed
-          </Text>
-          <Text style={[styles.percentage, { color: accentColor }]}>{percentage}%</Text>
-        </View>
+        <StarProgress progress={completion} />
+        <Text style={styles.statsText}>
+          <Text style={styles.statsBold}>{completed}</Text> / {total} completed
+        </Text>
       </View>
     </View>
   );
@@ -83,21 +73,6 @@ const styles = StyleSheet.create({
   progressSection: {
     gap: s(10),
   },
-  progressBarContainer: {
-    height: s(10),
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: ms(5),
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: ms(5),
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   statsText: {
     fontSize: fs(13),
     color: colors.textSlate,
@@ -105,9 +80,5 @@ const styles = StyleSheet.create({
   statsBold: {
     fontWeight: '700',
     color: colors.textDark,
-  },
-  percentage: {
-    fontSize: fs(13),
-    fontWeight: '700',
   },
 });

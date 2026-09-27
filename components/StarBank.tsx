@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { STAR_LEVELS, getStarLevel, getStarsToNextLevel } from '../types';
 import { colors, fs, ms, s, vs } from '../theme';
+import StarProgress from './StarProgress';
 
 interface StarBankProps {
   totalStars: number;
@@ -11,9 +12,8 @@ export default function StarBank({ totalStars }: StarBankProps) {
   const level = getStarLevel(totalStars);
   const starsToNext = getStarsToNextLevel(totalStars);
   const nextLevel = STAR_LEVELS.find((l) => l.minStars > level.maxStars) ?? level;
-  
+
   const progress = (totalStars - level.minStars) / (level.maxStars - level.minStars + 1);
-  const progressWidth = Math.min(Math.max(progress * 100, 0), 100);
 
   return (
     <View style={styles.container}>
@@ -36,14 +36,7 @@ export default function StarBank({ totalStars }: StarBankProps) {
         {level.level !== 'Superstar' && (
           <View style={styles.nextLevelInfo}>
             <Text style={styles.nextLevelLabel}>Next: {nextLevel.emoji} {nextLevel.level}</Text>
-            <View style={styles.progressBarContainer}>
-              <View
-                style={[
-                  styles.progressBar,
-                  { width: `${progressWidth}%` },
-                ]}
-              />
-            </View>
+            <StarProgress progress={progress} />
             <Text style={styles.starsNeeded}>
               {starsToNext} star{starsToNext !== 1 ? 's' : ''} to next level
             </Text>
@@ -115,22 +108,11 @@ const styles = StyleSheet.create({
     color: colors.textSlate,
     marginBottom: vs(8),
   },
-  progressBarContainer: {
-    height: s(8),
-    backgroundColor: colors.border,
-    borderRadius: ms(4),
-    overflow: 'hidden',
-    marginBottom: vs(8),
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: ms(4),
-  },
   starsNeeded: {
     fontSize: fs(12),
     fontWeight: '600',
     color: colors.textMuted,
     textAlign: 'center',
+    marginTop: vs(8),
   },
 });
