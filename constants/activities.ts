@@ -36,7 +36,7 @@ export const ACTIVITIES: Record<ActivityKey, ActivityMeta> = {
   brush_teeth: {
     key: 'brush_teeth',
     label: 'Brush Teeth',
-    promptTemplate: (name) => `Good morning, ${name}. It is time to brush your teeth for a bright, sparkly smile.`,
+    promptTemplate: (name) => `It is time to brush your teeth, ${name}, for a bright, sparkly smile.`,
     videoFile: 'brush_teeth.mp4',
     emoji: '🦷',
     color: '#4FC3F7',
@@ -68,7 +68,7 @@ export const ACTIVITIES: Record<ActivityKey, ActivityMeta> = {
   wash_face: {
     key: 'wash_face',
     label: 'Wash Face',
-    promptTemplate: (name) => `Rise and shine, ${name}. Let us wash your face and feel fresh and awake.`,
+    promptTemplate: (name) => `Let us wash your face, ${name}, and feel fresh and clean.`,
     videoFile: 'wash_face.mp4',
     emoji: '🚿',
     color: '#4DD0E1',
@@ -172,6 +172,35 @@ export const ACTIVITIES: Record<ActivityKey, ActivityMeta> = {
 };
 
 export const ACTIVITY_KEYS = Object.keys(ACTIVITIES) as Array<keyof typeof ACTIVITIES>;
+
+export type ActivityTimeOfDay = 'morning' | 'evening' | 'general';
+
+export const ACTIVITY_TIME_OF_DAY: Record<ActivityKey, ActivityTimeOfDay> = {
+  brush_teeth: 'general',
+  get_dressed: 'general',
+  eat_breakfast: 'morning',
+  pack_backpack: 'general',
+  wash_face: 'general',
+  comb_hair: 'general',
+  put_shoes_on: 'general',
+  drink_water: 'general',
+  tidy_room: 'general',
+  read_book: 'general',
+  put_on_pajamas: 'evening',
+  bedtime_story: 'evening',
+  eat_dinner: 'evening',
+  go_to_sleep: 'evening',
+  homework: 'general',
+  make_bed: 'general',
+  wake_up: 'morning',
+};
+
+export function activityKeysForSegment(segment: 'morning' | 'evening'): ActivityKey[] {
+  return ACTIVITY_KEYS.filter((key) => {
+    const timeOfDay = ACTIVITY_TIME_OF_DAY[key];
+    return timeOfDay === 'general' || timeOfDay === segment;
+  });
+}
 
 /** Remote base URL for avatar video assets stored in Firebase Storage */
 export const AVATAR_VIDEO_BASE_URL =

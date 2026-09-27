@@ -19,7 +19,7 @@ import { scheduleRoutineNotification } from '../../services/notifications';
 import { syncRoutineAssets } from '../../services/assetSync';
 import { ensureAudioForRoutine } from '../../services/tts';
 import { ChildProfile, Routine, ActivityKey } from '../../types';
-import { ACTIVITIES, ACTIVITY_KEYS } from '../../constants/activities';
+import { ACTIVITIES, activityKeysForSegment } from '../../constants/activities';
 import { db, ensureAuth } from '../../services/firebase';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { colors, fs, ms, s, vs } from '../../theme';
@@ -682,7 +682,7 @@ export default function CreateRoutineScreen() {
               activeOpacity={0.85}
             >
               <Text style={[styles.sectionTitle, isEvening && styles.sectionTitleEvening]}>
-                All activities
+                {isEvening ? 'Evening' : 'Morning'} Activities
               </Text>
               <Text style={[styles.sectionChevron, isEvening && styles.sectionChevronEvening]}>
                 {catalogCollapsed ? '▾' : '▴'}
@@ -692,7 +692,7 @@ export default function CreateRoutineScreen() {
               <View style={styles.sectionBorder}>
                 <ScrollView style={styles.catalogScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   <View style={styles.catalogGrid}>
-                    {ACTIVITY_KEYS.map((key) => {
+                    {activityKeysForSegment(activeSegment).map((key) => {
                       const activity = ACTIVITIES[key];
                       const selectedCount = selectedCounts.get(key) ?? 0;
                       return (

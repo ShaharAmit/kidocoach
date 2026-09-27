@@ -49,7 +49,7 @@ const DEFAULT_ASPECT_RATIO = 9 / 16;
 
 const ACTIVITY_TIMER_SECONDS: Record<ActivityKey, number> = {
   wake_up: 60,
-  brush_teeth: 120,
+  brush_teeth: 60,
   wash_face: 90,
   comb_hair: 120,
   get_dressed: 180,
