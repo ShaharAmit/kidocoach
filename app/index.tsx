@@ -613,6 +613,7 @@ export default function HomeScreen() {
             totalSteps={visibleStepIndexes.length}
             isFinalRemainingStep={isFinalRemainingStep}
             durationMinutes={primaryRoutine.stepDurations?.[currentStepIndex]}
+            durationMode={primaryRoutine.stepDurationModes?.[currentStepIndex]}
             showCaptions={showCaptions}
             onComplete={handleStepComplete}
           />

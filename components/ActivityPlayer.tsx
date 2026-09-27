@@ -12,8 +12,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer, VideoSize } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActivityKey, ActivityStep, CaptionCue } from '../types';
-import { ACTIVITIES, ACTIVITY_TIMER_SECONDS } from '../constants/activities';
+import { ActivityKey, ActivityStep, CaptionCue, DurationMode } from '../types';
+import { ACTIVITIES, ACTIVITY_TIMER_SECONDS, resolveDurationMode } from '../constants/activities';
 import { isValidCachedVideo, ensureActivityVideoReady } from '../services/assetSync';
 import { getOrBuildMergedCaptions, localPart2VideoPath } from '../services/twoPartVideoService';
 import { getReadyMergedVideoPath, ensureMergedActivityVideo } from '../services/videoMerge';
@@ -39,6 +39,7 @@ interface ActivityPlayerProps {
    */
   isFinalRemainingStep: boolean;
   durationMinutes?: number;
+  durationMode?: DurationMode;
   showCaptions?: boolean;
   onComplete: () => void;
 }
@@ -226,6 +227,7 @@ export default function ActivityPlayer({
   totalSteps,
   isFinalRemainingStep,
   durationMinutes,
+  durationMode,
   showCaptions = false,
   onComplete,
 }: ActivityPlayerProps) {
@@ -253,6 +255,12 @@ export default function ActivityPlayer({
   const activity = ACTIVITIES[currentActivityKey] ?? ACTIVITIES['brush_teeth'];
   const safeChildName = (childName || 'friend').trim() || 'friend';
   const safeAvatarId = (avatarId || 'becky').trim() || 'becky';
+  const defaultDurationSeconds = ACTIVITY_TIMER_SECONDS[currentActivityKey];
+  const hasCustomDuration = durationMinutes !== undefined && Number.isFinite(durationMinutes) && durationMinutes > 0;
+  const durationSeconds = hasCustomDuration ? Math.round(durationMinutes * 60) : defaultDurationSeconds;
+  const isVariableDuration = resolveDurationMode(currentActivityKey, durationMode, durationMinutes) === 'variable';
+  const canComplete = videoEnded && timerSecondsRemaining !== null &&
+    timerSecondsRemaining <= (isVariableDuration ? durationSeconds * 0.25 : 0);
 
   // Resolve the single file this activity will play BEFORE any player exists. The merge normally
   // ran during asset preload (assetCacheService -> ensureRoutineMergedVideosReady), so the first
@@ -335,11 +343,7 @@ export default function ActivityPlayer({
       return;
     }
 
-    setTimerSecondsRemaining(
-      durationMinutes !== undefined && Number.isFinite(durationMinutes) && durationMinutes > 0
-        ? Math.round(durationMinutes * 60)
-        : ACTIVITY_TIMER_SECONDS[currentActivityKey]
-    );
+    setTimerSecondsRemaining(durationSeconds);
     const timer = setInterval(() => {
       setTimerSecondsRemaining((remaining) =>
         remaining === null ? null : Math.max(0, remaining - 1)
@@ -347,7 +351,7 @@ export default function ActivityPlayer({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentActivityKey, durationMinutes, videoEnded]);
+  }, [durationSeconds, videoEnded]);
 
   const handleRetryVideo = useCallback(() => {
     setVideoEnded(false);
@@ -356,7 +360,7 @@ export default function ActivityPlayer({
   }, []);
 
   const handleComplete = useCallback(() => {
-    if (!videoEnded || timerSecondsRemaining !== 0) return;
+    if (!canComplete) return;
 
     if (activityIndex < normalizedSteps.length - 1) {
       setVideoEnded(false);
@@ -367,10 +371,9 @@ export default function ActivityPlayer({
     onComplete();
   }, [
     activityIndex,
+    canComplete,
     normalizedSteps.length,
     onComplete,
-    timerSecondsRemaining,
-    videoEnded,
   ]);
 
   if (!activity) return null;
@@ -459,21 +462,21 @@ export default function ActivityPlayer({
       </Text>
 
       {/* Done / Next Mission Complete button */}
-      {videoEnded && timerSecondsRemaining === 0 ? (
-        <TouchableOpacity
-          style={[styles.doneButton, { backgroundColor: activity.color }]}
-          onPress={handleComplete}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.doneButtonText}>
-            {activityIndex < normalizedSteps.length - 1
-              ? '➡️ Next Activity'
-              : isFinalRemainingStep
-                ? '🎉 All Done!'
-                : 'Complete Mission!'}
-          </Text>
-        </TouchableOpacity>
-      ) : null}
+      <TouchableOpacity
+        style={[styles.doneButton, { backgroundColor: canComplete ? activity.color : '#A3A3A3' }]}
+        onPress={handleComplete}
+        disabled={!canComplete}
+        accessibilityState={{ disabled: !canComplete }}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.doneButtonText}>
+          {activityIndex < normalizedSteps.length - 1
+            ? '➡️ Next Activity'
+            : isFinalRemainingStep
+              ? '🎉 All Done!'
+              : 'Complete Mission!'}
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }

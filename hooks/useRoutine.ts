@@ -11,9 +11,10 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { defaultDurationMinutes, starsForStep } from '../constants/activities';
-import { ActivityKey, ActivityStep, ChildProfile, Routine } from '../types';
+import { defaultDurationMinutes, resolveDurationMode, starsForStep } from '../constants/activities';
+import { ActivityKey, ActivityStep, ChildProfile, DurationMode, Routine } from '../types';
 import { getHomeBootstrapSnapshot } from '../services/homeBootstrap';
+import { cacheRoutine, cacheRoutines } from '../services/routineLocalCache';
 import { isMorningTime } from '../utils/timeOfDay';
 
 type UserRoutineProfile = {
@@ -36,6 +37,7 @@ type ActivityDoc = {
   order: number;
   time: string;
   durationMinutes: number;
+  durationMode: DurationMode;
   stars: number;
 };
 
@@ -87,6 +89,11 @@ function normalizeActivityDocs(
         durationMinutes: typeof entry.data.durationMinutes === 'number' &&
           Number.isInteger(entry.data.durationMinutes * 4) && entry.data.durationMinutes >= 0.25 && entry.data.durationMinutes <= 180
           ? entry.data.durationMinutes : defaultDurationMinutes(activityKey as ActivityKey),
+        durationMode: resolveDurationMode(
+          activityKey as ActivityKey,
+          entry.data.durationMode,
+          typeof entry.data.durationMinutes === 'number' ? entry.data.durationMinutes : undefined
+        ),
         stars: Number.isInteger(entry.data.stars) && (entry.data.stars as number) >= 0 && (entry.data.stars as number) <= 2
           ? entry.data.stars as number : starsForStep([activityKey as ActivityKey]),
       };
@@ -105,6 +112,7 @@ function composeRoutine(
   const stepIds = activities.map((item) => item.id);
   const stepTimes = activities.map((item) => item.time);
   const stepDurations = activities.map((item) => item.durationMinutes);
+  const stepDurationModes = activities.map((item) => item.durationMode);
   const stepStars = activities.map((item) => item.stars);
   const scheduledTime = meta.scheduledTime || stepTimes[0] || '08:00';
 
@@ -119,6 +127,7 @@ function composeRoutine(
     stepIds,
     stepTimes,
     stepDurations,
+    stepDurationModes,
     stepStars,
     tone: userProfile?.tone,
     voice: userProfile?.voice,
@@ -166,7 +175,9 @@ export function useRoutine(routineId: string, userId: string) {
 
     const unsubscribeUser = onSnapshot(
       doc(db, 'users', userId),
+      { includeMetadataChanges: true },
       (snap) => {
+        if (snap.metadata.fromCache) return;
         latestUserProfile = snap.exists()
           ? normalizeUserRoutineProfile(snap.data() as Record<string, unknown>)
           : null;
@@ -251,7 +262,7 @@ export function useUserRoutines(userId: string) {
     let userReady = false;
 
     const emit = () => {
-      if (!routinesReady || !userReady) return;
+      if (!routinesReady || !userReady || Array.from(metaById.keys()).some((id) => !activitiesById.has(id))) return;
       const data = Array.from(metaById.values())
         .map((meta) =>
           composeRoutine(userId, meta, activitiesById.get(meta.id) ?? [], latestUserProfile)
@@ -259,6 +270,9 @@ export function useUserRoutines(userId: string) {
         .sort((a, b) => a.id.localeCompare(b.id));
       setRoutines(data);
       setLoading(false);
+      cacheRoutines(userId, data).catch((err) => {
+        console.warn('[useUserRoutines] Failed to cache routines:', err);
+      });
     };
 
     const unsubscribeUser = onSnapshot(
@@ -278,7 +292,9 @@ export function useUserRoutines(userId: string) {
 
     const unsubscribeRoutines = onSnapshot(
       collection(db, 'users', userId, 'routines'),
+      { includeMetadataChanges: true },
       (snap) => {
+        if (snap.metadata.fromCache) return;
         const nextIds = new Set<string>();
 
         snap.docs.forEach((d) => {
@@ -288,7 +304,9 @@ export function useUserRoutines(userId: string) {
           if (!activityUnsubs.has(d.id)) {
             const unsub = onSnapshot(
               collection(db, 'users', userId, 'routines', d.id, 'activities'),
+              { includeMetadataChanges: true },
               (activitySnap) => {
+                if (activitySnap.metadata.fromCache) return;
                 activitiesById.set(
                   d.id,
                   normalizeActivityDocs(
@@ -369,6 +387,7 @@ export async function saveRoutine(routine: Routine): Promise<void> {
       order: index,
       time: stepTimes[index] ?? routine.scheduledTime,
       durationMinutes: routine.stepDurations?.[index] ?? defaultDurationMinutes(activityKey),
+      durationMode: routine.stepDurationModes?.[index] ?? resolveDurationMode(activityKey, undefined, routine.stepDurations?.[index]),
       stars: routine.stepStars?.[index] ?? starsForStep(step),
       updatedAt: Date.now(),
     });
@@ -384,6 +403,20 @@ export async function saveRoutine(routine: Routine): Promise<void> {
     meta.notificationId = routine.notificationId;
   }
   await setDoc(routineRef, meta, { merge: true });
+
+  await cacheRoutine({
+    ...routine,
+    id: routineId,
+    stepIds: routine.activityStack.map((_, index) => stepIds[index] ?? `step_${index}`),
+    stepTimes: routine.activityStack.map((_, index) => stepTimes[index] ?? routine.scheduledTime),
+    stepDurations: routine.activityStack.map((step, index) =>
+      routine.stepDurations?.[index] ?? defaultDurationMinutes(step[0])
+    ),
+    stepDurationModes: routine.activityStack.map((step, index) =>
+      routine.stepDurationModes?.[index] ?? resolveDurationMode(step[0], undefined, routine.stepDurations?.[index])
+    ),
+    stepStars: routine.activityStack.map((step, index) => routine.stepStars?.[index] ?? starsForStep(step)),
+  });
 }
 
 export async function saveRoutineIfMissing(routine: Routine): Promise<boolean> {

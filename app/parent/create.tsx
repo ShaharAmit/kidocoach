@@ -20,8 +20,8 @@ import { saveRoutine } from '../../hooks/useRoutine';
 import { scheduleRoutineNotification } from '../../services/notifications';
 import { syncRoutineAssets } from '../../services/assetSync';
 import { ensureAudioForRoutine } from '../../services/tts';
-import { ChildProfile, Routine, ActivityKey } from '../../types';
-import { ACTIVITIES, activityKeysForSegment, defaultDurationMinutes, starsForStep } from '../../constants/activities';
+import { ChildProfile, Routine, ActivityKey, DurationMode } from '../../types';
+import { ACTIVITIES, ACTIVITY_DURATION_MODES, activityKeysForSegment, defaultDurationMinutes, resolveDurationMode, starsForStep } from '../../constants/activities';
 import { db, ensureAuth } from '../../services/firebase';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { colors, fs, ms, s, vs } from '../../theme';
@@ -35,7 +35,7 @@ import { MOON_IMAGE, SUN_IMAGE } from '../../constants/images';
 
 type DaySegment = 'morning' | 'evening';
 type TimePickerMode = 'add' | 'edit';
-type ActivityEntry = { id: string; key: ActivityKey; time: string; order: number; durationMinutes: number; stars: number };
+type ActivityEntry = { id: string; key: ActivityKey; time: string; order: number; durationMinutes: number; durationMode: DurationMode; stars: number };
 
 type SegmentDraft = {
   scheduledTime: string;
@@ -51,6 +51,7 @@ type TimePickerState = {
   mode: TimePickerMode;
   time: string;
   durationMinutes: string;
+  durationMode: DurationMode;
   stars: number;
   entryId?: string;
   activityKey?: ActivityKey;
@@ -133,6 +134,11 @@ async function readExistingActivityEntries(
         durationMinutes: typeof data.durationMinutes === 'number' &&
           Number.isInteger(data.durationMinutes * 4) && data.durationMinutes >= 0.25 && data.durationMinutes <= 180
           ? data.durationMinutes : defaultDurationMinutes(key as ActivityKey),
+        durationMode: resolveDurationMode(
+          key as ActivityKey,
+          data.durationMode,
+          typeof data.durationMinutes === 'number' ? data.durationMinutes : undefined
+        ),
         stars: Number.isInteger(data.stars) && (data.stars as number) >= 0 && (data.stars as number) <= 2
           ? data.stars as number : starsForStep([key as ActivityKey]),
       };
@@ -180,7 +186,7 @@ function segmentHasChanged(current: SegmentDraft, original: SegmentDraft): boole
     const now = current.entries[i];
     const prev = original.entries[i];
     if (!prev) return true;
-    if (now.id !== prev.id || now.key !== prev.key || now.time !== prev.time || now.order !== prev.order || now.durationMinutes !== prev.durationMinutes || now.stars !== prev.stars) {
+    if (now.id !== prev.id || now.key !== prev.key || now.time !== prev.time || now.order !== prev.order || now.durationMinutes !== prev.durationMinutes || now.durationMode !== prev.durationMode || now.stars !== prev.stars) {
       return true;
     }
   }
@@ -248,6 +254,7 @@ export default function CreateRoutineScreen() {
     mode: 'add',
     time: DEFAULT_TIMES.morning,
     durationMinutes: '1',
+    durationMode: 'fixed',
     stars: 1,
   });
 
@@ -321,6 +328,7 @@ export default function CreateRoutineScreen() {
       mode: 'edit',
       time: entry.time,
       durationMinutes: String(entry.durationMinutes),
+      durationMode: entry.durationMode,
       stars: entry.stars,
       entryId: entry.id,
     });
@@ -339,6 +347,7 @@ export default function CreateRoutineScreen() {
       mode: 'add',
       time: coerceTimeToSegment(suggested, activeSegment),
       durationMinutes: String(defaultDurationMinutes(activityKey)),
+      durationMode: ACTIVITY_DURATION_MODES[activityKey],
       stars: starsForStep([activityKey]),
       activityKey,
     });
@@ -387,7 +396,7 @@ export default function CreateRoutineScreen() {
       if (timePicker.mode === 'edit' && timePicker.entryId) {
         const entries = current.entries.map((entry) =>
           entry.id === timePicker.entryId
-            ? { ...entry, time: timePicker.time, durationMinutes, stars: timePicker.stars }
+            ? { ...entry, time: timePicker.time, durationMinutes, durationMode: timePicker.durationMode, stars: timePicker.stars }
             : entry
         );
         return {
@@ -408,6 +417,7 @@ export default function CreateRoutineScreen() {
             key: timePicker.activityKey,
             time: timePicker.time,
             durationMinutes,
+            durationMode: timePicker.durationMode,
             stars: timePicker.stars,
             order: current.entries.length,
           },
@@ -482,6 +492,7 @@ export default function CreateRoutineScreen() {
           stepIds: normalizedEntries.map((entry) => entry.id),
           stepTimes: normalizedEntries.map((entry) => entry.time),
           stepDurations: normalizedEntries.map((entry) => entry.durationMinutes),
+          stepDurationModes: normalizedEntries.map((entry) => entry.durationMode),
           stepStars: normalizedEntries.map((entry) => entry.stars),
           tone: profile.tone,
           voice: profile.voice,
@@ -536,7 +547,7 @@ export default function CreateRoutineScreen() {
       Alert.alert(
         '✅ Routines Saved!',
         `${profile.childName}'s morning and evening routines were updated.`,
-        [{ text: 'Great!', onPress: () => router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } } as never) }]
+        [{ text: 'Great!', onPress: () => router.replace('/') }]
       );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -686,14 +697,14 @@ export default function CreateRoutineScreen() {
                               {activity.emoji} {activity.label}
                             </Text>
                             <Text style={[styles.selectedDetail, isEvening && styles.selectedLabelEvening]}>
-                              {entry.time} · {entry.durationMinutes} min · {entry.stars} stars
+                              {entry.time} · {entry.durationMinutes} min · {entry.durationMode} · {entry.stars} stars
                             </Text>
                           </View>
                           <TouchableOpacity
                             style={styles.editButton}
                             onPress={() => openEditTime(entry)}
                             activeOpacity={0.85}
-                            accessibilityLabel={`Edit ${activity.label}, ${entry.time}, ${entry.durationMinutes} minutes, ${entry.stars} stars`}
+                            accessibilityLabel={`Edit ${activity.label}, ${entry.time}, ${entry.durationMinutes} minutes, ${entry.durationMode}, ${entry.stars} stars`}
                           >
                             <Feather name="edit-2" size={s(17)} color={colors.primary} />
                           </TouchableOpacity>
@@ -759,7 +770,7 @@ export default function CreateRoutineScreen() {
                               isEvening && styles.catalogStateEvening,
                             ]}
                           >
-                            {selectedCount > 0 ? `Added ×${selectedCount}` : 'Add'}
+                            {selectedCount > 0 ? `Added ×${selectedCount}` : `Add · ${ACTIVITY_DURATION_MODES[key]}`}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -842,6 +853,22 @@ export default function CreateRoutineScreen() {
               >
                 <Feather name="plus" size={s(20)} color={colors.primary} />
               </TouchableOpacity>
+            </View>
+            <Text style={styles.modalFieldLabel}>Finish timing</Text>
+            <View style={styles.starOptions}>
+              {(['fixed', 'variable'] as const).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.starOption, timePicker.durationMode === mode && styles.starOptionSelected]}
+                  onPress={() => setTimePicker((prev) => ({ ...prev, durationMode: mode }))}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: timePicker.durationMode === mode }}
+                >
+                  <Text style={[styles.starOptionText, timePicker.durationMode === mode && styles.starOptionTextSelected]}>
+                    {mode === 'fixed' ? 'Fixed (0 left)' : 'Variable (25% left)'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
             <Text style={styles.modalFieldLabel}>Stars</Text>
             <View style={styles.starOptions}>

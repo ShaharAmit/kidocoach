@@ -21,6 +21,7 @@ export type ToneOption = 'cheerful' | 'encouraging' | 'calm';
 export type VoiceOption = 'woman' | 'man';
 export type ChildGender = 'boy' | 'girl';
 export type ActivityStep = ActivityKey[];
+export type DurationMode = 'fixed' | 'variable';
 
 /** Setup questionnaire answers — collected during onboarding to personalize the routine */
 export type MorningStuckPoint =
@@ -99,6 +100,7 @@ export interface Routine {
   stepIds?: string[];
   stepTimes?: string[];
   stepDurations?: number[];
+  stepDurationModes?: DurationMode[];
   stepStars?: number[];
   tone?: ToneOption;
   voice?: VoiceOption;

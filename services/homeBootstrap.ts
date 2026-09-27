@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, getDocFromServer, getDocsFromServer } from 'firebase/firestore';
 import { db } from './firebase';
-import { ActivityKey, ActivityStep, ChildProfile, LocalDailyCompletion, Routine } from '../types';
-import { defaultDurationMinutes, starsForStep } from '../constants/activities';
+import { cacheRoutines, readCachedRoutines } from './routineLocalCache';
+import { defaultDurationMinutes, resolveDurationMode, starsForStep } from '../constants/activities';
+import { ActivityKey, ActivityStep, ChildProfile, DurationMode, LocalDailyCompletion, Routine } from '../types';
 
 type HomeBootstrapSnapshot = {
   userId: string;
@@ -32,6 +33,7 @@ type ActivityDoc = {
   order: number;
   time: string;
   durationMinutes: number;
+  durationMode: DurationMode;
   stars: number;
 };
 
@@ -96,6 +98,11 @@ function normalizeActivityDocs(
         durationMinutes: typeof entry.data.durationMinutes === 'number' &&
           Number.isInteger(entry.data.durationMinutes * 4) && entry.data.durationMinutes >= 0.25 && entry.data.durationMinutes <= 180
           ? entry.data.durationMinutes : defaultDurationMinutes(key as ActivityKey),
+        durationMode: resolveDurationMode(
+          key as ActivityKey,
+          entry.data.durationMode,
+          typeof entry.data.durationMinutes === 'number' ? entry.data.durationMinutes : undefined
+        ),
         stars: Number.isInteger(entry.data.stars) && (entry.data.stars as number) >= 0 && (entry.data.stars as number) <= 2
           ? entry.data.stars as number : starsForStep([key as ActivityKey]),
       };
@@ -114,6 +121,7 @@ function composeRoutine(
   const stepIds = activities.map((item) => item.id);
   const stepTimes = activities.map((item) => item.time);
   const stepDurations = activities.map((item) => item.durationMinutes);
+  const stepDurationModes = activities.map((item) => item.durationMode);
   const stepStars = activities.map((item) => item.stars);
   const scheduledTime = meta.scheduledTime || stepTimes[0] || '08:00';
 
@@ -128,6 +136,7 @@ function composeRoutine(
     stepIds,
     stepTimes,
     stepDurations,
+    stepDurationModes,
     stepStars,
     tone: userProfile?.tone,
     voice: userProfile?.voice,
@@ -148,17 +157,17 @@ async function readTodaysCompletion(routineId: string): Promise<LocalDailyComple
   }
 }
 
-export async function primeHomeBootstrap(userId: string): Promise<HomeBootstrapSnapshot> {
-  const userSnap = await getDoc(doc(db, 'users', userId));
+async function fetchRemoteRoutines(userId: string): Promise<Routine[]> {
+  const userSnap = await getDocFromServer(doc(db, 'users', userId));
   const userProfile = userSnap.exists()
     ? normalizeUserRoutineProfile(userSnap.data() as Record<string, unknown>)
     : null;
 
-  const routineDocs = await getDocs(collection(db, 'users', userId, 'routines'));
+  const routineDocs = await getDocsFromServer(collection(db, 'users', userId, 'routines'));
   const routines = await Promise.all(
     routineDocs.docs.map(async (routineDoc) => {
       const meta = normalizeRoutineMeta(routineDoc.id, routineDoc.data() as Record<string, unknown>);
-      const activityDocs = await getDocs(
+      const activityDocs = await getDocsFromServer(
         collection(db, 'users', userId, 'routines', routineDoc.id, 'activities')
       );
       const activities = normalizeActivityDocs(
@@ -170,6 +179,21 @@ export async function primeHomeBootstrap(userId: string): Promise<HomeBootstrapS
       return composeRoutine(userId, meta, activities, userProfile);
     })
   );
+
+  return routines;
+}
+
+export async function primeHomeBootstrap(userId: string): Promise<HomeBootstrapSnapshot> {
+  let routines: Routine[];
+  try {
+    routines = await fetchRemoteRoutines(userId);
+    await cacheRoutines(userId, routines).catch((err) => {
+      console.warn('[HomeBootstrap] Failed to cache remote routines:', err);
+    });
+  } catch (err) {
+    routines = await readCachedRoutines(userId);
+    if (routines.length === 0) throw err;
+  }
 
   const completions: Record<string, LocalDailyCompletion> = {};
   await Promise.all(
