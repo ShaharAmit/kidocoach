@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import ActivityPlayer from '../components/ActivityPlayer';
 import StarsBackground from '../components/StarsBackground';
 import CloudsBackground from '../components/CloudsBackground';
-import { ACTIVITIES } from '../constants/activities';
+import { ACTIVITIES, starsForStep } from '../constants/activities';
 import {
   ACTIVITY_FALLBACK_IMAGE,
   ACTIVITY_IMAGES,
@@ -30,8 +30,8 @@ import { areAssetsReady, syncRoutineAssets } from '../services/assetSync';
 import { ensureAuth } from '../services/firebase';
 import { getHomeBootstrapSnapshot, isRoutineWarmed, markRoutineWarmed } from '../services/homeBootstrap';
 import { setHomeViewMode } from '../services/homeViewState';
-import { getChildProfile, saveChildProfile } from '../services/profile';
-import { awardRoutineStepStar } from '../services/stars';
+import { getChildProfile } from '../services/profile';
+import { flushPendingStepStars, queueRoutineStepStars } from '../services/stars';
 import { ensureAudioForRoutine } from '../services/tts';
 import { Routine } from '../types';
 import { getCurrentSegment, isMorningTime } from '../utils/timeOfDay';
@@ -162,6 +162,7 @@ export default function HomeScreen() {
       const user = await ensureAuth();
       if (!mounted) return;
       setUserId(user.uid);
+      flushPendingStepStars(user.uid).catch((err) => console.warn('[Home] Star sync failed:', err));
     }
 
     initialize().catch((err) => {
@@ -199,6 +200,7 @@ export default function HomeScreen() {
 
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
+        if (userId) flushPendingStepStars(userId).catch((err) => console.warn('[Home] Star sync failed:', err));
         setSegment(getCurrentSegment());
         setActivityImagesRevision((revision) => revision + 1);
         preloadLocalImages(ALL_BUNDLED_IMAGES).catch(() => undefined);
@@ -216,7 +218,7 @@ export default function HomeScreen() {
       appStateSub.remove();
       clearInterval(segmentTimer);
     };
-  }, []);
+  }, [userId]);
 
   // Switching tabs (e.g. Settings -> Routines) doesn't remount this screen or trigger an
   // AppState change, so the caption toggle above only picks up the latest saved preference
@@ -387,10 +389,7 @@ export default function HomeScreen() {
     prepareAssets();
   }, [primaryRoutine]);
 
-  // `trophyShownThisSession` is a per-day guard, but this screen can stay mounted across midnight.
-  // Without clearing it on rollover the allScopedDone effect early-returns for the new day, which
-  // skips `awardRoutineStepStar` entirely — the trophy still shows (handleStepComplete forces it)
-  // so the missing star would go unnoticed.
+  // Reset the trophy guard when a new day starts while this screen remains mounted.
   useEffect(() => {
     setTrophyShownThisSession({ morning: false, evening: false });
   }, [activeDate]);
@@ -404,37 +403,9 @@ export default function HomeScreen() {
     if (!allScopedDone) return;
     if (trophyShownThisSession[segment]) return;
 
-    // Award 1 star for completing the entire routine segment (not per step)
-    const awardSegmentStar = async () => {
-      if (userId && primaryRoutine) {
-        try {
-          const award = await awardRoutineStepStar({
-            userId,
-            routineId: primaryRoutine.id,
-            date: getTodayISO(),
-            segment,
-            stepIndex: -1, // -1 indicates segment completion, not a specific step
-          });
-          if (award.awarded) {
-            const profile = await getChildProfile();
-            if (profile && profile.userId === userId) {
-              await saveChildProfile({
-                ...profile,
-                totalStarsEarned: award.totalStars,
-                updatedAt: Date.now(),
-              });
-            }
-          }
-        } catch (err) {
-          console.warn('[Home] Failed to award segment star:', err);
-        }
-      }
-    };
-
-    awardSegmentStar();
     setTrophyVisible(true);
     setTrophyShownThisSession((prev) => ({ ...prev, [segment]: true }));
-  }, [allScopedDone, segment, trophyShownThisSession, userId, primaryRoutine]);
+  }, [allScopedDone, segment, trophyShownThisSession]);
 
   const handleStepComplete = useCallback(async () => {
     if (!primaryRoutine || visibleStepIndexes.length === 0) return;
@@ -442,9 +413,25 @@ export default function HomeScreen() {
     const completesSegment = isFinalRemainingStep;
     const newlyCompleted = await markStepDone(segment, currentStepId, visibleStepIndexes.length);
 
-    // Star awarding now happens in the allScopedDone effect,
-    // so we don't award here anymore. Show the completion message immediately after the final
-    // step is persisted; the effect still handles the idempotent star award.
+    const stars = primaryRoutine.stepStars?.[currentStepIndex]
+      ?? starsForStep(primaryRoutine.activityStack[currentStepIndex] ?? []);
+    if (newlyCompleted && stars > 0 && userId) {
+      try {
+        await queueRoutineStepStars({
+          userId,
+          routineId: primaryRoutine.id,
+          date: getTodayISO(),
+          segment,
+          stepIndex: currentStepIndex,
+          stepId: currentStepId,
+          stars,
+        });
+        await flushPendingStepStars(userId);
+      } catch (err) {
+        console.warn('[Home] Failed to queue task stars:', err);
+      }
+    }
+
     if (newlyCompleted && completesSegment) {
       setTrophyVisible(true);
     }
@@ -460,6 +447,8 @@ export default function HomeScreen() {
     currentStepId,
     markStepDone,
     segment,
+    currentStepIndex,
+    userId,
   ]);
 
 
@@ -623,6 +612,7 @@ export default function HomeScreen() {
             stepNumber={scopedProgress}
             totalSteps={visibleStepIndexes.length}
             isFinalRemainingStep={isFinalRemainingStep}
+            durationMinutes={primaryRoutine.stepDurations?.[currentStepIndex]}
             showCaptions={showCaptions}
             onComplete={handleStepComplete}
           />

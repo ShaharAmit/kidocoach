@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { ActivityKey, ActivityStep, ChildProfile, LocalDailyCompletion, Routine } from '../types';
+import { defaultDurationMinutes, starsForStep } from '../constants/activities';
 
 type HomeBootstrapSnapshot = {
   userId: string;
@@ -30,6 +31,8 @@ type ActivityDoc = {
   activityKey: string;
   order: number;
   time: string;
+  durationMinutes: number;
+  stars: number;
 };
 
 let snapshot: HomeBootstrapSnapshot | null = null;
@@ -90,6 +93,11 @@ function normalizeActivityDocs(
         activityKey: key,
         order: typeof orderRaw === 'number' ? orderRaw : index,
         time: timeRaw,
+        durationMinutes: typeof entry.data.durationMinutes === 'number' &&
+          Number.isInteger(entry.data.durationMinutes * 4) && entry.data.durationMinutes >= 0.25 && entry.data.durationMinutes <= 180
+          ? entry.data.durationMinutes : defaultDurationMinutes(key as ActivityKey),
+        stars: Number.isInteger(entry.data.stars) && (entry.data.stars as number) >= 0 && (entry.data.stars as number) <= 2
+          ? entry.data.stars as number : starsForStep([key as ActivityKey]),
       };
     })
     .filter((item): item is ActivityDoc => Boolean(item))
@@ -105,6 +113,8 @@ function composeRoutine(
   const activityStack: ActivityStep[] = activities.map((item) => [item.activityKey as ActivityKey]);
   const stepIds = activities.map((item) => item.id);
   const stepTimes = activities.map((item) => item.time);
+  const stepDurations = activities.map((item) => item.durationMinutes);
+  const stepStars = activities.map((item) => item.stars);
   const scheduledTime = meta.scheduledTime || stepTimes[0] || '08:00';
 
   return {
@@ -117,6 +127,8 @@ function composeRoutine(
     activityStack,
     stepIds,
     stepTimes,
+    stepDurations,
+    stepStars,
     tone: userProfile?.tone,
     voice: userProfile?.voice,
     notificationId: meta.notificationId,

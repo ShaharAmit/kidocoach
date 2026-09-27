@@ -173,6 +173,54 @@ export const ACTIVITIES: Record<ActivityKey, ActivityMeta> = {
 
 export const ACTIVITY_KEYS = Object.keys(ACTIVITIES) as Array<keyof typeof ACTIVITIES>;
 
+export const ACTIVITY_TIMER_SECONDS: Record<ActivityKey, number> = {
+  wake_up: 60,
+  brush_teeth: 60,
+  wash_face: 90,
+  comb_hair: 120,
+  get_dressed: 180,
+  put_shoes_on: 90,
+  pack_backpack: 180,
+  drink_water: 30,
+  tidy_room: 300,
+  make_bed: 180,
+  eat_breakfast: 600,
+  homework: 900,
+  read_book: 600,
+  put_on_pajamas: 180,
+  eat_dinner: 900,
+  bedtime_story: 600,
+  go_to_sleep: 300,
+};
+
+export function defaultDurationMinutes(activity: ActivityKey): number {
+  return ACTIVITY_TIMER_SECONDS[activity] / 60;
+}
+
+export const ACTIVITY_STARS: Record<ActivityKey, 0 | 1 | 2> = {
+  brush_teeth: 2,
+  get_dressed: 2,
+  eat_breakfast: 1,
+  pack_backpack: 2,
+  wash_face: 1,
+  comb_hair: 1,
+  put_shoes_on: 1,
+  drink_water: 0,
+  tidy_room: 2,
+  read_book: 1,
+  put_on_pajamas: 1,
+  bedtime_story: 0,
+  eat_dinner: 1,
+  go_to_sleep: 0,
+  homework: 2,
+  make_bed: 2,
+  wake_up: 0,
+};
+
+export function starsForStep(step: ActivityKey[]): number {
+  return Math.max(0, ...step.map((activity) => ACTIVITY_STARS[activity]));
+}
+
 export type ActivityTimeOfDay = 'morning' | 'evening' | 'general';
 
 export const ACTIVITY_TIME_OF_DAY: Record<ActivityKey, ActivityTimeOfDay> = {

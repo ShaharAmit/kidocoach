@@ -91,6 +91,7 @@ interface AwardRoutineStepStarRequest {
   date: string;
   segment: 'morning' | 'evening';
   stepIndex: number;
+  stepId: string;
   stars?: number;
 }
 
@@ -792,7 +793,7 @@ export const awardRoutineStepStar = onCall(
       throw new HttpsError('unauthenticated', 'Authentication is required.');
     }
 
-    const { userId, routineId, date, segment, stepIndex, stars = 1 } = request.data ?? {};
+    const { userId, routineId, date, segment, stepIndex, stepId, stars = 1 } = request.data ?? {};
     if (!userId || !routineId || !date || (segment !== 'morning' && segment !== 'evening')) {
       throw new HttpsError(
         'invalid-argument',
@@ -802,14 +803,17 @@ export const awardRoutineStepStar = onCall(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new HttpsError('invalid-argument', 'date must be in YYYY-MM-DD format.');
     }
-    if (!Number.isInteger(stepIndex) || stepIndex < -1) {
+    if (!Number.isInteger(stepIndex) || stepIndex < 0) {
       throw new HttpsError(
         'invalid-argument',
-        'stepIndex must be an integer greater than or equal to -1.'
+        'stepIndex must be a non-negative integer.'
       );
     }
-    if (!Number.isInteger(stars) || stars <= 0 || stars > 10) {
-      throw new HttpsError('invalid-argument', 'stars must be an integer between 1 and 10.');
+    if (typeof stepId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(stepId)) {
+      throw new HttpsError('invalid-argument', 'stepId must be a valid task ID.');
+    }
+    if (!Number.isInteger(stars) || stars < 1 || stars > 2) {
+      throw new HttpsError('invalid-argument', 'stars must be an integer between 1 and 2.');
     }
     if (authUid !== userId) {
       throw new HttpsError('permission-denied', 'Cannot award stars for a different user.');
@@ -817,10 +821,7 @@ export const awardRoutineStepStar = onCall(
 
     const userRef = db.collection('users').doc(userId);
     const statsRef = userRef.collection('stats').doc('main');
-    // Use segment-based eventId when stepIndex is -1 (segment completion), otherwise use step-based
-    const eventId = stepIndex === -1
-      ? `${date}_${routineId}_${segment}`
-      : `${date}_${routineId}_${segment}_${stepIndex}`;
+    const eventId = `${date}_${routineId}_${segment}_${stepId}`;
     const awardRef = userRef.collection('awards').doc(eventId);
 
     return db.runTransaction(async (tx) => {
@@ -852,6 +853,7 @@ export const awardRoutineStepStar = onCall(
         date,
         segment,
         stepIndex,
+        stepId,
         stars,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });

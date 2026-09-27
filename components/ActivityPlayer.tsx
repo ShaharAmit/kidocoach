@@ -13,7 +13,7 @@ import { VideoView, useVideoPlayer, VideoSize } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityKey, ActivityStep, CaptionCue } from '../types';
-import { ACTIVITIES } from '../constants/activities';
+import { ACTIVITIES, ACTIVITY_TIMER_SECONDS } from '../constants/activities';
 import { isValidCachedVideo, ensureActivityVideoReady } from '../services/assetSync';
 import { getOrBuildMergedCaptions, localPart2VideoPath } from '../services/twoPartVideoService';
 import { getReadyMergedVideoPath, ensureMergedActivityVideo } from '../services/videoMerge';
@@ -38,6 +38,7 @@ interface ActivityPlayerProps {
    * actual completion state, not list position, so an out-of-order step never claims to be last.
    */
   isFinalRemainingStep: boolean;
+  durationMinutes?: number;
   showCaptions?: boolean;
   onComplete: () => void;
 }
@@ -46,26 +47,6 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CONTAINER_WIDTH = SCREEN_WIDTH * 0.8;
 const MAX_CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.55;
 const DEFAULT_ASPECT_RATIO = 9 / 16;
-
-const ACTIVITY_TIMER_SECONDS: Record<ActivityKey, number> = {
-  wake_up: 60,
-  brush_teeth: 60,
-  wash_face: 90,
-  comb_hair: 120,
-  get_dressed: 180,
-  put_shoes_on: 90,
-  pack_backpack: 180,
-  drink_water: 30,
-  tidy_room: 300,
-  make_bed: 180,
-  eat_breakfast: 600,
-  homework: 900,
-  read_book: 600,
-  put_on_pajamas: 180,
-  eat_dinner: 900,
-  bedtime_story: 600,
-  go_to_sleep: 300,
-};
 
 function clampContainerHeight(aspectRatio: number): number {
   const idealHeight = CONTAINER_WIDTH / aspectRatio;
@@ -244,6 +225,7 @@ export default function ActivityPlayer({
   stepNumber,
   totalSteps,
   isFinalRemainingStep,
+  durationMinutes,
   showCaptions = false,
   onComplete,
 }: ActivityPlayerProps) {
@@ -353,7 +335,11 @@ export default function ActivityPlayer({
       return;
     }
 
-    setTimerSecondsRemaining(ACTIVITY_TIMER_SECONDS[currentActivityKey]);
+    setTimerSecondsRemaining(
+      durationMinutes !== undefined && Number.isFinite(durationMinutes) && durationMinutes > 0
+        ? Math.round(durationMinutes * 60)
+        : ACTIVITY_TIMER_SECONDS[currentActivityKey]
+    );
     const timer = setInterval(() => {
       setTimerSecondsRemaining((remaining) =>
         remaining === null ? null : Math.max(0, remaining - 1)
@@ -361,7 +347,7 @@ export default function ActivityPlayer({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentActivityKey, videoEnded]);
+  }, [currentActivityKey, durationMinutes, videoEnded]);
 
   const handleRetryVideo = useCallback(() => {
     setVideoEnded(false);

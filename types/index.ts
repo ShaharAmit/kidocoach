@@ -98,6 +98,8 @@ export interface Routine {
   activityStack: ActivityStep[];
   stepIds?: string[];
   stepTimes?: string[];
+  stepDurations?: number[];
+  stepStars?: number[];
   tone?: ToneOption;
   voice?: VoiceOption;
   notificationId?: string;

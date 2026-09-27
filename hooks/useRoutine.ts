@@ -11,6 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { defaultDurationMinutes, starsForStep } from '../constants/activities';
 import { ActivityKey, ActivityStep, ChildProfile, Routine } from '../types';
 import { getHomeBootstrapSnapshot } from '../services/homeBootstrap';
 import { isMorningTime } from '../utils/timeOfDay';
@@ -34,6 +35,8 @@ type ActivityDoc = {
   activityKey: ActivityKey;
   order: number;
   time: string;
+  durationMinutes: number;
+  stars: number;
 };
 
 function normalizeUserRoutineProfile(raw: Record<string, unknown> | null): UserRoutineProfile | null {
@@ -81,6 +84,11 @@ function normalizeActivityDocs(
         activityKey: activityKey as ActivityKey,
         order: typeof orderRaw === 'number' ? orderRaw : index,
         time: timeRaw,
+        durationMinutes: typeof entry.data.durationMinutes === 'number' &&
+          Number.isInteger(entry.data.durationMinutes * 4) && entry.data.durationMinutes >= 0.25 && entry.data.durationMinutes <= 180
+          ? entry.data.durationMinutes : defaultDurationMinutes(activityKey as ActivityKey),
+        stars: Number.isInteger(entry.data.stars) && (entry.data.stars as number) >= 0 && (entry.data.stars as number) <= 2
+          ? entry.data.stars as number : starsForStep([activityKey as ActivityKey]),
       };
     })
     .filter((item): item is ActivityDoc => Boolean(item))
@@ -96,6 +104,8 @@ function composeRoutine(
   const activityStack: ActivityStep[] = activities.map((item) => [item.activityKey]);
   const stepIds = activities.map((item) => item.id);
   const stepTimes = activities.map((item) => item.time);
+  const stepDurations = activities.map((item) => item.durationMinutes);
+  const stepStars = activities.map((item) => item.stars);
   const scheduledTime = meta.scheduledTime || stepTimes[0] || '08:00';
 
   return {
@@ -108,6 +118,8 @@ function composeRoutine(
     activityStack,
     stepIds,
     stepTimes,
+    stepDurations,
+    stepStars,
     tone: userProfile?.tone,
     voice: userProfile?.voice,
     notificationId: meta.notificationId,
@@ -356,6 +368,8 @@ export async function saveRoutine(routine: Routine): Promise<void> {
       activityKey,
       order: index,
       time: stepTimes[index] ?? routine.scheduledTime,
+      durationMinutes: routine.stepDurations?.[index] ?? defaultDurationMinutes(activityKey),
+      stars: routine.stepStars?.[index] ?? starsForStep(step),
       updatedAt: Date.now(),
     });
   });
