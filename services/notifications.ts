@@ -93,6 +93,34 @@ export async function cancelRoutineNotification(notificationId: string): Promise
   await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
 
+const TRIAL_LENGTH_DAYS = 7;
+const NOTIFY_HOURS_BEFORE_TRIAL_END = 24;
+
+/**
+ * Schedules a one-off local reminder ~24h before the paywall's free trial converts to a paid
+ * subscription. Tied to the "Notify me before trial ends" toggle on the paywall screen.
+ */
+export async function scheduleTrialEndingNotification(): Promise<string> {
+  const secondsFromNow = (TRIAL_LENGTH_DAYS * 24 - NOTIFY_HOURS_BEFORE_TRIAL_END) * 3600;
+
+  return Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Your free trial ends tomorrow',
+      body: "Your Kids Routine Coach subscription starts tomorrow unless you cancel first.",
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: secondsFromNow,
+      repeats: false,
+    },
+  });
+}
+
+export async function cancelTrialEndingNotification(notificationId: string): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(notificationId).catch(() => {});
+}
+
 /**
  * Get all currently scheduled notifications (for debugging/display).
  */

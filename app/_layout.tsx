@@ -4,8 +4,10 @@ import { Tabs, Stack, router, usePathname } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { clearDebugHomeAccess, hasDebugHomeAccess } from '../services/debugFlow';
 import { getHomeViewMode, subscribeHomeViewMode } from '../services/homeViewState';
+import { getPaidStatus } from '../services/subscription';
+import { hasCompletedOnboarding } from '../services/profile';
+import { initPurchases } from '../services/purchases';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
 import { colors, fs, ms, s, vs } from '../theme';
 import { preloadLocalImages, retryLocalImage, useLocalImage } from '../utils/localImages';
@@ -140,25 +142,39 @@ export default function RootLayout() {
     []
   );
 
+  // Init RevenueCat once per app session (non-blocking).
   useEffect(() => {
-    const enforceDebugLaunchRouting = () => {
+    initPurchases().catch((err) => {
+      console.warn('[RootLayout] Failed to init purchases:', err);
+    });
+  }, []);
+
+  // Paywall gate: any screen outside onboarding/loading/paywall requires a completed
+  // questionnaire AND an active paid entitlement. Re-checked on every foreground so a lapsed
+  // subscription (or an onboarding flow abandoned mid-paywall) is caught without hard-blocking
+  // offline-first usage — getPaidStatus() reads the local cache only, never blocks on network.
+  useEffect(() => {
+    const enforceAccessGate = async () => {
       const alreadyInOnboarding = pathname.startsWith('/onboarding');
       const alreadyInLoading = pathname === '/loading';
-      if (!hasDebugHomeAccess() && !alreadyInOnboarding && !alreadyInLoading) {
+      const alreadyInPaywall = pathname === '/paywall';
+      if (alreadyInOnboarding || alreadyInLoading || alreadyInPaywall) return;
+
+      const [isPaid, onboardingDone] = await Promise.all([getPaidStatus(), hasCompletedOnboarding()]);
+      if (isPaid && onboardingDone) return;
+
+      if (!onboardingDone) {
         router.replace('/onboarding/welcome' as never);
+      } else {
+        router.replace('/paywall' as never);
       }
     };
 
-    enforceDebugLaunchRouting();
+    enforceAccessGate();
 
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        enforceDebugLaunchRouting();
-        return;
-      }
-
-      if (state === 'inactive' || state === 'background') {
-        clearDebugHomeAccess();
+        enforceAccessGate();
       }
     });
 
@@ -201,7 +217,7 @@ export default function RootLayout() {
         </View>
       )}
 
-      {pathname === '/loading' || pathname.startsWith('/onboarding') ? (
+      {pathname === '/loading' || pathname === '/paywall' || pathname.startsWith('/onboarding') ? (
         <Stack
           initialRouteName="loading"
           screenOptions={{
@@ -212,6 +228,7 @@ export default function RootLayout() {
         >
           <Stack.Screen name="loading" options={{ title: 'Loading', headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="paywall" options={{ headerShown: false }} />
         </Stack>
       ) : (
         <Tabs
@@ -306,6 +323,7 @@ export default function RootLayout() {
           />
           <Tabs.Screen name="loading" options={{ href: null }} />
           <Tabs.Screen name="onboarding" options={{ href: null }} />
+          <Tabs.Screen name="paywall" options={{ href: null }} />
           <Tabs.Screen
             name="parent/create"
             options={{

@@ -12,7 +12,7 @@ import {
 import { router, Stack } from 'expo-router';
 import { getChildProfile, clearChildProfile, saveChildProfile } from '../services/profile';
 import { clearAllLocalCachedAssets } from '../services/assetCacheService';
-import { clearDebugHomeAccess } from '../services/debugFlow';
+import { setPaidStatus } from '../services/subscription';
 import { colors, fs, ms, vs } from '../theme';
 import { ChildProfile } from '../types';
 import { getUserTotalStars } from '../services/stars';
@@ -83,7 +83,7 @@ export default function SettingsScreen() {
     if (!existingProfile) {
       await clearChildProfile();
       await clearAllLocalCachedAssets();
-      clearDebugHomeAccess();
+      await setPaidStatus(false);
       router.replace('/onboarding/questionnaire' as never);
       return;
     }
@@ -122,7 +122,7 @@ export default function SettingsScreen() {
       await deleteDoc(doc(db, 'users', userId, 'stats', 'main')).catch(() => {});
       await clearChildProfile();
       await clearAllLocalCachedAssets();
-      clearDebugHomeAccess();
+      await setPaidStatus(false);
 
       Alert.alert(
         'Questionnaire reset',

@@ -7,10 +7,9 @@ import {
   downloadWelcomeAssets,
   warmAllRoutineAssetsToCompletion,
 } from '../services/assetCacheService';
-import { getPaidStatus } from '../services/subscription';
+import { getPaidStatus, refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { getChildProfile, hasCompletedOnboarding } from '../services/profile';
 import { Routine } from '../types';
-import { hasDebugHomeAccess } from '../services/debugFlow';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
 import { colors, fs, ms, s, vs } from '../theme';
 import { isMorningTime } from '../utils/timeOfDay';
@@ -55,11 +54,13 @@ export default function LoadingScreen() {
           });
         }
 
-        const isPaid = await getPaidStatus();
+        // Post-questionnaire arrivals come straight from a successful paywall purchase, so the
+        // cached flag is already true — avoid an extra network round trip. Cold starts do a
+        // best-effort online refresh (falls back to cache offline) to catch lapsed subscriptions.
+        const isPaid = isPostQuestionnaire ? await getPaidStatus() : await refreshPaidStatusFromRevenueCat();
         const onboardingDone = await hasCompletedOnboarding();
-        const hasDebugAccess = hasDebugHomeAccess();
 
-        if (isPostQuestionnaire || ((onboardingDone || hasDebugAccess) && (isPaid || hasDebugAccess))) {
+        if (isPostQuestionnaire || (onboardingDone && isPaid)) {
           setStage('Generating experience...');
           setProgress(50);
 
@@ -100,17 +101,11 @@ export default function LoadingScreen() {
         setProgress(100);
 
         if (isCancelled) return;
-        if (hasDebugAccess) {
-          router.replace('/');
-          return;
-        }
 
-        if (!isPaid) {
-          router.replace('/onboarding/welcome' as never);
-        } else if (onboardingDone) {
-          router.replace('/');
+        if (onboardingDone) {
+          router.replace(isPaid ? '/' : ('/paywall' as never));
         } else {
-          router.replace('/onboarding/welcome' as never);
+          router.replace(isPaid ? ('/onboarding/questionnaire' as never) : ('/onboarding/welcome' as never));
         }
       } catch (err) {
         console.warn('[Loading] Failed to initialize app:', err);

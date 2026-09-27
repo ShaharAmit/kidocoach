@@ -33,7 +33,6 @@ import { saveRoutine, saveRoutineIfMissing } from '../../hooks/useRoutine';
 import { scheduleRoutineNotification } from '../../services/notifications';
 import { saveChildProfile, getChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { preloadRoutineAssetsInBackground } from '../../services/assetCacheService';
-import { grantDebugHomeAccess } from '../../services/debugFlow';
 import { calculateAgeFromISO, formatBirthDate, getTodayISO, isoDateYearsAgo } from '../../utils/date';
 import { colors, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
@@ -327,9 +326,8 @@ export default function QuestionnaireScreen() {
         const routineWithNotif: Routine = { ...morningRoutine, notificationId };
         await saveRoutine(routineWithNotif);
       }
-      grantDebugHomeAccess();
-
-      router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } } as never);
+      // Setup is complete — require a paid entitlement before the app main screen is reachable.
+      router.replace('/paywall' as never);
     } catch (err) {
       console.warn('[Questionnaire] failed to save:', err);
       Alert.alert('Save failed', 'Could not save setup. Please try again.');
