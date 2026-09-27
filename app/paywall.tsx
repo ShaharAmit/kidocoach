@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ImageBackground,
   Linking,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,7 @@ import {
   restorePurchasesAndCheckEntitlement,
 } from '../services/purchases';
 import { setPaidStatus } from '../services/subscription';
+import { grantTemporaryPaywallAccess } from '../services/temporaryAccess';
 import { scheduleTrialEndingNotification, cancelTrialEndingNotification } from '../services/notifications';
 import { PAYWALL_IMAGES } from '../constants/paywallImages';
 import { colors, fs, ms, s, vs } from '../theme';
@@ -153,6 +155,11 @@ export default function PaywallScreen() {
     router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } } as never);
   }, []);
 
+  const handleTemporarySkip = useCallback(() => {
+    grantTemporaryPaywallAccess();
+    router.replace({ pathname: '/loading', params: { mode: 'temporary_skip' } } as never);
+  }, []);
+
   const handleToggleNotify = useCallback(async (value: boolean) => {
     setNotifyBeforeTrialEnds(value);
     try {
@@ -230,21 +237,30 @@ export default function PaywallScreen() {
         <View style={styles.brandRow}>
           <Image source={require('../assets/icon.png')} style={styles.brandIcon} resizeMode="contain" />
           <Text style={styles.brandName}>Kids Routine Coach</Text>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={handleTemporarySkip}
+            accessibilityRole="button"
+            accessibilityLabel="Skip for now"
+            hitSlop={8}
+          >
+            <MaterialCommunityIcons name="close" size={ms(24)} color={colors.textSlate} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.carouselRow}>
-          <View style={[styles.imageBox, styles.imageBoxTall]}>
+          <ImageBackground source={PAYWALL_IMAGES.sahara} style={[styles.imageBox, styles.imageBoxTall]} resizeMode="stretch">
             <Image source={PAYWALL_IMAGES.boy} style={styles.tileImage} resizeMode="contain" />
             {/* <View style={styles.captionPill}>
               <Text style={styles.captionText}>Track progress{'\n'}and build habits</Text>
             </View> */}
-          </View>
+          </ImageBackground>
 
           <View style={styles.carouselMiddleColumn}>
-            <View style={[styles.logoBox, styles.characterTile]}>
+            <ImageBackground source={PAYWALL_IMAGES.sahara} style={[styles.logoBox, styles.characterTile]} resizeMode="stretch">
               <Image source={PAYWALL_IMAGES.boyAndGirl} style={styles.tileImage} resizeMode="contain" />
-            </View>
-            <View style={[styles.imageBox, styles.imageBoxShort]}>
+            </ImageBackground>
+            <ImageBackground source={PAYWALL_IMAGES.backdrop} style={[styles.imageBox, styles.imageBoxShort]} resizeMode="stretch">
               <Image
                 source={PAYWALL_IMAGES.coach}
                 style={styles.tileImage}
@@ -253,15 +269,15 @@ export default function PaywallScreen() {
               {/* <View style={styles.captionPill}>
                 <Text style={styles.captionText}>Loved by{'\n'}parents and kids</Text>
               </View> */}
-            </View>
+            </ImageBackground>
           </View>
 
-          <View style={[styles.imageBox, styles.imageBoxTall]}>
+          <ImageBackground source={PAYWALL_IMAGES.sahara} style={[styles.imageBox, styles.imageBoxTall]} resizeMode="stretch">
             <Image source={PAYWALL_IMAGES.girl} style={styles.tileImage} resizeMode="contain" />
             {/* <View style={styles.captionPill}>
               <Text style={styles.captionText}>Fun routines{'\n'}kids enjoy</Text>
             </View> */}
-          </View>
+          </ImageBackground>
         </View>
 
         <Text style={styles.headline}>
@@ -374,6 +390,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: vs(16),
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 0,
+    width: s(44),
+    height: s(44),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   brandIcon: {
     width: s(28),

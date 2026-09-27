@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getHomeViewMode, subscribeHomeViewMode } from '../services/homeViewState';
 import { getPaidStatus } from '../services/subscription';
+import { clearTemporaryPaywallAccess, hasTemporaryPaywallAccess } from '../services/temporaryAccess';
 import { hasCompletedOnboarding } from '../services/profile';
 import { initPurchases } from '../services/purchases';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
@@ -159,6 +160,7 @@ export default function RootLayout() {
       const alreadyInLoading = pathname === '/loading';
       const alreadyInPaywall = pathname === '/paywall';
       if (alreadyInOnboarding || alreadyInLoading || alreadyInPaywall) return;
+      if (hasTemporaryPaywallAccess()) return;
 
       const [isPaid, onboardingDone] = await Promise.all([getPaidStatus(), hasCompletedOnboarding()]);
       if (isPaid && onboardingDone) return;
@@ -175,6 +177,8 @@ export default function RootLayout() {
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         enforceAccessGate();
+      } else {
+        clearTemporaryPaywallAccess();
       }
     });
 

@@ -7,8 +7,8 @@
  */
 export const colors = {
   // Brand / actions
-  primary: '#4A90D9',
-  teal: '#1E7B7B',
+  primary: '#46a1c2',
+  teal: '#46a1c2',
   tealMuted: '#5F8F86',
 
   // Surfaces

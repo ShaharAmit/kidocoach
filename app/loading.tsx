@@ -8,6 +8,7 @@ import {
   warmAllRoutineAssetsToCompletion,
 } from '../services/assetCacheService';
 import { getPaidStatus, refreshPaidStatusFromRevenueCat } from '../services/subscription';
+import { hasTemporaryPaywallAccess } from '../services/temporaryAccess';
 import { getChildProfile, hasCompletedOnboarding } from '../services/profile';
 import { Routine } from '../types';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
@@ -18,11 +19,13 @@ import DayNightTransition from '../components/DayNightTransition';
 export default function LoadingScreen() {
   const params = useLocalSearchParams<{ mode?: string }>();
   const isPostQuestionnaire = params.mode === 'generating_experience';
+  const isTemporarySkip = params.mode === 'temporary_skip';
+  const isWarmStart = isPostQuestionnaire || isTemporarySkip;
 
   const progressAnim = useRef(new Animated.Value(0)).current;
-  const [progress, setProgress] = useState(isPostQuestionnaire ? 15 : 0);
+  const [progress, setProgress] = useState(isWarmStart ? 15 : 0);
   const [stage, setStage] = useState(
-    isPostQuestionnaire ? 'Generating experience...' : 'Starting...'
+    isWarmStart ? 'Generating experience...' : 'Starting...'
   );
 
   useEffect(() => {
@@ -38,7 +41,7 @@ export default function LoadingScreen() {
 
     async function run() {
       try {
-        if (!isPostQuestionnaire) {
+        if (!isWarmStart) {
           setStage('Signing in...');
           setProgress(15);
           await requestNotificationPermissions();
@@ -46,7 +49,7 @@ export default function LoadingScreen() {
 
         const user = await ensureAuth();
 
-        if (!isPostQuestionnaire) {
+        if (!isWarmStart) {
           setStage('Preparing your coach...');
           setProgress(35);
           await downloadWelcomeAssets().catch((err) => {
@@ -54,13 +57,11 @@ export default function LoadingScreen() {
           });
         }
 
-        // Post-questionnaire arrivals come straight from a successful paywall purchase, so the
-        // cached flag is already true — avoid an extra network round trip. Cold starts do a
-        // best-effort online refresh (falls back to cache offline) to catch lapsed subscriptions.
-        const isPaid = isPostQuestionnaire ? await getPaidStatus() : await refreshPaidStatusFromRevenueCat();
+        // Purchase and temporary-skip arrivals use the cached flag; cold starts refresh RevenueCat.
+        const isPaid = isWarmStart ? await getPaidStatus() : await refreshPaidStatusFromRevenueCat();
         const onboardingDone = await hasCompletedOnboarding();
 
-        if (isPostQuestionnaire || (onboardingDone && isPaid)) {
+        if (isWarmStart || (onboardingDone && isPaid)) {
           setStage('Generating experience...');
           setProgress(50);
 
@@ -102,10 +103,11 @@ export default function LoadingScreen() {
 
         if (isCancelled) return;
 
+        const canEnterApp = isPaid || (isTemporarySkip && hasTemporaryPaywallAccess());
         if (onboardingDone) {
-          router.replace(isPaid ? '/' : ('/paywall' as never));
+          router.replace(canEnterApp ? '/' : ('/paywall' as never));
         } else {
-          router.replace(isPaid ? ('/onboarding/questionnaire' as never) : ('/onboarding/welcome' as never));
+          router.replace(canEnterApp ? ('/onboarding/questionnaire' as never) : ('/onboarding/welcome' as never));
         }
       } catch (err) {
         console.warn('[Loading] Failed to initialize app:', err);
@@ -120,7 +122,7 @@ export default function LoadingScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [isPostQuestionnaire]);
+  }, [isPostQuestionnaire, isTemporarySkip, isWarmStart]);
 
   const width = progressAnim.interpolate({
     inputRange: [0, 100],
@@ -140,7 +142,7 @@ export default function LoadingScreen() {
     </View>
   );
 
-  if (!isPostQuestionnaire) {
+  if (!isWarmStart) {
     return content;
   }
 
