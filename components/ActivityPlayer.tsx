@@ -399,7 +399,7 @@ export default function ActivityPlayer({
 
       {/* Step counter */}
       <Text style={styles.stepCounter}>
-        Step {stepNumber} of {totalSteps}
+        Activity {stepNumber} of {totalSteps}
       </Text>
 
       {normalizedSteps.length > 1 ? (

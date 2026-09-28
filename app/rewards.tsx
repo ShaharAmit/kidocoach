@@ -17,12 +17,9 @@ import { useUserRoutines } from '../hooks/useRoutine';
 import { getUserTotalStars } from '../services/stars';
 import { ChildProfile, DailyProgress, Routine } from '../types';
 import { colors, fs, ms, vs } from '../theme';
+import { completionStorageKey } from '../utils/dailyCompletion';
 import { getTodayISO } from '../utils/date';
 import { isMorningTime } from '../utils/timeOfDay';
-
-function completionStorageKey(routineId: string): string {
-  return `daily_completion_${routineId}`;
-}
 
 async function computeDailyProgress(routines: Routine[]): Promise<DailyProgress> {
   const today = getTodayISO();
@@ -33,9 +30,12 @@ async function computeDailyProgress(routines: Routine[]): Promise<DailyProgress>
 
   for (const routine of routines) {
     const raw = await AsyncStorage.getItem(completionStorageKey(routine.id));
-    const parsed = raw
-      ? (JSON.parse(raw) as { date?: string; morning?: string[]; evening?: string[] })
-      : null;
+    let parsed: { date?: string; morning?: string[]; evening?: string[] } | null = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
     const morningSet = new Set<string>(parsed?.date === today ? parsed?.morning ?? [] : []);
     const eveningSet = new Set<string>(parsed?.date === today ? parsed?.evening ?? [] : []);
 

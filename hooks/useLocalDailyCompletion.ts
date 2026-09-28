@@ -4,11 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { LocalDailyCompletion } from '../types';
+import { completionStorageKey } from '../utils/dailyCompletion';
 import { getTodayISO } from '../utils/date';
-
-function storageKey(routineId: string): string {
-  return `daily_completion_${routineId}`;
-}
 
 interface DailyCompletionState {
   completedMorningStepIds: Set<string>;
@@ -84,7 +81,7 @@ export function useLocalDailyCompletion(
 
     async function load() {
       try {
-        const raw = await AsyncStorage.getItem(storageKey(routineId));
+        const raw = await AsyncStorage.getItem(completionStorageKey(routineId));
         if (!mounted) return;
 
         // Recomputed here rather than closed over, so a hook instance that stays mounted across
@@ -177,7 +174,7 @@ export function useLocalDailyCompletion(
       // Persist to AsyncStorage
       const today = getTodayISO();
       try {
-        const raw = await AsyncStorage.getItem(storageKey(routineId));
+        const raw = await AsyncStorage.getItem(completionStorageKey(routineId));
         const current: LocalDailyCompletion = raw
           ? JSON.parse(raw)
           : { date: today, morning: [], evening: [] };
@@ -191,7 +188,7 @@ export function useLocalDailyCompletion(
           ...stored,
           [segment]: updatedArray,
         };
-        await AsyncStorage.setItem(storageKey(routineId), JSON.stringify(updated));
+        await AsyncStorage.setItem(completionStorageKey(routineId), JSON.stringify(updated));
       } catch (err) {
         console.warn('[useLocalDailyCompletion] Persist error:', err);
       }

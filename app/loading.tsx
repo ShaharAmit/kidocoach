@@ -13,7 +13,6 @@ import { getChildProfile, hasCompletedOnboarding } from '../services/profile';
 import { Routine } from '../types';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
 import { colors, fs, ms, s, vs } from '../theme';
-import { isMorningTime } from '../utils/timeOfDay';
 import DayNightTransition from '../components/DayNightTransition';
 
 export default function LoadingScreen() {

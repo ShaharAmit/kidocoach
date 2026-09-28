@@ -26,6 +26,7 @@ import { db, ensureAuth } from '../../services/firebase';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { colors, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
+import { completionStorageKey } from '../../utils/dailyCompletion';
 import { getTodayISO } from '../../utils/date';
 import { isMorningTime } from '../../utils/timeOfDay';
 import PageBackground from '../../components/PageBackground';
@@ -197,7 +198,7 @@ async function remapLocalDailyCompletionForUpdatedActivities(
   routineId: DaySegment,
   next: ActivityEntry[]
 ): Promise<void> {
-  const storageKey = `daily_completion_${routineId}`;
+  const storageKey = completionStorageKey(routineId);
   const raw = await AsyncStorage.getItem(storageKey);
   if (!raw) return;
 

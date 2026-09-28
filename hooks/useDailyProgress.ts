@@ -30,16 +30,15 @@ export function useDailyProgress(
     routine.activityStack.forEach((_, stepIndex) => {
       const time = routine.stepTimes?.[stepIndex] ?? routine.scheduledTime;
       const isMorning = isMorningTime(time);
+      const stepId = routine.stepIds?.[stepIndex] ?? `step_${stepIndex}`;
 
       if (isMorning) {
         morningTotal += 1;
-        const stepId = routine.stepIds?.[stepIndex] ?? `step_${stepIndex}`;
         if (completion.completedMorningStepIds.has(stepId)) {
           morningCompleted += 1;
         }
       } else {
         eveningTotal += 1;
-        const stepId = routine.stepIds?.[stepIndex] ?? `step_${stepIndex}`;
         if (completion.completedEveningStepIds.has(stepId)) {
           eveningCompleted += 1;
         }

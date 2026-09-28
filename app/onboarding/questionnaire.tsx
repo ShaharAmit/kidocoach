@@ -32,7 +32,6 @@ import { ensureAuth } from '../../services/firebase';
 import { saveRoutine, saveRoutineIfMissing } from '../../hooks/useRoutine';
 import { scheduleRoutineNotification } from '../../services/notifications';
 import { saveChildProfile, getChildProfile, saveUserProfileDoc } from '../../services/profile';
-import { preloadRoutineAssetsInBackground } from '../../services/assetCacheService';
 import { calculateAgeFromISO, formatBirthDate, getTodayISO, isoDateYearsAgo } from '../../utils/date';
 import { colors, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';

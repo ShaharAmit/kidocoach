@@ -74,28 +74,6 @@ function PlanCard({ title, badge, monthlyLabel, billedLabel, selected, onPress }
   );
 }
 
-type FeatureRowProps = {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  iconColor: string;
-  iconBg: string;
-  title: string;
-  subtitle: string;
-};
-
-function FeatureRow({ icon, iconColor, iconBg, title, subtitle }: FeatureRowProps) {
-  return (
-    <View style={styles.featureRow}>
-      <View style={[styles.featureIconWrap, { backgroundColor: iconBg }]}>
-        <MaterialCommunityIcons name={icon} size={ms(22)} color={iconColor} />
-      </View>
-      <View style={styles.featureTextWrap}>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureSubtitle}>{subtitle}</Text>
-      </View>
-    </View>
-  );
-}
-
 export default function PaywallScreen() {
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [loadingOfferings, setLoadingOfferings] = useState(true);
@@ -316,32 +294,6 @@ export default function PaywallScreen() {
           />
         </View>
 
-        {/* <View style={styles.featuresCard}>
-          <FeatureRow
-            icon="infinity"
-            iconColor="#2F80D9"
-            iconBg="#E4F0FC"
-            title="Unlimited routines & tasks"
-            subtitle="Create as many as you need"
-          />
-          <View style={styles.featureDivider} />
-          <FeatureRow
-            icon="chart-bar"
-            iconColor="#8B5CF6"
-            iconBg="#EFE7FD"
-            title="Advanced parent insights"
-            subtitle="Track progress & get AI insights"
-          />
-          <View style={styles.featureDivider} />
-          <FeatureRow
-            icon="star"
-            iconColor="#3D9A6E"
-            iconBg="#E1F5EA"
-            title="Motivate & reward kids"
-            subtitle="Stars, levels and fun rewards"
-          />
-        </View> */}
-
         <TouchableOpacity
           style={[styles.ctaButton, (purchasing || restoring || loadingOfferings) && styles.ctaButtonDisabled]}
           onPress={handleStartTrial}
@@ -561,43 +513,6 @@ const styles = StyleSheet.create({
     fontSize: fs(15),
     fontWeight: '600',
     color: colors.textInk,
-  },
-  featuresCard: {
-    backgroundColor: '#FFF',
-    borderRadius: ms(16),
-    paddingHorizontal: s(16),
-    paddingVertical: vs(6),
-    marginBottom: vs(20),
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: vs(12),
-  },
-  featureDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderLight,
-  },
-  featureIconWrap: {
-    width: s(40),
-    height: s(40),
-    borderRadius: s(20),
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: s(12),
-  },
-  featureTextWrap: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: fs(15),
-    fontWeight: '700',
-    color: colors.textInk,
-  },
-  featureSubtitle: {
-    fontSize: fs(12),
-    color: colors.textMuted,
-    marginTop: vs(2),
   },
   ctaButton: {
     backgroundColor: '#FFF',

@@ -4,6 +4,8 @@ import { db } from './firebase';
 import { cacheRoutines, readCachedRoutines } from './routineLocalCache';
 import { defaultDurationMinutes, resolveDurationMode, starsForStep } from '../constants/activities';
 import { ActivityKey, ActivityStep, ChildProfile, DurationMode, LocalDailyCompletion, Routine } from '../types';
+import { completionStorageKey } from '../utils/dailyCompletion';
+import { getTodayISO } from '../utils/date';
 
 type HomeBootstrapSnapshot = {
   userId: string;
@@ -39,18 +41,6 @@ type ActivityDoc = {
 
 let snapshot: HomeBootstrapSnapshot | null = null;
 
-function getTodayISO(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function completionStorageKey(routineId: string): string {
-  return `daily_completion_${routineId}`;
-}
-
 function normalizeUserRoutineProfile(raw: Record<string, unknown> | null): UserRoutineProfile | null {
   if (!raw) return null;
   const childName = typeof raw.childName === 'string' ? raw.childName.trim() : '';
@@ -81,7 +71,7 @@ function normalizeRoutineMeta(id: string, raw: Record<string, unknown>): Routine
 }
 
 function normalizeActivityDocs(
-  docs: Array<{ id: string; data: Record<string, unknown> }>
+  docs: { id: string; data: Record<string, unknown> }[]
 ): ActivityDoc[] {
   return docs
     .map((entry, index) => {

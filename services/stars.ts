@@ -23,13 +23,23 @@ const pendingAwardsKey = (userId: string) => `pending_step_awards_${userId}`;
 let pendingFlush: Promise<void> | null = null;
 let pendingWrite: Promise<void> = Promise.resolve();
 
+async function getPendingAwards(userId: string): Promise<AwardRoutineStepStarRequest[]> {
+  const stored = await AsyncStorage.getItem(pendingAwardsKey(userId));
+  try {
+    const parsed: unknown = JSON.parse(stored ?? '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function updatePendingAwards(
   userId: string,
   update: (pending: AwardRoutineStepStarRequest[]) => AwardRoutineStepStarRequest[]
 ): Promise<void> {
   const next = pendingWrite.then(async () => {
     const key = pendingAwardsKey(userId);
-    const pending = JSON.parse((await AsyncStorage.getItem(key)) ?? '[]') as AwardRoutineStepStarRequest[];
+    const pending = await getPendingAwards(userId);
     await AsyncStorage.setItem(key, JSON.stringify(update(pending)));
   });
   pendingWrite = next.catch(() => undefined);
@@ -47,10 +57,9 @@ export async function queueRoutineStepStars(payload: AwardRoutineStepStarRequest
 export function flushPendingStepStars(userId: string): Promise<void> {
   if (pendingFlush) return pendingFlush;
   pendingFlush = (async () => {
-    const key = pendingAwardsKey(userId);
     while (true) {
       await pendingWrite;
-      const pending = JSON.parse((await AsyncStorage.getItem(key)) ?? '[]') as AwardRoutineStepStarRequest[];
+      const pending = await getPendingAwards(userId);
       if (pending.length === 0) break;
       const current = pending[0];
       try {
