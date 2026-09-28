@@ -100,6 +100,7 @@ export default function HomeScreen() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [assetsReady, setAssetsReady] = useState(false);
   const [trophyVisible, setTrophyVisible] = useState(false);
+  const [rewardStars, setRewardStars] = useState<number | null>(null);
   const [showCaptions, setShowCaptions] = useState(false);
   const [activityListHeight, setActivityListHeight] = useState(0);
   const [activityContentHeight, setActivityContentHeight] = useState(0);
@@ -400,12 +401,13 @@ export default function HomeScreen() {
   }, [visibleStepIds, completedStepIds]);
 
   useEffect(() => {
-    if (!allScopedDone) return;
+    if (!allScopedDone || viewMode === 'player') return;
     if (trophyShownThisSession[segment]) return;
 
+    setRewardStars(null);
     setTrophyVisible(true);
     setTrophyShownThisSession((prev) => ({ ...prev, [segment]: true }));
-  }, [allScopedDone, segment, trophyShownThisSession]);
+  }, [allScopedDone, segment, trophyShownThisSession, viewMode]);
 
   const handleStepComplete = useCallback(async () => {
     if (!primaryRoutine || visibleStepIndexes.length === 0) return;
@@ -415,6 +417,17 @@ export default function HomeScreen() {
 
     const stars = primaryRoutine.stepStars?.[currentStepIndex]
       ?? starsForStep(primaryRoutine.activityStack[currentStepIndex] ?? []);
+    if (newlyCompleted) {
+      setRewardStars(stars);
+      setTrophyVisible(true);
+      if (completesSegment) {
+        setTrophyShownThisSession((prev) => ({ ...prev, [segment]: true }));
+      }
+    }
+
+    // Replays still leave the player, but do not earn stars again.
+    setViewMode('activities');
+
     if (newlyCompleted && stars > 0 && userId) {
       try {
         await queueRoutineStepStars({
@@ -432,14 +445,6 @@ export default function HomeScreen() {
       }
     }
 
-    if (newlyCompleted && completesSegment) {
-      setTrophyVisible(true);
-    }
-
-    // Always leave the player, including when this step was already completed earlier today.
-    // `markStepDone` reports `false` for that re-watch case, and gating the transition on it made
-    // the Done button silently do nothing whenever a finished activity was replayed.
-    setViewMode('activities');
   }, [
     primaryRoutine,
     visibleStepIndexes,
@@ -645,9 +650,12 @@ export default function HomeScreen() {
       <Modal visible={trophyVisible} transparent animationType="fade" onRequestClose={() => setTrophyVisible(false)}>
         <View style={styles.trophyOverlay}>
           <View style={styles.trophyCard}>
-            <Text style={styles.trophyEmoji}>🏆</Text>
+            <Text style={styles.trophyEmoji}>{allScopedDone ? '🏆' : '⭐'}</Text>
             <Text style={styles.trophyTitle}>Amazing, {primaryRoutine.childName}!</Text>
-            <Text style={styles.trophySub}>You finished all {segment} activities.</Text>
+            {rewardStars !== null && rewardStars > 0 ? (
+              <Text style={styles.rewardText}>{rewardStars} {rewardStars === 1 ? 'star' : 'stars'} earned!</Text>
+            ) : null}
+            <Text>{'\n'}</Text>
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={() => {
@@ -971,6 +979,12 @@ const styles = StyleSheet.create({
     fontSize: fs(16),
     color: '#5E6F6E',
     textAlign: 'center',
+  },
+  rewardText: {
+    marginTop: vs(8),
+    fontSize: fs(22),
+    color: '#B87716',
+    fontFamily: roundedFontBold ?? 'System',
   },
   primaryButton: {
     backgroundColor: colors.primary,

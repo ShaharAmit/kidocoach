@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { ClipPath, Defs, Line, Path, Rect } from 'react-native-svg';
 import { VideoView, useVideoPlayer, VideoSize } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -60,6 +61,34 @@ function formatCountdown(seconds: number): string {
   return `${minutes}:${remainder.toString().padStart(2, '0')}`;
 }
 
+function SandHourglass({ remaining, total }: { remaining: number; total: number }) {
+  const fraction = Math.max(0, Math.min(1, remaining / Math.max(1, total)));
+  const surface = Math.sqrt(fraction);
+  const upperLevel = 47 - 35 * surface;
+  const lowerLevel = 49 + 35 * surface;
+
+  return (
+    <Svg width={ms(56)} height={ms(84)} viewBox="0 0 64 96" aria-hidden>
+      <Defs>
+        <ClipPath id="upperSand">
+          <Rect x="10" y={upperLevel} width="44" height={47 - upperLevel} />
+        </ClipPath>
+        <ClipPath id="lowerSand">
+          <Rect x="10" y={lowerLevel} width="44" height={84 - lowerLevel} />
+        </ClipPath>
+      </Defs>
+      <Path d="M12 12 H52 L32 47 Z" fill="#F6BF57" clipPath="url(#upperSand)" />
+      <Path d="M32 49 L52 84 H12 Z" fill="#F6BF57" clipPath="url(#lowerSand)" />
+      {fraction > 0 && fraction < 1 ? (
+        <Line x1="32" y1="47" x2="32" y2={lowerLevel} stroke="#F6BF57" strokeWidth="2" />
+      ) : null}
+      <Path d="M12 12 H52 L32 47 L52 84 H12 L32 49 Z" fill="none" stroke="#FFF5DC" strokeWidth="3" strokeLinejoin="round" />
+      <Line x1="8" y1="8" x2="56" y2="8" stroke="#FFF5DC" strokeWidth="5" strokeLinecap="round" />
+      <Line x1="8" y1="88" x2="56" y2="88" stroke="#FFF5DC" strokeWidth="5" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /**
  * What this step will actually play.
  *
@@ -79,6 +108,7 @@ interface VideoStageProps {
   captionCues: CaptionCue[] | null;
   videoEnded: boolean;
   timerSecondsRemaining: number | null;
+  timerDurationSeconds: number;
   accentColor: string;
   onRetry: () => void;
   onEnded: () => void;
@@ -103,6 +133,7 @@ function VideoStage({
   captionCues,
   videoEnded,
   timerSecondsRemaining,
+  timerDurationSeconds,
   accentColor,
   onRetry,
   onEnded,
@@ -194,7 +225,11 @@ function VideoStage({
 
       {videoEnded ? (
         <TouchableOpacity
-          style={[styles.retryButton, { backgroundColor: accentColor }]}
+          style={[
+            styles.retryButton,
+            timerSecondsRemaining !== null && styles.retryButtonWithTimer,
+            { backgroundColor: accentColor },
+          ]}
           onPress={onRetry}
           activeOpacity={0.85}
           accessibilityLabel="Replay video"
@@ -205,6 +240,7 @@ function VideoStage({
 
       {timerSecondsRemaining !== null ? (
         <View style={styles.timerOverlay} pointerEvents="none">
+          <SandHourglass remaining={timerSecondsRemaining} total={timerDurationSeconds} />
           <Text style={styles.timerText}>{formatCountdown(timerSecondsRemaining)}</Text>
         </View>
       ) : null}
@@ -433,6 +469,7 @@ export default function ActivityPlayer({
           captionCues={captionCues}
           videoEnded={videoEnded}
           timerSecondsRemaining={timerSecondsRemaining}
+          timerDurationSeconds={durationSeconds}
           accentColor={activity.color}
           onRetry={handleRetryVideo}
           onEnded={handleVideoEnded}
@@ -566,20 +603,22 @@ const styles = StyleSheet.create({
   },
   timerOverlay: {
     position: 'absolute',
-    left: '18%',
-    right: '18%',
-    bottom: '18%',
+    alignSelf: 'center',
+    bottom: '16%',
+    minWidth: ms(104),
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: vs(10),
-    borderRadius: ms(18),
-    backgroundColor: 'rgba(0,0,0,0.52)',
+    gap: vs(4),
+    paddingHorizontal: s(14),
+    paddingVertical: vs(8),
+    borderRadius: ms(12),
+    backgroundColor: 'rgba(0,0,0,0.62)',
   },
   timerText: {
     color: colors.white,
-    fontSize: fs(36),
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontSize: fs(23),
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   captionText: {
     color: colors.white,
@@ -599,6 +638,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,
+  },
+  retryButtonWithTimer: {
+    alignSelf: 'auto',
+    top: vs(12),
+    right: s(12),
+    marginTop: 0,
   },
   promptText: {
     fontSize: fs(18),
