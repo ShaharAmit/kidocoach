@@ -128,23 +128,6 @@ export default function LoadingScreen() {
     outputRange: ['0%', '100%'],
   });
 
-  const content = (
-    <View style={styles.container}>
-      <Text style={styles.title}>KidoCoach</Text>
-      <Text style={styles.stage}>{stage}</Text>
-
-      <View style={styles.barTrack}>
-        <Animated.View style={[styles.barFill, { width }]} />
-      </View>
-
-      <Text style={styles.percent}>{Math.round(progress)}%</Text>
-    </View>
-  );
-
-  if (!isWarmStart) {
-    return content;
-  }
-
   return (
     <DayNightTransition>
       <View style={styles.sceneContent}>
@@ -164,24 +147,6 @@ export default function LoadingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: s(28),
-    backgroundColor: '#F5F7FA',
-  },
-  title: {
-    fontSize: fs(28),
-    fontWeight: '800',
-    color: '#1E2B39',
-    marginBottom: vs(20),
-  },
-  stage: {
-    fontSize: fs(16),
-    color: '#4A5568',
-    marginBottom: vs(24),
-  },
   barTrack: {
     width: '100%',
     height: vs(12),

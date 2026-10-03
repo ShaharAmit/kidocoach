@@ -87,9 +87,9 @@ export default function DayNightTransition({ children, loop = true }: DayNightTr
   return (
     <View style={styles.root}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <CloudsBackground />
+        <CloudsBackground fillScreen />
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: nightOpacity }]}>
-          <StarsBackground />
+          <StarsBackground fillScreen />
         </Animated.View>
       </View>
 

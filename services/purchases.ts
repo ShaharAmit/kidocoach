@@ -9,13 +9,11 @@ import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchase
  */
 const REVENUECAT_IOS_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ||
-  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ||
-  'test_CttHZCmUIMsxPYVtOvvOmLlXFFS';
+  'appl_VDcFodNHmkxScTABerxjQoXGVxs';
 
 const REVENUECAT_ANDROID_API_KEY =
   process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ||
-  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ||
-  'test_CttHZCmUIMsxPYVtOvvOmLlXFFS';
+  'goog_REPLACE_WITH_ANDROID_KEY';
 
 /** Entitlement identifier configured in the RevenueCat dashboard for full app access. */
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
