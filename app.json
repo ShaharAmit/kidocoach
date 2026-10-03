@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "KidsRoutineCoach",
-    "slug": "kids-routine-coach",
+    "name": "KidoCoach",
+    "slug": "kidocoach",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "kidsroutine",
+    "scheme": "kidocoach",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kidsroutinecoach.app",
+      "bundleIdentifier": "com.kidocoach.app",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -23,7 +23,7 @@
       }
     },
     "android": {
-      "package": "com.kidsroutinecoach.app",
+      "package": "com.kidocoach.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

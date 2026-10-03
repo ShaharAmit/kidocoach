@@ -1,6 +1,6 @@
 {
-  "name": "kids-routine-coach-functions",
-  "description": "Firebase Cloud Functions for Kids Routine Coach",
+  "name": "kidocoach-functions",
+  "description": "Firebase Cloud Functions for KidoCoach",
   "scripts": {
     "build": "tsc",
     "seed:public-site": "node scripts/seed-public-site-config.js",

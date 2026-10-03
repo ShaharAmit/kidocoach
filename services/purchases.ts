@@ -7,8 +7,15 @@ import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchase
  * to this app, never account or billing management. Replace these with the real keys from the
  * RevenueCat dashboard (Project Settings > API Keys) before shipping.
  */
-const REVENUECAT_IOS_API_KEY = 'appl_REPLACE_WITH_IOS_KEY';
-const REVENUECAT_ANDROID_API_KEY = 'goog_REPLACE_WITH_ANDROID_KEY';
+const REVENUECAT_IOS_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ||
+  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ||
+  'test_CttHZCmUIMsxPYVtOvvOmLlXFFS';
+
+const REVENUECAT_ANDROID_API_KEY =
+  process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ||
+  process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ||
+  'test_CttHZCmUIMsxPYVtOvvOmLlXFFS';
 
 /** Entitlement identifier configured in the RevenueCat dashboard for full app access. */
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
@@ -17,7 +24,7 @@ let configured = false;
 
 function currentApiKey(): string | null {
   const key = Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
-  return key.includes('REPLACE_WITH') ? null : key;
+  return !key || key.includes('REPLACE_WITH') ? null : key;
 }
 
 /**

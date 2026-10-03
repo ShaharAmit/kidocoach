@@ -1,4 +1,4 @@
-# AI Avatar Kids Routine Coach
+# KidoCoach
 
 An iOS/Android app built with **Expo (React Native)** + **Firebase** that guides children through sequential daily routines using animated avatar loops and personalised AI-generated voice audio.
 
@@ -14,7 +14,7 @@ An iOS/Android app built with **Expo (React Native)** + **Firebase** that guides
 ## 🗂 Project Structure
 
 ```
-kids-routine-coach/
+kidocoach/
 ├── app/                          # expo-router screens
 │   ├── _layout.tsx               # Root layout: notification deep-link handler
 │   ├── index.tsx                 # Home screen: routine list
@@ -53,8 +53,8 @@ kids-routine-coach/
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/kids-routine-coach.git
-cd kids-routine-coach
+git clone https://github.com/ShaharAmit/kidocoach.git
+cd kidocoach
 npm install
 
 ### Website (kidocoach.app)
@@ -165,10 +165,10 @@ Document ID: `{normalizedChildName}_{activityKey}_{avatarId}`
 
 ## 📱 Deep Linking
 
-The app registers the `kidsroutine://` scheme. Tapping a push notification navigates to:
+The app registers the `kidocoach://` scheme. Tapping a push notification navigates to:
 
 ```
-kidsroutine://routine/{routineId}
+kidocoach://routine/{routineId}
 ```
 
 expo-router intercepts this URL and renders `app/routine/[id].tsx` directly, even when the app is cold-started.

@@ -130,7 +130,7 @@ export default function LoadingScreen() {
 
   const content = (
     <View style={styles.container}>
-      <Text style={styles.title}>Kids Routine Coach</Text>
+      <Text style={styles.title}>KidoCoach</Text>
       <Text style={styles.stage}>{stage}</Text>
 
       <View style={styles.barTrack}>

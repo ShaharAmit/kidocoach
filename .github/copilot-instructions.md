@@ -168,7 +168,7 @@ Post-setup core flow:
 
 **`tts.ts`** — Client-side TTS orchestration. `ensureAudioForRoutine(routine)` iterates `activityStack`, checks Firestore `audio_cache/{cacheKey}` for `status === 'ready'`, and calls the `generateRoutineAudio` Cloud Function for any missing entries. `getAudioCacheForRoutine(routine)` fetches all cache entries for display/debugging.
 
-**`notifications.ts`** — `requestNotificationPermissions()` requests OS permission and sets up an Android channel. `scheduleRoutineNotification(routine)` schedules a daily repeating `CALENDAR` trigger at the first step's time; cancels any previous notification for the same routine. Notification `data` payload includes `routineId` and a `kidsroutine://` deep-link URL.
+**`notifications.ts`** — `requestNotificationPermissions()` requests OS permission and sets up an Android channel. `scheduleRoutineNotification(routine)` schedules a daily repeating `CALENDAR` trigger at the first step's time; cancels any previous notification for the same routine. Notification `data` payload includes `routineId` and a `kidocoach://` deep-link URL.
 
 **`profile.ts`** — `ChildProfile` CRUD over AsyncStorage (`child_profile_v1`). `saveChildProfile()` normalizes `activityStack` and `stepTimes` before writing. `getChildProfile()` fully validates every field on read (clears and returns `null` on any invalid value). `hasCompletedOnboarding()` is a convenience wrapper.
 

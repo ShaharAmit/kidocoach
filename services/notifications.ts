@@ -71,7 +71,7 @@ export async function scheduleRoutineNotification(routine: Routine): Promise<str
       body: `${routine.childName}, your morning routine is starting now. Tap to begin! 🚀`,
       data: {
         routineId: routine.id,
-        url: `kidsroutine://routine/${routine.id}`,
+        url: `kidocoach://routine/${routine.id}`,
       },
       sound: true,
     },
@@ -106,7 +106,7 @@ export async function scheduleTrialEndingNotification(): Promise<string> {
   return Notifications.scheduleNotificationAsync({
     content: {
       title: 'Your free trial ends tomorrow',
-      body: "Your Kids Routine Coach subscription starts tomorrow unless you cancel first.",
+      body: "Your KidoCoach subscription starts tomorrow unless you cancel first.",
       sound: true,
     },
     trigger: {

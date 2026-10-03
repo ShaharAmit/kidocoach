@@ -28,7 +28,7 @@ import { scheduleTrialEndingNotification, cancelTrialEndingNotification } from '
 import { PAYWALL_IMAGES } from '../constants/paywallImages';
 import { colors, fs, ms, s, vs } from '../theme';
 
-const LEGAL_BASE_URL = 'https://kids-routine-coach-app.web.app';
+const LEGAL_BASE_URL = 'https://kidocoach.app';
 const TRIAL_NOTIFY_ID_KEY = 'trial_notify_id_v1';
 
 const FALLBACK_YEARLY_PRICE = '$49.99/year';
@@ -214,7 +214,7 @@ export default function PaywallScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.brandRow}>
           <Image source={require('../assets/icon.png')} style={styles.brandIcon} resizeMode="contain" />
-          <Text style={styles.brandName}>Kids Routine Coach</Text>
+          <Text style={styles.brandName}>KidoCoach</Text>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={handleTemporarySkip}
