@@ -325,7 +325,10 @@ export default function RootLayout() {
             name="profile"
             options={{
               title: 'Profile',
+              headerLeft: () => <NavigationBackButton />,
               headerStyle: { backgroundColor: colors.morningBg },
+              headerTintColor: colors.textInk,
+              tabBarStyle: { display: 'none' },
               tabBarLabel: ({ color }) => <TabLabel text="Profile" color={color} />,
               tabBarIcon: ({ color, size }) => (
                 <MaterialCommunityIcons name="account-circle-outline" size={size} color={color} />
