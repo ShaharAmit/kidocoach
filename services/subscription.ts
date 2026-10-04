@@ -13,6 +13,7 @@ export async function setPaidStatus(isPaid: boolean): Promise<void> {
 
 /** Reads the locally cached paid flag (AsyncStorage-backed, no network). */
 export async function getPaidStatus(): Promise<boolean> {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) return true;
   if (cachedPaidStatus !== null) return cachedPaidStatus;
   const raw = await AsyncStorage.getItem(PAID_STATUS_KEY);
   cachedPaidStatus = raw === '1';
@@ -25,6 +26,7 @@ export async function getPaidStatus(): Promise<boolean> {
  * never hard-blocking offline-first usage (e.g. iPads with intermittent Wi-Fi).
  */
 export async function refreshPaidStatusFromRevenueCat(): Promise<boolean> {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) return true;
   const remoteStatus = await refreshEntitlementFromRevenueCat();
   if (remoteStatus === null) {
     return getPaidStatus();

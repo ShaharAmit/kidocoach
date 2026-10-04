@@ -1,14 +1,16 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
-import { AppState, Text, View, Image, useWindowDimensions } from 'react-native';
+import { AppState, Text, View, Image, useWindowDimensions, type ColorValue } from 'react-native';
 import { Tabs, Stack, router, usePathname } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getHomeViewMode, subscribeHomeViewMode } from '../services/homeViewState';
 import { getPaidStatus } from '../services/subscription';
-import { clearTemporaryPaywallAccess, hasTemporaryPaywallAccess } from '../services/temporaryAccess';
 import { hasCompletedOnboarding } from '../services/profile';
+import { getAccessRoute } from '../utils/accessRoute';
 import { initPurchases } from '../services/purchases';
+import { auth, ensureAuth } from '../services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
 import { colors, fs, ms, s, vs } from '../theme';
 import { preloadLocalImages, retryLocalImage, useLocalImage } from '../utils/localImages';
@@ -29,7 +31,7 @@ function HeaderTitle({ segment }: { segment: DaySegment }) {
   );
 }
 
-function TabLabel({ text, color }: { text: string; color: string }) {
+function TabLabel({ text, color }: { text: string; color: ColorValue }) {
   return (
     <Text
       numberOfLines={1}
@@ -70,6 +72,7 @@ export default function RootLayout() {
   const [segment, setSegment] = useState<DaySegment>(getCurrentSegment);
   const [showDecorations, setShowDecorations] = useState(false);
   const [homeViewMode, setHomeViewModeLocal] = useState(getHomeViewMode);
+  const [authUserId, setAuthUserId] = useState(auth.currentUser?.uid);
   const sunSource = useLocalImage(SUN_IMAGE);
   const moonSource = useLocalImage(MOON_IMAGE);
   const tabBarHorizontalInset = Math.round(screenWidth * 0.05);
@@ -77,6 +80,8 @@ export default function RootLayout() {
   useEffect(() => {
     return subscribeHomeViewMode(setHomeViewModeLocal);
   }, []);
+
+  useEffect(() => onAuthStateChanged(auth, (user) => setAuthUserId(user?.uid)), []);
 
   // Resolve every bundled image to a stable local file URI up front. Without this, dev-build
   // artwork keeps pointing at packager URLs that stop resolving once the dev server goes away,
@@ -155,48 +160,48 @@ export default function RootLayout() {
   // subscription (or an onboarding flow abandoned mid-paywall) is caught without hard-blocking
   // offline-first usage — getPaidStatus() reads the local cache only, never blocks on network.
   useEffect(() => {
+    let cancelled = false;
     const enforceAccessGate = async () => {
       const alreadyInOnboarding = pathname.startsWith('/onboarding');
       const alreadyInLoading = pathname === '/loading';
       const alreadyInPaywall = pathname === '/paywall';
-      if (alreadyInOnboarding || alreadyInLoading || alreadyInPaywall) return;
-      if (hasTemporaryPaywallAccess()) return;
+      if (alreadyInOnboarding || alreadyInLoading || alreadyInPaywall || pathname === '/profile') return;
 
+      const user = await ensureAuth();
       const [isPaid, onboardingDone] = await Promise.all([getPaidStatus(), hasCompletedOnboarding()]);
+      if (cancelled || auth.currentUser?.uid !== user.uid) return;
       if (isPaid && onboardingDone) return;
 
-      if (!onboardingDone) {
-        router.replace('/onboarding/welcome' as never);
-      } else {
-        router.replace('/paywall' as never);
-      }
+      router.replace(getAccessRoute(isPaid, onboardingDone));
     };
 
-    enforceAccessGate();
+    const checkAccess = () => {
+      enforceAccessGate().catch((err) => {
+        console.warn('[RootLayout] Failed to check family access:', err);
+        if (!cancelled) router.replace('/loading');
+      });
+    };
+    checkAccess();
 
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        enforceAccessGate();
-      } else {
-        clearTemporaryPaywallAccess();
-      }
-    });
-
-    const responseListener = Notifications.addNotificationResponseReceivedListener(
-      handleNotificationResponse
-    );
-
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response) {
-        handleNotificationResponse(response);
+        checkAccess();
       }
     });
 
     return () => {
+      cancelled = true;
       appStateSub.remove();
-      responseListener.remove();
     };
-  }, [handleNotificationResponse, pathname]);
+  }, [pathname, authUserId]);
+
+  useEffect(() => {
+    const responseListener = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) handleNotificationResponse(response);
+    }).catch((err) => console.warn('[RootLayout] Failed to read notification response:', err));
+    return () => responseListener.remove();
+  }, [handleNotificationResponse]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -236,6 +241,11 @@ export default function RootLayout() {
         </Stack>
       ) : (
         <Tabs
+          screenLayout={({ children, route }) => (
+            <React.Fragment key={route.name === 'profile' ? 'profile' : authUserId ?? 'guest'}>
+              {children}
+            </React.Fragment>
+          )}
           screenOptions={{
             headerStyle: { backgroundColor: colors.appBg },
             headerTintColor: colors.textInk,
@@ -308,6 +318,17 @@ export default function RootLayout() {
               tabBarLabel: ({ color }) => <TabLabel text="Rewards" color={color} />,
               tabBarIcon: ({ color, size }) => (
                 <MaterialCommunityIcons name="star" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="profile"
+            options={{
+              title: 'Profile',
+              headerStyle: { backgroundColor: colors.morningBg },
+              tabBarLabel: ({ color }) => <TabLabel text="Profile" color={color} />,
+              tabBarIcon: ({ color, size }) => (
+                <MaterialCommunityIcons name="account-circle-outline" size={size} color={color} />
               ),
             }}
           />

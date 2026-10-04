@@ -21,9 +21,9 @@ import {
   fetchOfferingPackages,
   purchasePackageAndCheckEntitlement,
   restorePurchasesAndCheckEntitlement,
+  initPurchases,
 } from '../services/purchases';
-import { setPaidStatus } from '../services/subscription';
-import { grantTemporaryPaywallAccess } from '../services/temporaryAccess';
+import { refreshPaidStatusFromRevenueCat, setPaidStatus } from '../services/subscription';
 import { scheduleTrialEndingNotification, cancelTrialEndingNotification } from '../services/notifications';
 import { PAYWALL_IMAGES } from '../constants/paywallImages';
 import { colors, fs, ms, s, vs } from '../theme';
@@ -84,9 +84,21 @@ export default function PaywallScreen() {
 
   useEffect(() => {
     let mounted = true;
-    fetchOfferingPackages()
+    initPurchases()
+      .then(async () => {
+        const isPaid = await refreshPaidStatusFromRevenueCat();
+        if (isPaid && mounted) {
+          router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } });
+          return [];
+        }
+        return fetchOfferingPackages();
+      })
       .then((pkgs) => {
         if (mounted) setPackages(pkgs);
+      })
+      .catch((err: unknown) => {
+        console.warn('[Paywall] Failed to load purchase access:', err);
+        if (mounted) Alert.alert('Plans unavailable', 'Check your connection and try opening the paywall again.');
       })
       .finally(() => {
         if (mounted) setLoadingOfferings(false);
@@ -131,11 +143,6 @@ export default function PaywallScreen() {
   const unlockAndContinue = useCallback(async () => {
     await setPaidStatus(true);
     router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } } as never);
-  }, []);
-
-  const handleTemporarySkip = useCallback(() => {
-    grantTemporaryPaywallAccess();
-    router.replace({ pathname: '/loading', params: { mode: 'temporary_skip' } } as never);
   }, []);
 
   const handleToggleNotify = useCallback(async (value: boolean) => {
@@ -215,15 +222,6 @@ export default function PaywallScreen() {
         <View style={styles.brandRow}>
           <Image source={require('../assets/icon.png')} style={styles.brandIcon} resizeMode="contain" />
           <Text style={styles.brandName}>KidoCoach</Text>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={handleTemporarySkip}
-            accessibilityRole="button"
-            accessibilityLabel="Skip for now"
-            hitSlop={8}
-          >
-            <MaterialCommunityIcons name="close" size={ms(24)} color={colors.textSlate} />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.carouselRow}>
@@ -309,6 +307,14 @@ export default function PaywallScreen() {
           )}
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => router.replace('/profile')} disabled={restoring || purchasing}>
+          <Text style={[styles.footerLink, { textAlign: 'center', marginVertical: vs(14) }]}>
+            Parent sign in / registration
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.planBilled, { textAlign: 'center', marginBottom: vs(12) }]}>
+          Restore Purchases restores paid access only. Sign in to a linked parent account to recover your family.
+        </Text>
         <View style={styles.footerRow}>
           <TouchableOpacity onPress={handleRestore} disabled={restoring || purchasing}>
             <Text style={styles.footerLink}>{restoring ? 'Restoring…' : 'Restore Purchases'}</Text>
@@ -343,14 +349,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: vs(16),
     position: 'relative',
-  },
-  closeButton: {
-    position: 'absolute',
-    right: 0,
-    width: s(44),
-    height: s(44),
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   brandIcon: {
     width: s(28),

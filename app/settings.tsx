@@ -10,9 +10,9 @@ import {
   View,
 } from 'react-native';
 import { router, Stack } from 'expo-router';
-import { getChildProfile, clearChildProfile, saveChildProfile } from '../services/profile';
+import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../services/profile';
+import { clearLocalFamilySession } from '../services/accountSession';
 import { clearAllLocalCachedAssets } from '../services/assetCacheService';
-import { setPaidStatus } from '../services/subscription';
 import { colors, fs, ms, vs } from '../theme';
 import { ChildProfile } from '../types';
 import { getUserTotalStars } from '../services/stars';
@@ -81,9 +81,8 @@ export default function SettingsScreen() {
 
     const existingProfile = await getChildProfile();
     if (!existingProfile) {
-      await clearChildProfile();
+      await clearLocalFamilySession();
       await clearAllLocalCachedAssets();
-      await setPaidStatus(false);
       router.replace('/onboarding/questionnaire' as never);
       return;
     }
@@ -120,9 +119,9 @@ export default function SettingsScreen() {
       ]);
 
       await deleteDoc(doc(db, 'users', userId, 'stats', 'main')).catch(() => {});
-      await clearChildProfile();
+      await clearLocalFamilySession();
       await clearAllLocalCachedAssets();
-      await setPaidStatus(false);
+      await deleteDoc(doc(db, 'users', userId));
 
       Alert.alert(
         'Questionnaire reset',
@@ -192,8 +191,16 @@ export default function SettingsScreen() {
     } catch (err) {
       console.warn('[Settings] failed to save caption preference:', err);
       setProfile(profile); // revert on failure
+      Alert.alert('Save failed', 'Could not save the caption preference on this device.');
+      return;
     } finally {
       setIsSavingCaptions(false);
+    }
+    try {
+      await saveUserProfileDoc(updatedProfile);
+    } catch (err) {
+      console.warn('[Settings] caption backup failed:', err);
+      Alert.alert('Saved on this device', 'The caption preference could not be backed up. Use Profile to back up your setup when connected.');
     }
   };
 

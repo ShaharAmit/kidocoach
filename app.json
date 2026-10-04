@@ -7,13 +7,10 @@
     "icon": "./assets/icon.png",
     "scheme": "kidocoach",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
+      "deploymentTarget": "16.4",
       "supportsTablet": true,
+      "usesAppleSignIn": true,
       "bundleIdentifier": "com.kidocoach.app",
       "infoPlist": {
         "UIBackgroundModes": [
@@ -43,6 +40,15 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "enableFullScreenImage_legacy": true
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
@@ -52,6 +58,7 @@
         }
       ],
       "expo-video",
+      "expo-apple-authentication",
       "@react-native-community/datetimepicker"
     ],
     "experiments": {

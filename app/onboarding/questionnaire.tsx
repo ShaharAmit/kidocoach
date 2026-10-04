@@ -32,6 +32,7 @@ import { ensureAuth } from '../../services/firebase';
 import { saveRoutine, saveRoutineIfMissing } from '../../hooks/useRoutine';
 import { scheduleRoutineNotification } from '../../services/notifications';
 import { saveChildProfile, getChildProfile, saveUserProfileDoc } from '../../services/profile';
+import { getPaidStatus } from '../../services/subscription';
 import { calculateAgeFromISO, formatBirthDate, getTodayISO, isoDateYearsAgo } from '../../utils/date';
 import { colors, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
@@ -325,8 +326,10 @@ export default function QuestionnaireScreen() {
         const routineWithNotif: Routine = { ...morningRoutine, notificationId };
         await saveRoutine(routineWithNotif);
       }
-      // Setup is complete — require a paid entitlement before the app main screen is reachable.
-      router.replace('/paywall' as never);
+      const isPaid = await getPaidStatus();
+      router.replace(isPaid
+        ? { pathname: '/loading', params: { mode: 'generating_experience' } }
+        : '/paywall');
     } catch (err) {
       console.warn('[Questionnaire] failed to save:', err);
       Alert.alert('Save failed', 'Could not save setup. Please try again.');

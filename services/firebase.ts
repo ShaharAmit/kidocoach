@@ -44,26 +44,18 @@ export const auth = (() => {
   }
 })();
 
-/**
- * Ensures the user is signed in anonymously.
- * Safe to call multiple times — no-ops if already authenticated.
- */
+let anonymousSignIn: Promise<FirebaseAuth.User> | null = null;
+
+/** Restores persisted auth first; concurrent callers share one guest sign-in. */
 export async function ensureAuth(): Promise<FirebaseAuth.User> {
-  return new Promise((resolve, reject) => {
-    const unsubscribe = FirebaseAuth.onAuthStateChanged(auth, async (user) => {
-      unsubscribe();
-      if (user) {
-        resolve(user);
-      } else {
-        try {
-          const credential = await FirebaseAuth.signInAnonymously(auth);
-          resolve(credential.user);
-        } catch (err) {
-          reject(err);
-        }
-      }
-    });
-  });
+  await auth.authStateReady();
+  if (auth.currentUser) return auth.currentUser;
+  if (!anonymousSignIn) {
+    anonymousSignIn = FirebaseAuth.signInAnonymously(auth)
+      .then((credential) => credential.user)
+      .finally(() => { anonymousSignIn = null; });
+  }
+  return anonymousSignIn;
 }
 
 export default app;

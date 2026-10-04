@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { saveRoutine } from '../../hooks/useRoutine';
-import { scheduleRoutineNotification } from '../../services/notifications';
+import { cancelNotificationsForRoutine, scheduleRoutineNotification } from '../../services/notifications';
 import { syncRoutineAssets } from '../../services/assetSync';
 import { ensureAudioForRoutine } from '../../services/tts';
 import { ChildProfile, Routine, ActivityKey, DurationMode } from '../../types';
@@ -475,6 +475,9 @@ export default function CreateRoutineScreen() {
 
     try {
       const user = await ensureAuth();
+      if (profile.userId !== user.uid) {
+        throw new Error('The family account changed. Reopen the activity manager before saving.');
+      }
       const nextDrafts = cloneDrafts(drafts);
 
       for (const segment of changedSegments) {
@@ -510,6 +513,9 @@ export default function CreateRoutineScreen() {
           syncRoutineAssets({ ...routine, notificationId: nextNotificationId }).catch((err) => {
             console.warn(`[CreateRoutine] Asset sync error for ${segment}:`, err);
           });
+        } else {
+          await cancelNotificationsForRoutine(routine.id, routine.userId);
+          nextNotificationId = undefined;
         }
 
         await remapLocalDailyCompletionForUpdatedActivities(

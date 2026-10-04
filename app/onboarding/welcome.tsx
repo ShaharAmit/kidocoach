@@ -232,6 +232,12 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.buttonText}>Continue To Questionnaire</Text>
           </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.replace('/profile')} style={{ paddingVertical: vs(18) }}>
+            <Text style={[styles.buttonText, { fontSize: fs(16) }]}>Already connected? Parent sign in</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.replace('/paywall')} style={{ paddingVertical: vs(12) }}>
+            <Text style={[styles.buttonText, { fontSize: fs(16) }]}>Restore a purchase</Text>
+          </TouchableOpacity>
         </Animated.View>
       ) : null}
     </ScrollView>
@@ -257,10 +263,10 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   video: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   posterOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 10,
   },
   fallback: {

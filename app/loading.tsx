@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ensureAuth } from '../services/firebase';
 import { requestNotificationPermissions } from '../services/notifications';
@@ -8,8 +8,10 @@ import {
   warmAllRoutineAssetsToCompletion,
 } from '../services/assetCacheService';
 import { getPaidStatus, refreshPaidStatusFromRevenueCat } from '../services/subscription';
-import { hasTemporaryPaywallAccess } from '../services/temporaryAccess';
-import { getChildProfile, hasCompletedOnboarding } from '../services/profile';
+import { getChildProfile } from '../services/profile';
+import { recoverSignedInFamily } from '../services/accountSession';
+import { getAccessRoute } from '../utils/accessRoute';
+import { initPurchases } from '../services/purchases';
 import { Routine } from '../types';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
 import { colors, fs, ms, s, vs } from '../theme';
@@ -18,14 +20,15 @@ import DayNightTransition from '../components/DayNightTransition';
 export default function LoadingScreen() {
   const params = useLocalSearchParams<{ mode?: string }>();
   const isPostQuestionnaire = params.mode === 'generating_experience';
-  const isTemporarySkip = params.mode === 'temporary_skip';
-  const isWarmStart = isPostQuestionnaire || isTemporarySkip;
+  const isWarmStart = isPostQuestionnaire;
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [progress, setProgress] = useState(isWarmStart ? 15 : 0);
   const [stage, setStage] = useState(
     isWarmStart ? 'Generating experience...' : 'Starting...'
   );
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -47,6 +50,12 @@ export default function LoadingScreen() {
         }
 
         const user = await ensureAuth();
+        let profile = await getChildProfile();
+        if (!profile && !user.isAnonymous) {
+          setStage('Recovering saved family...');
+          await recoverSignedInFamily();
+          profile = await getChildProfile();
+        }
 
         if (!isWarmStart) {
           setStage('Preparing your coach...');
@@ -56,11 +65,12 @@ export default function LoadingScreen() {
           });
         }
 
-        // Purchase and temporary-skip arrivals use the cached flag; cold starts refresh RevenueCat.
+        // Purchase arrivals use the cached flag; cold starts refresh RevenueCat.
+        if (!isWarmStart) await initPurchases();
         const isPaid = isWarmStart ? await getPaidStatus() : await refreshPaidStatusFromRevenueCat();
-        const onboardingDone = await hasCompletedOnboarding();
+        const onboardingDone = profile !== null;
 
-        if (isWarmStart || (onboardingDone && isPaid)) {
+        if (onboardingDone && isPaid) {
           setStage('Generating experience...');
           setProgress(50);
 
@@ -68,7 +78,6 @@ export default function LoadingScreen() {
             console.warn('[Loading] Home bootstrap preload failed:', err);
           });
 
-          const profile = await getChildProfile();
           const snapshot = getHomeBootstrapSnapshot(user.uid);
           const routines: Routine[] = snapshot?.routines ?? [];
 
@@ -102,16 +111,11 @@ export default function LoadingScreen() {
 
         if (isCancelled) return;
 
-        const canEnterApp = isPaid || (isTemporarySkip && hasTemporaryPaywallAccess());
-        if (onboardingDone) {
-          router.replace(canEnterApp ? '/' : ('/paywall' as never));
-        } else {
-          router.replace(canEnterApp ? ('/onboarding/questionnaire' as never) : ('/onboarding/welcome' as never));
-        }
+        router.replace(getAccessRoute(isPaid, onboardingDone));
       } catch (err) {
         console.warn('[Loading] Failed to initialize app:', err);
         if (!isCancelled) {
-          router.replace('/onboarding/welcome' as never);
+          setError('Could not load your family. Check your connection and try again.');
         }
       }
     }
@@ -121,7 +125,7 @@ export default function LoadingScreen() {
     return () => {
       isCancelled = true;
     };
-  }, [isPostQuestionnaire, isTemporarySkip, isWarmStart]);
+  }, [isWarmStart, attempt]);
 
   const width = progressAnim.interpolate({
     inputRange: [0, 100],
@@ -140,6 +144,17 @@ export default function LoadingScreen() {
           </View>
 
           <Text style={styles.percent}>{Math.round(progress)}%</Text>
+          {error ? (
+            <>
+              <Text style={styles.cardStage}>{error}</Text>
+              <TouchableOpacity onPress={() => { setError(''); setAttempt((value) => value + 1); }}>
+                <Text style={styles.percent}>Try again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.replace('/profile')}>
+                <Text style={styles.percent}>Parent sign in</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
         </View>
       </View>
     </DayNightTransition>

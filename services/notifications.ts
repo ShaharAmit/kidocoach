@@ -55,10 +55,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
  * Returns the notification identifier so it can be cancelled later.
  */
 export async function scheduleRoutineNotification(routine: Routine): Promise<string> {
-  // Cancel any existing notification for this routine
-  if (routine.notificationId) {
-    await Notifications.cancelScheduledNotificationAsync(routine.notificationId).catch(() => {});
-  }
+  await cancelNotificationsForRoutine(routine.id, routine.userId);
 
   const triggerTime = routine.stepTimes?.[0] ?? routine.scheduledTime;
   const [hourStr, minuteStr] = triggerTime.split(':');
@@ -71,6 +68,7 @@ export async function scheduleRoutineNotification(routine: Routine): Promise<str
       body: `${routine.childName}, your morning routine is starting now. Tap to begin! 🚀`,
       data: {
         routineId: routine.id,
+        userId: routine.userId,
         url: `kidocoach://routine/${routine.id}`,
       },
       sound: true,
@@ -84,6 +82,17 @@ export async function scheduleRoutineNotification(routine: Routine): Promise<str
   });
 
   return notificationId;
+}
+
+/** The OS notification list is the per-device registry; cloud IDs belong to other devices. */
+export async function cancelNotificationsForRoutine(routineId: string, userId: string): Promise<void> {
+  const notifications = await Notifications.getAllScheduledNotificationsAsync();
+  for (const notification of notifications) {
+    const data = notification.content.data;
+    if (data?.routineId === routineId && (data.userId === userId || data.userId === undefined)) {
+      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    }
+  }
 }
 
 /**

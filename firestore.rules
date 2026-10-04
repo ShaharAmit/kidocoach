@@ -4,32 +4,30 @@ service cloud.firestore {
 
     // User-scoped app data
     match /users/{userId} {
-      // DEV MODE: keep user trees open while the app flow is still evolving.
-      // Tighten to request.auth.uid == userId before production.
-      allow read, write: if true;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
 
       match /routines/{routineId} {
-        allow read, write: if true;
+        allow read, write: if request.auth != null && request.auth.uid == userId;
 
         // One doc per routine step/activity
         match /activities/{activityId} {
-          allow read, write: if true;
+          allow read, write: if request.auth != null && request.auth.uid == userId;
         }
       }
 
       // Daily trophy events — client writes when segment completes
       match /trophies/{trophyId} {
-        allow read, write: if true;
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
       // User stats (stars) — readable by client, written by Cloud Functions/admin SDK.
       match /stats/{statsId} {
-        allow read: if true;
+        allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
 
       match /awards/{awardId} {
-        allow read: if true;
+        allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if false;
       }
     }
