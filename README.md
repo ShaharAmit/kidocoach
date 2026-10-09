@@ -2,6 +2,9 @@
 
 An iOS/Android app built with **Expo (React Native)** + **Firebase** that guides children through sequential daily routines using animated avatar loops and personalised AI-generated voice audio.
 
+For the original Gemini/Aoede -> HeyGen authoring workflow and the current
+two-part personalized media pipeline, see [TTS, HeyGen, and app playback](docs/TTS_HEYGEN_PIPELINE.md).
+
 ## ✨ Features
 
 | Phase | Description |

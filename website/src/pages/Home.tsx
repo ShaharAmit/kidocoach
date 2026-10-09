@@ -196,7 +196,7 @@ export default function HomePage() {
     <main className="home-shell">
       <header className="top-bar">
         <div className="brand-lockup" aria-label="KidoCoach brand">
-          <img className="brand-mark" src="/logo.png" alt="" aria-hidden="true" />
+          <img className="brand-mark" src="/logo.png?v=9e729603" alt="" aria-hidden="true" />
           <span className="brand-name">KidoCoach</span>
         </div>
 
