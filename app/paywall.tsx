@@ -86,7 +86,7 @@ export default function PaywallScreen() {
     let mounted = true;
     initPurchases()
       .then(async () => {
-        const isPaid = await refreshPaidStatusFromRevenueCat();
+        const isPaid = (typeof __DEV__ !== 'undefined' && __DEV__) ? false : await refreshPaidStatusFromRevenueCat();
         if (isPaid && mounted) {
           router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } });
           return [];
@@ -184,7 +184,19 @@ export default function PaywallScreen() {
       }
     } catch (err: any) {
       if (!err?.userCancelled) {
-        Alert.alert('Purchase failed', err?.message ?? 'Something went wrong. You have not been charged.');
+        console.error('[Paywall] Purchase failed:', {
+          code: err?.code,
+          readableErrorCode: err?.readableErrorCode,
+          message: err?.message,
+          underlyingErrorMessage: err?.underlyingErrorMessage,
+        });
+
+        const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+        const message = isDev && (err?.readableErrorCode || err?.underlyingErrorMessage)
+          ? `${err?.message ?? 'Purchase failed.'}\n\n[Debug: ${[err?.readableErrorCode, err?.underlyingErrorMessage].filter(Boolean).join(' - ')}]`
+          : (err?.message ?? 'Something went wrong. You have not been charged.');
+
+        Alert.alert('Purchase failed', message);
       }
     } finally {
       setPurchasing(false);
@@ -206,7 +218,19 @@ export default function PaywallScreen() {
         );
       }
     } catch (err: any) {
-      Alert.alert('Restore failed', err?.message ?? 'Please try again later.');
+      console.error('[Paywall] Restore failed:', {
+        code: err?.code,
+        readableErrorCode: err?.readableErrorCode,
+        message: err?.message,
+        underlyingErrorMessage: err?.underlyingErrorMessage,
+      });
+
+      const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+      const message = isDev && (err?.readableErrorCode || err?.underlyingErrorMessage)
+        ? `${err?.message ?? 'Restore failed.'}\n\n[Debug: ${[err?.readableErrorCode, err?.underlyingErrorMessage].filter(Boolean).join(' - ')}]`
+        : (err?.message ?? 'Please try again later.');
+
+      Alert.alert('Restore failed', message);
     } finally {
       setRestoring(false);
     }

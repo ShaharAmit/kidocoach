@@ -38,6 +38,11 @@ export async function initPurchases(): Promise<void> {
     return;
   }
   try {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      await Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+    } else {
+      await Purchases.setLogLevel(Purchases.LOG_LEVEL.WARN);
+    }
     await Purchases.configure({ apiKey });
     configured = true;
   } catch (err) {

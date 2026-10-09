@@ -1,0 +1,79 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Apple: Deploy to TestFlight (Full Pipeline)",
+      "type": "shell",
+      "command": "npm run deploy:ios",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Expo: Start Metro Bundler",
+      "type": "shell",
+      "command": "npx expo start",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Expo: Start Metro Bundler (Tunnel)",
+      "type": "shell",
+      "command": "npx expo start --tunnel",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Apple: Archive iOS App",
+      "type": "shell",
+      "command": "mkdir -p build && xcodebuild -workspace ios/KidoCoach.xcworkspace -scheme KidoCoach -configuration Release -archivePath build/KidoCoach.xcarchive archive -allowProvisioningUpdates",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Apple: Export IPA",
+      "type": "shell",
+      "command": "xcodebuild -exportArchive -archivePath build/KidoCoach.xcarchive -exportOptionsPlist ios/exportOptions.plist -exportPath build -allowProvisioningUpdates",
+      "dependsOn": "Apple: Archive iOS App",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Apple: Validate IPA (Pre-upload)",
+      "type": "shell",
+      "command": "[ -f .env ] && export $(grep -v '^#' .env | xargs); if [ -z \"$APPLE_ISSUER_ID\" ] || [ \"$APPLE_ISSUER_ID\" = \"PASTE_YOUR_ISSUER_ID_HERE\" ]; then echo '❌ Missing APPLE_ISSUER_ID! Open .env and paste your Issuer ID from App Store Connect -> Integrations.'; exit 1; fi; xcrun altool --validate-app -f build/KidoCoach.ipa -t ios --apiKey \"$APPLE_KEY_ID\" --apiIssuer \"$APPLE_ISSUER_ID\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "Apple: Upload to TestFlight",
+      "type": "shell",
+      "command": "[ -f .env ] && export $(grep -v '^#' .env | xargs); if [ -z \"$APPLE_ISSUER_ID\" ] || [ \"$APPLE_ISSUER_ID\" = \"PASTE_YOUR_ISSUER_ID_HERE\" ]; then echo '❌ Missing APPLE_ISSUER_ID! Open .env and paste your Issuer ID from App Store Connect -> Integrations.'; exit 1; fi; xcrun altool --upload-app -f build/KidoCoach.ipa -t ios --apiKey \"$APPLE_KEY_ID\" --apiIssuer \"$APPLE_ISSUER_ID\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "Simulator: Launch App",
+      "type": "shell",
+      "command": "xcrun simctl bootstatus booted -b 2>/dev/null && xcrun simctl launch booted com.kidocoach.app",
+      "problemMatcher": []
+    },
+    {
+      "label": "Simulator: Take Screenshot",
+      "type": "shell",
+      "command": "mkdir -p screenshots && xcrun simctl io booted screenshot screenshots/screen-$(date +%Y%m%d_%H%M%S).png",
+      "problemMatcher": []
+    }
+  ]
+}

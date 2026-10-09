@@ -51,3 +51,7 @@ storage.rules.bak
 # generated native folders
 /ios
 /android
+
+# local build artifacts
+build/
+screenshots/

@@ -12,11 +12,16 @@
       "supportsTablet": true,
       "usesAppleSignIn": true,
       "bundleIdentifier": "com.kidocoach.app",
+      "buildNumber": "2",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
-        ]
+        ],
+        "NSCameraUsageDescription": "KidoCoach needs access to your camera to capture photos and videos for your coaching activities.",
+        "NSPhotoLibraryUsageDescription": "KidoCoach needs access to your photo library to select photos and videos for your coaching activities.",
+        "NSPhotoLibraryAddUsageDescription": "KidoCoach needs permission to save coaching photos and videos to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
