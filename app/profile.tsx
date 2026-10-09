@@ -139,7 +139,7 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <MaterialCommunityIcons name="account-circle-outline" size={ms(64)} color={colors.primary} />
-            <Text style={styles.title}>Parent profile</Text>
+            <Text style={styles.title}>{profile? profile.childName + '\'s' : ''} Parent profile</Text>
             <Text style={styles.subtitle}>
               {isLinked ? user.email ?? 'Connected parent account' : 'Guest family on this device'}
             </Text>
@@ -147,7 +147,6 @@ export default function ProfileScreen() {
               Connect an account to keep your child&apos;s setup and routines across devices.
               Purchase restoration only confirms paid access; it does not recover your family or identify your Firebase account.
             </Text>
-            {profile ? <Text style={styles.body}>Saved setup: {profile.childName}</Text> : null}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             {busy ? <ActivityIndicator color={colors.primary} style={styles.spinner} /> : null}
 
@@ -180,11 +179,6 @@ export default function ProfileScreen() {
                     <Text style={[styles.link, mode === 'login' && styles.selected]}>Sign in</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.body}>
-                  {mode === 'register'
-                    ? 'Registration connects your current guest family without changing its account ID.'
-                    : 'Sign in to the account you previously connected to recover its saved family.'}
-                </Text>
                 <TextInput style={styles.input} value={email} onChangeText={setEmail} editable={!busy}
                   placeholder="Parent email" accessibilityLabel="Parent email" keyboardType="email-address"
                   autoCapitalize="none" autoCorrect={false} autoComplete="email" textContentType="emailAddress" />
@@ -228,10 +222,6 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </>
             )}
-            <TouchableOpacity disabled={busy} style={styles.secondaryButton}
-              onPress={() => router.replace('/loading')}>
-              <Text style={styles.link}>Back to app setup</Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
