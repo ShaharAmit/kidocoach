@@ -86,7 +86,7 @@ export default function PaywallScreen() {
     let mounted = true;
     initPurchases()
       .then(async () => {
-        const isPaid = (typeof __DEV__ !== 'undefined' && __DEV__) ? false : await refreshPaidStatusFromRevenueCat();
+        const isPaid = await refreshPaidStatusFromRevenueCat();
         if (isPaid && mounted) {
           router.replace({ pathname: '/loading', params: { mode: 'generating_experience' } });
           return [];

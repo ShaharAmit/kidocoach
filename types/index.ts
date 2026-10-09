@@ -123,7 +123,7 @@ export interface ChildProfile {
   answers?: QuestionnaireAnswers;
   totalStarsEarned: number;
   updatedAt: number;
-  /** Parent preference: overlay subtitles on avatar videos during routine playback. Defaults to false. */
+  /** Parent preference: overlay subtitles on avatar videos during routine playback. Defaults to true. */
   showCaptions?: boolean;
 }
 

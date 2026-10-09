@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useFocusEffect, useNavigation } from 'expo-router/react-navigation';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityPlayer from '../components/ActivityPlayer';
@@ -27,6 +27,7 @@ import { useLocalDailyCompletion } from '../hooks/useLocalDailyCompletion';
 import { useUserRoutines } from '../hooks/useRoutine';
 import { subscribeAssetCacheStatus } from '../services/assetCacheService';
 import { areAssetsReady, syncRoutineAssets } from '../services/assetSync';
+import { isBootComplete } from '../services/bootState';
 import { ensureAuth } from '../services/firebase';
 import { getHomeBootstrapSnapshot, isRoutineWarmed, markRoutineWarmed } from '../services/homeBootstrap';
 import { setHomeViewMode } from '../services/homeViewState';
@@ -90,7 +91,12 @@ function pickPrimaryRoutine(
 
 const roundedFontBold = ROUNDED_FONT;
 
-export default function HomeScreen() {
+export default function IndexRoute() {
+  if (!isBootComplete()) return <Redirect href="/loading" />;
+  return <HomeScreen />;
+}
+
+function HomeScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [userId, setUserId] = useState('');
@@ -101,7 +107,7 @@ export default function HomeScreen() {
   const [assetsReady, setAssetsReady] = useState(false);
   const [trophyVisible, setTrophyVisible] = useState(false);
   const [rewardStars, setRewardStars] = useState<number | null>(null);
-  const [showCaptions, setShowCaptions] = useState(false);
+  const [showCaptions, setShowCaptions] = useState(true);
   const [activityListHeight, setActivityListHeight] = useState(0);
   const [activityContentHeight, setActivityContentHeight] = useState(0);
   const [activityListHasScrolled, setActivityListHasScrolled] = useState(false);
@@ -191,7 +197,7 @@ export default function HomeScreen() {
     async function loadCaptionPreference() {
       const profile = await getChildProfile();
       if (mounted) {
-        setShowCaptions(profile?.showCaptions ?? false);
+        setShowCaptions(profile?.showCaptions ?? true);
       }
     }
 
@@ -232,7 +238,7 @@ export default function HomeScreen() {
 
       getChildProfile()
         .then((profile) => {
-          if (mounted) setShowCaptions(profile?.showCaptions ?? false);
+          if (mounted) setShowCaptions(profile?.showCaptions ?? true);
         })
         .catch((err) => console.warn('[Home] failed to refresh caption preference on focus:', err));
 

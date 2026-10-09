@@ -11,6 +11,7 @@ import { getPaidStatus, refreshPaidStatusFromRevenueCat } from '../services/subs
 import { getChildProfile } from '../services/profile';
 import { recoverSignedInFamily } from '../services/accountSession';
 import { getAccessRoute } from '../utils/accessRoute';
+import { markBootComplete } from '../services/bootState';
 import { initPurchases } from '../services/purchases';
 import { Routine } from '../types';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
@@ -111,6 +112,7 @@ export default function LoadingScreen() {
 
         if (isCancelled) return;
 
+        markBootComplete();
         router.replace(getAccessRoute(isPaid, onboardingDone));
       } catch (err) {
         console.warn('[Loading] Failed to initialize app:', err);

@@ -5,10 +5,10 @@ import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getHomeViewMode, subscribeHomeViewMode } from '../services/homeViewState';
-import { getPaidStatus } from '../services/subscription';
+import { getPaidStatus, startPaidStatusSync } from '../services/subscription';
 import { hasCompletedOnboarding } from '../services/profile';
 import { getAccessRoute } from '../utils/accessRoute';
-import { initPurchases } from '../services/purchases';
+import { isBootComplete } from '../services/bootState';
 import { auth, ensureAuth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
@@ -141,19 +141,16 @@ export default function RootLayout() {
         url?: string;
       };
 
-      if (data?.routineId) {
+      // Before boot, app/loading.tsx routes home itself once assets are ready.
+      if (data?.routineId && isBootComplete()) {
         router.push('/' as never);
       }
     },
     []
   );
 
-  // Init RevenueCat once per app session (non-blocking).
-  useEffect(() => {
-    initPurchases().catch((err) => {
-      console.warn('[RootLayout] Failed to init purchases:', err);
-    });
-  }, []);
+  // Init RevenueCat and keep the paid flag bound to the Firebase UID for the app session.
+  useEffect(() => startPaidStatusSync(), []);
 
   // Paywall gate: any screen outside onboarding/loading/paywall requires a completed
   // questionnaire AND an active paid entitlement. Re-checked on every foreground so a lapsed
@@ -166,6 +163,8 @@ export default function RootLayout() {
       const alreadyInLoading = pathname === '/loading';
       const alreadyInPaywall = pathname === '/paywall';
       if (alreadyInOnboarding || alreadyInLoading || alreadyInPaywall || pathname === '/profile') return;
+      // Cold start: app/index.tsx redirects to /loading, which runs the same checks.
+      if (!isBootComplete()) return;
 
       const user = await ensureAuth();
       const [isPaid, onboardingDone] = await Promise.all([getPaidStatus(), hasCompletedOnboarding()]);
@@ -226,7 +225,10 @@ export default function RootLayout() {
         </View>
       )}
 
-      {pathname === '/loading' || pathname === '/paywall' || pathname.startsWith('/onboarding') ? (
+      {pathname === '/loading' ||
+      pathname === '/paywall' ||
+      pathname.startsWith('/onboarding') ||
+      (pathname === '/' && !isBootComplete()) ? (
         <Stack
           initialRouteName="loading"
           screenOptions={{
@@ -238,6 +240,7 @@ export default function RootLayout() {
           <Stack.Screen name="loading" options={{ title: 'Loading', headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="paywall" options={{ headerShown: false }} />
+          <Stack.Screen name="index" options={{ headerShown: false, animation: 'none' }} />
         </Stack>
       ) : (
         <Tabs

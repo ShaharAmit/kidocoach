@@ -261,7 +261,7 @@ export default function SettingsScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Show Subtitles</Text>
             <Switch
-              value={profile?.showCaptions ?? false}
+              value={profile?.showCaptions ?? true}
               onValueChange={handleToggleCaptions}
               disabled={!profile || isSavingCaptions}
               trackColor={{ true: colors.textInk }}

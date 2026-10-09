@@ -81,7 +81,7 @@ export function normalizeChildProfile(value: unknown, userId?: string): ChildPro
     totalStarsEarned: typeof value.totalStarsEarned === 'number' &&
       Number.isFinite(value.totalStarsEarned) && value.totalStarsEarned >= 0 ? value.totalStarsEarned : 0,
     updatedAt: typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt) ? value.updatedAt : 0,
-    showCaptions: typeof value.showCaptions === 'boolean' ? value.showCaptions : false,
+    showCaptions: typeof value.showCaptions === 'boolean' ? value.showCaptions : true,
     birthDate: typeof value.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.birthDate)
       ? value.birthDate : undefined,
   };

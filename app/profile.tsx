@@ -16,6 +16,7 @@ import {
 } from '../services/accountAuth';
 import { backUpCurrentFamily, clearLocalFamilySession, recoverSignedInFamily } from '../services/accountSession';
 import { getChildProfile } from '../services/profile';
+import { refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { ChildProfile } from '../types';
 import { colors, fs, ms, s, vs } from '../theme';
 
@@ -88,6 +89,8 @@ export default function ProfileScreen() {
     const performLogin = () => run(async () => {
       await login();
       setPassword('');
+      // Bind RevenueCat to the signed-in family before the warm-start loader reads the paid flag.
+      await refreshPaidStatusFromRevenueCat();
       await recoverAndContinue();
     });
     if (!profile) {

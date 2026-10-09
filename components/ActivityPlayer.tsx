@@ -264,7 +264,7 @@ export default function ActivityPlayer({
   isFinalRemainingStep,
   durationMinutes,
   durationMode,
-  showCaptions = false,
+  showCaptions = true,
   onComplete,
 }: ActivityPlayerProps) {
   const insets = useSafeAreaInsets();
