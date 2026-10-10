@@ -203,13 +203,6 @@ export default function ProfileScreen() {
                 }); }}>
                   <Text style={styles.buttonText}>Back up current setup</Text>
                 </TouchableOpacity>
-                <TouchableOpacity disabled={busy} style={styles.secondaryButton}
-                  onPress={() => { void run(recoverAndContinue); }}>
-                  <Text style={styles.link}>Recover saved family</Text>
-                </TouchableOpacity>
-                <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={continueToApp}>
-                  <Text style={styles.link}>Continue</Text>
-                </TouchableOpacity>
                 <TouchableOpacity disabled={busy} style={styles.secondaryButton} onPress={requestSignOut}>
                   <Text style={styles.link}>Sign out</Text>
                 </TouchableOpacity>

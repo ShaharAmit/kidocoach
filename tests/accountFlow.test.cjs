@@ -46,10 +46,10 @@ function family(userId = 'guest') {
   };
 }
 
-function harness() {
+function harness(extraMocks = {}) {
   const items = new Map();
   const auth = { currentUser: { uid: 'guest', isAnonymous: true }, authStateReady: async () => {} };
-  const state = { remote: null, remoteError: null, writes: [], cancelled: [], scheduled: [], links: [] };
+  const state = { remote: null, remoteError: null, writes: [], cancelled: [], scheduled: [], links: [], calls: [] };
   const storage = {
     getItem: async (key) => items.get(key) ?? null,
     setItem: async (key, value) => { items.set(key, value); },
@@ -64,7 +64,15 @@ function harness() {
   const mocks = {
     '@react-native-async-storage/async-storage': { __esModule: true, default: storage },
     [path.join(root, 'services/firebase.ts')]: {
-      auth, db: {}, ensureAuth: async () => auth.currentUser,
+      auth, db: {}, functions: {}, ensureAuth: async () => auth.currentUser,
+    },
+    'firebase/functions': {
+      httpsCallable: (_functions, name) => async (data) => {
+        state.calls.push({ name, data });
+        const error = state.callableErrors?.[name]?.shift();
+        if (error) throw error;
+        return { data: {} };
+      },
     },
     'firebase/firestore': {
       doc: (_db, ...segments) => segments.join('/'),
@@ -109,6 +117,7 @@ function harness() {
       signOut: async () => { auth.currentUser = null; },
       sendPasswordResetEmail: async (_auth, email) => { state.resetEmail = email; },
     },
+    ...extraMocks,
   };
   return { auth, items, state, load: loader(mocks) };
 }
@@ -280,6 +289,92 @@ test('explicit login switches identity and password reset normalizes email', asy
   await accounts.signOutParent();
   assert.equal(auth.currentUser, null);
   assert.deepEqual(await accounts.getAvailableAccountProviders(), []);
+});
+
+function appleMocks(state, auth, { authorizationCode = 'apple-code' } = {}) {
+  return {
+    'react-native': { Platform: { OS: 'ios' }, TurboModuleRegistry: { get: () => null } },
+    'expo-apple-authentication': {
+      isAvailableAsync: async () => true,
+      AppleAuthenticationScope: { EMAIL: 1 },
+      signInAsync: async (options) => {
+        state.appleSheets = (state.appleSheets ?? 0) + 1;
+        return { identityToken: 'id-token', authorizationCode, options };
+      },
+    },
+    'expo-crypto': {
+      CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+      getRandomBytesAsync: async (count) => new Uint8Array(count),
+      digestStringAsync: async (_algorithm, value) => `hash(${value})`,
+    },
+    'firebase/auth': {
+      OAuthProvider: class { credential(value) { return value; } },
+      signInWithCredential: async () => {
+        auth.currentUser = { uid: 'apple-parent', isAnonymous: false, providerData: [{ providerId: 'apple.com' }] };
+        return { user: auth.currentUser };
+      },
+      revokeAccessToken: async (_auth, code) => { state.revokedCodes = [...(state.revokedCodes ?? []), code]; },
+      signOut: async () => { auth.currentUser = null; },
+    },
+  };
+}
+
+test('Apple sign-in hands the one-time authorization code to the backend for later revocation', async () => {
+  const state = { calls: [] };
+  const auth = { currentUser: { uid: 'guest', isAnonymous: true } };
+  const { load, state: harnessState } = harness(appleMocks(state, auth));
+  const accounts = load('services/accountAuth.ts');
+  const user = await accounts.loginParentProvider('apple');
+  assert.equal(user.uid, 'apple-parent');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(harnessState.calls, [
+    { name: 'registerAppleAuthorization', data: { authorizationCode: 'apple-code' } },
+  ]);
+});
+
+function deletionHarness() {
+  const appleState = {};
+  const auth = {
+    currentUser: { uid: 'apple-parent', isAnonymous: false, providerData: [{ providerId: 'apple.com' }] },
+  };
+  const h = harness({
+    ...appleMocks(appleState, auth),
+    [path.join(root, 'services/firebase.ts')]: { auth, functions: {}, ensureAuth: async () => auth.currentUser },
+    '@react-native-async-storage/async-storage': { __esModule: true, default: { clear: async () => {} } },
+    'expo-notifications': { cancelAllScheduledNotificationsAsync: async () => {} },
+    [path.join(root, 'services/accountSession.ts')]: { clearLocalFamilySession: async () => {} },
+    [path.join(root, 'services/assetCacheService.ts')]: { clearAllLocalCachedAssets: async () => {} },
+    [path.join(root, 'services/purchases.ts')]: { logOutPurchasesUser: async () => {} },
+    [path.join(root, 'services/subscription.ts')]: { setPaidStatus: async () => {} },
+  });
+  h.appleState = appleState;
+  return h;
+}
+
+test('account deletion relies on server-side Apple revocation without prompting', async () => {
+  const { load, state, appleState } = deletionHarness();
+  await load('services/accountDeletion.ts').deleteFamilyAccount();
+  assert.deepEqual(state.calls, [{ name: 'deleteAccount', data: {} }]);
+  assert.equal(appleState.appleSheets, undefined);
+});
+
+test('account deletion falls back to one Apple prompt only when the server cannot revoke', async () => {
+  const { load, state, appleState } = deletionHarness();
+  state.callableErrors = {
+    deleteAccount: [{ code: 'functions/failed-precondition', details: { reason: 'apple-reauth-required' } }],
+  };
+  await load('services/accountDeletion.ts').deleteFamilyAccount();
+  assert.equal(appleState.appleSheets, 1);
+  assert.deepEqual(appleState.revokedCodes, ['apple-code']);
+  assert.deepEqual(state.calls, [
+    { name: 'deleteAccount', data: {} },
+    { name: 'deleteAccount', data: { appleTokenRevoked: true } },
+  ]);
+
+  const other = deletionHarness();
+  other.state.callableErrors = { deleteAccount: [{ code: 'functions/unavailable' }] };
+  await assert.rejects(other.load('services/accountDeletion.ts').deleteFamilyAccount());
+  assert.equal(other.appleState.appleSheets, undefined);
 });
 
 test('anonymous auth initialization is single-flight and preserves a restored parent identity', async () => {

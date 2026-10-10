@@ -1,9 +1,10 @@
 import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
-import { createHash } from 'crypto';
+import { createHash, sign as cryptoSign } from 'crypto';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
+import { defineSecret, defineString } from 'firebase-functions/params';
 import { GoogleGenAI } from '@google/genai';
 
 admin.initializeApp();
@@ -42,6 +43,15 @@ const DAILY_GENERATION_LIMIT_PER_USER = 60;
 const MAX_ACTIVITY_KEYS_PER_BATCH = 20;
 const MAX_CHILD_NAME_LENGTH = 30;
 const CHILD_NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M}' .-]*$/u;
+
+// Sign in with Apple server credentials (developer.apple.com > Keys, "Sign in with Apple" enabled).
+// The client ID is the iOS bundle ID because native authorization codes are issued to the app.
+const appleSignInPrivateKey = defineSecret('APPLE_SIGN_IN_PRIVATE_KEY');
+const appleTeamId = defineString('APPLE_TEAM_ID');
+const appleKeyId = defineString('APPLE_KEY_ID');
+const appleClientId = defineString('APPLE_CLIENT_ID', { default: 'com.kidocoach.app' });
+const APPLE_AUTH_BASE_URL = 'https://appleid.apple.com/auth';
+const MAX_APPLE_AUTHORIZATION_CODE_LENGTH = 2048;
 
 interface GeneratePart1AudioRequest {
   childName: string;
@@ -217,6 +227,69 @@ function requireUid(request: CallableRequest<unknown>): string {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
   }
   return uid;
+}
+
+function base64Url(input: string | Buffer): string {
+  return Buffer.from(input).toString('base64url');
+}
+
+/** Short-lived ES256 client secret for Apple's token/revoke endpoints. */
+function createAppleClientSecret(): string {
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64Url(JSON.stringify({ alg: 'ES256', kid: appleKeyId.value() }));
+  const payload = base64Url(JSON.stringify({
+    iss: appleTeamId.value(),
+    iat: now,
+    exp: now + 300,
+    aud: 'https://appleid.apple.com',
+    sub: appleClientId.value(),
+  }));
+  const signingInput = `${header}.${payload}`;
+  // Secrets pasted as a single line keep literal "\n" escapes.
+  const privateKey = appleSignInPrivateKey.value().replace(/\\n/g, '\n');
+  const signature = cryptoSign('sha256', Buffer.from(signingInput), { key: privateKey, dsaEncoding: 'ieee-p1363' });
+  return `${signingInput}.${base64Url(signature)}`;
+}
+
+async function postAppleAuth(endpoint: 'token' | 'revoke', params: Record<string, string>): Promise<Response> {
+  return fetch(`${APPLE_AUTH_BASE_URL}/${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: appleClientId.value(),
+      client_secret: createAppleClientSecret(),
+      ...params,
+    }),
+  });
+}
+
+/**
+ * Apple's revoke endpoint answers 200 even for unknown tokens/clients, so success here only rules
+ * out transport/server errors. Config validity is proven earlier: a refresh token is only stored
+ * after Apple's token endpoint (which does validate the client secret) accepted the exchange.
+ */
+async function revokeAppleRefreshToken(refreshToken: string): Promise<boolean> {
+  try {
+    const response = await postAppleAuth('revoke', { token: refreshToken, token_type_hint: 'refresh_token' });
+    if (response.ok) return true;
+    console.warn(`[Apple] Token revocation failed with HTTP ${response.status}: ${await response.text()}`);
+  } catch (err) {
+    console.warn('[Apple] Token revocation request failed:', err);
+  }
+  return false;
+}
+
+function hasAppleProvider(user: admin.auth.UserRecord | null): boolean {
+  return user?.providerData.some((provider) => provider.providerId === 'apple.com') ?? false;
+}
+
+async function getAuthUserOrNull(uid: string): Promise<admin.auth.UserRecord | null> {
+  try {
+    return await admin.auth().getUser(uid);
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code === 'auth/user-not-found') return null;
+    throw err;
+  }
 }
 
 function validateChildName(raw: unknown): string {
@@ -600,12 +673,68 @@ export const generateRoutinePart1Audio = onCall(
  * Firebase Auth user. Shared, name-keyed audio clips are not linked to a UID and expire via TTL.
  * Store subscriptions are owned by Apple/Google and must be cancelled by the parent.
  */
-export const deleteAccount = onCall(
-  { timeoutSeconds: 120, memory: '256MiB' },
-  async (request: CallableRequest<unknown>): Promise<{ deleted: true }> => {
+/**
+ * Exchanges a fresh Sign in with Apple authorization code (valid ~5 min, single use) for a
+ * refresh token kept server-side, so account deletion can revoke the Apple grant without
+ * prompting the parent to sign in with Apple again.
+ */
+export const registerAppleAuthorization = onCall(
+  { timeoutSeconds: 30, memory: '256MiB', secrets: [appleSignInPrivateKey] },
+  async (request: CallableRequest<{ authorizationCode?: unknown }>): Promise<{ stored: true }> => {
     const uid = requireUid(request);
+    const code = request.data?.authorizationCode;
+    if (typeof code !== 'string' || !code || code.length > MAX_APPLE_AUTHORIZATION_CODE_LENGTH) {
+      throw new HttpsError('invalid-argument', 'A valid Apple authorization code is required.');
+    }
+    if (!hasAppleProvider(await getAuthUserOrNull(uid))) {
+      throw new HttpsError('failed-precondition', 'This account is not connected to Sign in with Apple.');
+    }
+
+    let response: Response;
+    try {
+      response = await postAppleAuth('token', { code, grant_type: 'authorization_code' });
+    } catch (err) {
+      console.warn('[registerAppleAuthorization] Apple token request failed:', err);
+      throw new HttpsError('unavailable', 'Could not reach Apple. Try again later.');
+    }
+    const body = (await response.json().catch(() => ({}))) as { refresh_token?: unknown; error?: unknown };
+    if (!response.ok || typeof body.refresh_token !== 'string') {
+      console.warn(`[registerAppleAuthorization] Apple token exchange failed with HTTP ${response.status}:`, body.error);
+      throw new HttpsError('failed-precondition', 'Apple rejected the authorization code.');
+    }
+
+    await db.collection('apple_tokens').doc(uid).set({
+      refreshToken: body.refresh_token,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { stored: true };
+  }
+);
+
+/**
+ * Deletes the family's server data and Auth user. Apple-linked accounts must have their Sign in
+ * with Apple grant revoked first (App Store guideline 5.1.1(v)): the stored refresh token is
+ * revoked here; without a usable one the call fails with `apple-reauth-required` and the client
+ * revokes via a fresh Apple authorization, then retries with `appleTokenRevoked: true`.
+ */
+export const deleteAccount = onCall(
+  { timeoutSeconds: 120, memory: '256MiB', secrets: [appleSignInPrivateKey] },
+  async (request: CallableRequest<{ appleTokenRevoked?: unknown }>): Promise<{ deleted: true }> => {
+    const uid = requireUid(request);
+    const appleTokenRef = db.collection('apple_tokens').doc(uid);
+
+    if (request.data?.appleTokenRevoked !== true && hasAppleProvider(await getAuthUserOrNull(uid))) {
+      const refreshToken = (await appleTokenRef.get()).get('refreshToken');
+      const revoked = typeof refreshToken === 'string' && await revokeAppleRefreshToken(refreshToken);
+      if (!revoked) {
+        throw new HttpsError('failed-precondition', 'Confirm with Apple to finish deleting this account.', {
+          reason: 'apple-reauth-required',
+        });
+      }
+    }
 
     await db.recursiveDelete(db.collection('users').doc(uid));
+    await appleTokenRef.delete();
 
     try {
       await admin.auth().deleteUser(uid);

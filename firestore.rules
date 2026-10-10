@@ -43,6 +43,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Sign in with Apple refresh tokens (revoked on account deletion) — Cloud Functions only.
+    match /apple_tokens/{uid} {
+      allow read, write: if false;
+    }
+
     // Public website bootstrap config (landing video/store links) — no personal data.
     match /public_site/{docId} {
       allow read: if true;

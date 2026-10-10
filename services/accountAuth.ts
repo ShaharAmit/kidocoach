@@ -15,7 +15,8 @@ import {
   type AuthCredential,
   type User,
 } from 'firebase/auth';
-import { auth, ensureAuth } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, ensureAuth, functions } from './firebase';
 
 export type AccountProvider = 'apple' | 'google';
 
@@ -104,7 +105,9 @@ async function getGoogleModule(): Promise<GoogleModule> {
   return googleModulePromise;
 }
 
-async function providerCredential(provider: AccountProvider): Promise<AuthCredential> {
+async function providerCredential(
+  provider: AccountProvider
+): Promise<{ credential: AuthCredential; appleAuthorizationCode?: string }> {
   if (provider === 'apple') {
     if (Platform.OS !== 'ios' || !(await AppleAuthentication.isAvailableAsync())) {
       throw new AccountAuthError('account/provider-unavailable');
@@ -118,10 +121,13 @@ async function providerCredential(provider: AccountProvider): Promise<AuthCreden
     });
     if (!result.identityToken) throw new AccountAuthError('account/missing-token');
     // Apple receives the hash; Firebase must receive the original nonce.
-    return new OAuthProvider('apple.com').credential({
-      idToken: result.identityToken,
-      rawNonce,
-    });
+    return {
+      credential: new OAuthProvider('apple.com').credential({
+        idToken: result.identityToken,
+        rawNonce,
+      }),
+      appleAuthorizationCode: result.authorizationCode ?? undefined,
+    };
   }
   if (provider === 'google') {
     const { GoogleSignin } = await getGoogleModule();
@@ -131,9 +137,23 @@ async function providerCredential(provider: AccountProvider): Promise<AuthCreden
     const result = await GoogleSignin.signIn();
     if (result.type === 'cancelled') throw new AccountAuthError('account/cancelled');
     if (!result.data.idToken) throw new AccountAuthError('account/missing-token');
-    return GoogleAuthProvider.credential(result.data.idToken);
+    return { credential: GoogleAuthProvider.credential(result.data.idToken) };
   }
   throw new AccountAuthError('account/provider-unavailable');
+}
+
+/**
+ * Hands Apple's one-time authorization code to the backend, which keeps a refresh token so
+ * account deletion can revoke the Apple grant without another Apple prompt. Best-effort: if it
+ * fails, deletion falls back to {@link revokeAppleSignInWithPrompt}.
+ */
+function registerAppleAuthorization(authorizationCode: string | undefined): void {
+  if (!authorizationCode) return;
+  httpsCallable<{ authorizationCode: string }, { stored: true }>(functions, 'registerAppleAuthorization')({
+    authorizationCode,
+  }).catch((err: unknown) => {
+    console.warn('[AccountAuth] Failed to register Apple authorization for deletion:', err);
+  });
 }
 
 /** Upgrade the guest account without changing its UID or switching accounts on conflicts. */
@@ -160,17 +180,21 @@ export async function loginParentWithEmail(email: string, password: string): Pro
 export async function connectParentProvider(provider: AccountProvider): Promise<User> {
   return runAccountOperation(async () => {
     const user = await anonymousUser();
-    const credential = await providerCredential(provider);
+    const { credential, appleAuthorizationCode } = await providerCredential(provider);
     assertAnonymousSession(user);
-    return (await linkWithCredential(user, credential)).user;
+    const linkedUser = (await linkWithCredential(user, credential)).user;
+    registerAppleAuthorization(appleAuthorizationCode);
+    return linkedUser;
   });
 }
 
 export async function loginParentProvider(provider: AccountProvider): Promise<User> {
   return runAccountOperation(async () => {
     await ensureAuth();
-    const credential = await providerCredential(provider);
-    return (await signInWithCredential(auth, credential)).user;
+    const { credential, appleAuthorizationCode } = await providerCredential(provider);
+    const signedInUser = (await signInWithCredential(auth, credential)).user;
+    registerAppleAuthorization(appleAuthorizationCode);
+    return signedInUser;
   });
 }
 
@@ -187,23 +211,27 @@ export async function signOutParent(): Promise<void> {
 }
 
 /**
- * Revokes third-party sign-in grants before account deletion. Apple requires apps to revoke
- * Sign in with Apple tokens on deletion; that needs a fresh authorization code, so Apple shows
- * its sheet once more. Throws `account/cancelled` if the parent dismisses it.
+ * Fallback Apple revocation for account deletion when the backend has no usable refresh token
+ * (accounts linked before server-side registration, or a failed exchange). Apple requires a
+ * fresh authorization code for this, so its sheet is shown once. Throws `account/cancelled` if
+ * the parent dismisses it.
  */
-export async function revokeSignInProviders(user: User): Promise<void> {
-  const providerIds = user.providerData.map((provider) => provider.providerId);
-  if (providerIds.includes('apple.com') && Platform.OS === 'ios' && await AppleAuthentication.isAvailableAsync()) {
-    const result = await AppleAuthentication.signInAsync({ requestedScopes: [] });
-    if (!result.authorizationCode) throw new AccountAuthError('account/missing-token');
-    await revokeAccessToken(auth, result.authorizationCode);
+export async function revokeAppleSignInWithPrompt(): Promise<void> {
+  if (Platform.OS !== 'ios' || !(await AppleAuthentication.isAvailableAsync())) {
+    throw new AccountAuthError('account/provider-unavailable');
   }
-  if (providerIds.includes('google.com') && googleIsConfigured()) {
-    const { GoogleSignin } = await getGoogleModule();
-    await GoogleSignin.revokeAccess().catch((err: unknown) => {
-      console.warn('[AccountAuth] Google revokeAccess failed:', err);
-    });
-  }
+  const result = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+  if (!result.authorizationCode) throw new AccountAuthError('account/missing-token');
+  await revokeAccessToken(auth, result.authorizationCode);
+}
+
+/** Revokes the Google grant before account deletion; never prompts. */
+export async function revokeGoogleSignIn(user: User): Promise<void> {
+  if (!user.providerData.some((provider) => provider.providerId === 'google.com') || !googleIsConfigured()) return;
+  const { GoogleSignin } = await getGoogleModule();
+  await GoogleSignin.revokeAccess().catch((err: unknown) => {
+    console.warn('[AccountAuth] Google revokeAccess failed:', err);
+  });
 }
 
 /** Email/password is always available independently of native provider availability. */
