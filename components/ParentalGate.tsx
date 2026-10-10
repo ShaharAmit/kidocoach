@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { colors, fs, ms, s, vs } from '../theme';
 
 /**
@@ -82,7 +82,7 @@ export function ParentalGateHost() {
 
   return (
     <Modal visible={pending !== null} transparent animationType="fade" onRequestClose={() => finish(false)}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.card} accessibilityViewIsModal>
           <Text style={styles.title}>Parents only</Text>
           <Text style={styles.body}>
@@ -92,9 +92,7 @@ export function ParentalGateHost() {
           <TextInput
             value={input}
             onChangeText={(value) => setInput(value.replace(/[^0-9]/g, ''))}
-            onSubmitEditing={submit}
             keyboardType="number-pad"
-            returnKeyType="done"
             maxLength={3}
             autoFocus
             style={styles.input}
@@ -110,7 +108,7 @@ export function ParentalGateHost() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

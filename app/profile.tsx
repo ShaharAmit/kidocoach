@@ -4,6 +4,7 @@ import {
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { reloadAppAsync } from 'expo';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -153,7 +154,12 @@ export default function ProfileScreen() {
       console.warn('[Profile] account deletion failed:', err);
       throw new Error('Could not delete your account. Check your connection and try again.');
     }
-    router.replace('/loading');
+    // Full JS restart drops every in-memory listener, cache and hook still tied to the deleted UID.
+    try {
+      await reloadAppAsync('Account deleted');
+    } catch {
+      router.replace('/loading');
+    }
   });
 
   const requestDeleteAccount = async () => {
