@@ -44,6 +44,7 @@ import {
   useLocalImagesRevision,
 } from '../utils/localImages';
 import { colors, fs, ms, ROUNDED_FONT, s, vs } from '../theme';
+import { requestParentalGate } from '../components/ParentalGate';
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -485,7 +486,7 @@ function HomeScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>No routine found.</Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/parent/create')}>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.push('/parent/create'); }); }}>
           <Text style={styles.primaryButtonText}>Create Routine</Text>
         </TouchableOpacity>
       </View>
@@ -591,7 +592,7 @@ function HomeScreen() {
                   <View style={styles.emptyState}>
                     <TouchableOpacity
                       style={styles.emptyAddButton}
-                      onPress={() => router.push(`/parent/create?segment=${segment}` as never)}
+                      onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.push(`/parent/create?segment=${segment}` as never); }); }}
                       activeOpacity={0.85}
                     >
                       <Text style={styles.emptyAddIcon}>＋</Text>

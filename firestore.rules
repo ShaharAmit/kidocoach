@@ -32,13 +32,18 @@ service cloud.firestore {
       }
     }
 
-    // Audio cache — open read for dev; only Cloud Functions write
+    // Audio cache registry — keys embed children's names, so clients never read or list it.
+    // The app resolves clips only through the authenticated generate* callables.
     match /audio_cache/{cacheKey} {
-      allow read: if true;
-      allow write: if false; // Written only by Cloud Functions (admin SDK)
+      allow read, write: if false;
     }
 
-    // Public website bootstrap config (landing video/store links)
+    // Per-user TTS generation quotas — Cloud Functions only.
+    match /rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    // Public website bootstrap config (landing video/store links) — no personal data.
     match /public_site/{docId} {
       allow read: if true;
       allow write: if false;

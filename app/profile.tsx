@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -15,6 +15,8 @@ import {
   resetParentPassword, signOutParent,
 } from '../services/accountAuth';
 import { backUpCurrentFamily, clearLocalFamilySession, recoverSignedInFamily } from '../services/accountSession';
+import { deleteFamilyAccount } from '../services/accountDeletion';
+import { requestParentalGate } from '../components/ParentalGate';
 import { getChildProfile } from '../services/profile';
 import { refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { ChildProfile } from '../types';
@@ -136,6 +138,40 @@ export default function ProfileScreen() {
     ]
   );
 
+  const openSubscriptionSettings = () => {
+    const url = Platform.OS === 'ios'
+      ? 'https://apps.apple.com/account/subscriptions'
+      : 'https://play.google.com/store/account/subscriptions';
+    Linking.openURL(url).catch(() => {});
+  };
+
+  const deleteAccount = () => run(async () => {
+    try {
+      await deleteFamilyAccount();
+    } catch (err) {
+      if (isAccountCancellation(err)) throw err;
+      console.warn('[Profile] account deletion failed:', err);
+      throw new Error('Could not delete your account. Check your connection and try again.');
+    }
+    router.replace('/loading');
+  });
+
+  const requestDeleteAccount = async () => {
+    if (!(await requestParentalGate('Deleting the account is permanent.'))) return;
+    Alert.alert(
+      'Delete account permanently?',
+      `This deletes ${profile ? `${profile.childName}'s` : 'your'} setup, routines, stars and ` +
+        `${isLinked ? 'your parent account' : 'this guest family'} from our servers and this device. ` +
+        'It cannot be undone.\n\nDeleting does not cancel an App Store or Google Play subscription — ' +
+        'cancel it in your store subscription settings first.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Manage subscription', onPress: openSubscriptionSettings },
+        { text: 'Delete', style: 'destructive', onPress: () => { void deleteAccount(); } },
+      ]
+    );
+  };
+
   return (
     <PageBackground variant="clouds" edges={['bottom']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -226,6 +262,17 @@ export default function ProfileScreen() {
               </>
             )}
           </View>
+
+          <View style={[styles.card, styles.dangerCard]}>
+            <Text style={styles.dangerTitle}>Delete account</Text>
+            <Text style={styles.body}>
+              Permanently remove your family&apos;s data from KidoCoach servers and this device.
+            </Text>
+            <TouchableOpacity disabled={busy} style={styles.dangerButton}
+              accessibilityRole="button" onPress={() => { void requestDeleteAccount(); }}>
+              <Text style={styles.buttonText}>Delete account</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </PageBackground>
@@ -248,4 +295,7 @@ const styles = StyleSheet.create({
   link: { color: colors.primary, fontWeight: '600', fontSize: fs(15) },
   error: { color: '#B42318', fontSize: fs(15) },
   spinner: { marginVertical: vs(8) },
+  dangerCard: { marginTop: vs(16) },
+  dangerTitle: { color: '#B42318', fontSize: fs(20), fontWeight: '800' },
+  dangerButton: { backgroundColor: '#B42318', padding: s(16), borderRadius: ms(14), alignItems: 'center' },
 });

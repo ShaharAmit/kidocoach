@@ -237,13 +237,16 @@ avatars/{avatarId}/{activityKey}.mp4
 
 Example: `avatars/becky/brush_teeth.mp4`
 
-## 🔒 Security
+## 🔒 Security & privacy
 
-- Firestore rules restrict routine access to the owning user
-- Audio cache writes are blocked from the client (admin SDK only)
-- Storage audio files require authentication to read
-- All TTS text is sanitized (max 500 chars) in the Cloud Function
-- Firebase HTTPS Callable functions require authentication
+- Firestore rules restrict family data (`users/{uid}/**`) to the owning UID.
+- `audio_cache` and `rate_limits` are server-only; clients resolve clips exclusively through the authenticated `generatePart1Audio` / `generateRoutinePart1Audio` callables.
+- Storage is private by default: only `avatars/default/welcome.mp4` (pre-auth welcome video) and `avatars/public_site/**` (website) are public. Everything else is `get`-only for signed-in users, with no listing. Generated audio is never made public; the app downloads it via `getDownloadURL`.
+- TTS callables require auth, validate name (1–30 letters), tone, voice and activity keys, cap batches at 20 keys, enforce a per-UID daily generation quota (`DAILY_GENERATION_LIMIT_PER_USER`), and run with `maxInstances` limits. Cache hits never consume quota.
+- Audio cache docs carry `expireAt`; a Firestore TTL policy deletes clips no device has requested for 12 months (`onAudioCacheDocDeleted` removes the Storage object). Docs store no plain-text child name.
+- `deleteAccount` removes `users/{uid}` recursively and the Auth user; the app also revokes Apple/Google grants and wipes local data. Store subscriptions are not cancelled by deletion.
+- Purchases, restores, external links and parent areas (Profile, Settings, Activity Manager) sit behind a parental gate (`components/ParentalGate.tsx`).
+- After deploying these rules/functions, run `node functions/scripts/lock-audio-cache.js --apply --purge-legacy` once to make previously public audio private, backfill TTLs and strip stored names (dry run without `--apply`).
 
 ## 🧪 Testing
 

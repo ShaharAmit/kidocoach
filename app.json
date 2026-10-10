@@ -18,9 +18,8 @@
           "fetch",
           "remote-notification"
         ],
-        "NSCameraUsageDescription": "KidoCoach needs access to your camera to capture photos and videos for your coaching activities.",
-        "NSPhotoLibraryUsageDescription": "KidoCoach needs access to your photo library to select photos and videos for your coaching activities.",
-        "NSPhotoLibraryAddUsageDescription": "KidoCoach needs permission to save coaching photos and videos to your photo library.",
+        "NSPhotoLibraryUsageDescription": "KidoCoach does not access your photo library. A bundled video-processing component declares this permission, but the app never requests it.",
+        "NSPhotoLibraryAddUsageDescription": "KidoCoach does not save to your photo library. A bundled video-processing component declares this permission, but the app never requests it.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

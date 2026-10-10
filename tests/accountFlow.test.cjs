@@ -230,7 +230,7 @@ test('reminder replacement cancels device-local IDs, not cloud IDs or another fa
     'expo-device': { isDevice: false },
     'expo-notifications': {
       setNotificationHandler: () => {},
-      SchedulableTriggerInputTypes: { CALENDAR: 'calendar' },
+      SchedulableTriggerInputTypes: { DAILY: 'daily' },
       getAllScheduledNotificationsAsync: async () => [...notifications],
       cancelScheduledNotificationAsync: async (id) => {
         cancelled.push(id);
@@ -244,7 +244,10 @@ test('reminder replacement cancels device-local IDs, not cloud IDs or another fa
     },
   });
   const service = load('services/notifications.ts');
-  const routine = { id: 'morning', userId: 'guest', childName: 'Liam', scheduledTime: '08:00', notificationId: 'foreign-id' };
+  const routine = {
+    id: 'morning', userId: 'guest', childName: 'Liam', scheduledTime: '08:00',
+    activityStack: [['wake_up']], notificationId: 'foreign-id',
+  };
   assert.equal(await service.scheduleRoutineNotification(routine), 'new-1');
   assert.equal(await service.scheduleRoutineNotification({ ...routine, scheduledTime: '09:00' }), 'new-2');
   assert.deepEqual(cancelled, ['local-old', 'new-1']);

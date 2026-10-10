@@ -37,6 +37,7 @@ import { calculateAgeFromISO, formatBirthDate, getTodayISO, isoDateYearsAgo } fr
 import { colors, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
 import { GRASS_IMAGE as GRASS } from '../../constants/images';
+import { isValidChildName, MAX_CHILD_NAME_LENGTH } from '../../utils/nameToken';
 
 
 const DEFAULT_AVATAR_ID = 'becky';
@@ -235,7 +236,7 @@ export default function QuestionnaireScreen() {
   const canContinue = useMemo(() => {
     switch (stepIndex) {
       case 0:
-        return childName.trim().length > 0 && age >= MIN_AGE && age <= MAX_AGE;
+        return isValidChildName(childName) && age >= MIN_AGE && age <= MAX_AGE;
       case 1:
         return !!answers.morningStuck;
       case 2:
@@ -320,10 +321,14 @@ export default function QuestionnaireScreen() {
       await saveUserProfileDoc(profile);
 
       const morningCreated = await saveRoutineIfMissing(morningRoutine);
-      await saveRoutineIfMissing(eveningRoutine);
-      if (morningCreated) {
-        const notificationId = await scheduleRoutineNotification(morningRoutine);
-        const routineWithNotif: Routine = { ...morningRoutine, notificationId };
+      const eveningCreated = await saveRoutineIfMissing(eveningRoutine);
+      for (const [created, routine] of [
+        [morningCreated, morningRoutine],
+        [eveningCreated, eveningRoutine],
+      ] as const) {
+        if (!created) continue;
+        const notificationId = await scheduleRoutineNotification(routine);
+        const routineWithNotif: Routine = { ...routine, notificationId };
         await saveRoutine(routineWithNotif);
       }
       const isPaid = await getPaidStatus();
@@ -524,6 +529,7 @@ function NameAgeStep({
           placeholderTextColor="#9CB8B8"
           autoCapitalize="words"
           returnKeyType="done"
+          maxLength={MAX_CHILD_NAME_LENGTH}
         />
       </View>
 

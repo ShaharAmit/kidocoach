@@ -1,15 +1,27 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Avatar video assets — public read (pre-rendered, no personal data)
+    // Everything is private by default; only the paths below are readable.
+
+    // In-app welcome video — shown before the first sign-in completes, so it stays public.
+    match /avatars/default/welcome.mp4 {
+      allow get: if true;
+    }
+
+    // Website landing assets (kidocoach.app) — public marketing media, no personal data.
+    match /avatars/public_site/{allPaths=**} {
+      allow get: if true;
+    }
+
+    // Pre-rendered avatar videos and captions — signed-in app users only, no listing.
     match /avatars/{allPaths=**} {
-      allow read: if true;
+      allow get: if request.auth != null;
       allow write: if false; // Upload only via admin/deployment scripts
     }
 
-    // Generated TTS audio — only accessible by authenticated users
+    // Generated TTS audio (names embedded in keys) — signed-in users only, no listing.
     match /audio/{allPaths=**} {
-      allow read: if request.auth != null;
+      allow get: if request.auth != null;
       allow write: if false; // Written only by Cloud Functions (admin SDK)
     }
   }

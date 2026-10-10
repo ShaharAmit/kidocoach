@@ -7,6 +7,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   linkWithCredential,
+  revokeAccessToken,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
@@ -183,6 +184,26 @@ export async function signOutParent(): Promise<void> {
     await auth.authStateReady();
     await signOut(auth);
   });
+}
+
+/**
+ * Revokes third-party sign-in grants before account deletion. Apple requires apps to revoke
+ * Sign in with Apple tokens on deletion; that needs a fresh authorization code, so Apple shows
+ * its sheet once more. Throws `account/cancelled` if the parent dismisses it.
+ */
+export async function revokeSignInProviders(user: User): Promise<void> {
+  const providerIds = user.providerData.map((provider) => provider.providerId);
+  if (providerIds.includes('apple.com') && Platform.OS === 'ios' && await AppleAuthentication.isAvailableAsync()) {
+    const result = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+    if (!result.authorizationCode) throw new AccountAuthError('account/missing-token');
+    await revokeAccessToken(auth, result.authorizationCode);
+  }
+  if (providerIds.includes('google.com') && googleIsConfigured()) {
+    const { GoogleSignin } = await getGoogleModule();
+    await GoogleSignin.revokeAccess().catch((err: unknown) => {
+      console.warn('[AccountAuth] Google revokeAccess failed:', err);
+    });
+  }
 }
 
 /** Email/password is always available independently of native provider availability. */

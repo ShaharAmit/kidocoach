@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { downloadWelcomeAssets, getWelcomeAssetPaths } from '../../services/assetCacheService';
 import { getOrExtractMobilePoster } from '../../services/mobileVideoCache';
 import { colors, fs, ms, s, vs } from '../../theme';
+import { requestParentalGate } from '../../components/ParentalGate';
 
 type WelcomeVideoPlayerProps = {
   videoPath: string;
@@ -232,7 +233,7 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.buttonText}>Continue To Questionnaire</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.replace('/profile')} style={{ paddingVertical: vs(18) }}>
+          <TouchableOpacity onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }} style={{ paddingVertical: vs(18) }}>
             <Text style={[styles.buttonText, { fontSize: fs(16) }]}>Already connected? Parent sign in</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.replace('/paywall')} style={{ paddingVertical: vs(12) }}>

@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { Routine } from '../types';
+import { ACTIVITIES } from '../constants/activities';
 
 // Configure how notifications appear when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -50,38 +51,63 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   return true;
 }
 
+/** Reminders fire this many minutes before each activity's scheduled time. */
+export const ACTIVITY_REMINDER_LEAD_MINUTES = 2;
+const ROUTINE_CHANNEL_ID = 'routine-reminders';
+
+/** "HH:MM" minus the lead time, wrapping across midnight (00:01 -> 23:59). */
+function reminderTriggerTime(time: string | undefined): { hour: number; minute: number } | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(time?.trim() ?? '');
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  const total = (hour * 60 + minute - ACTIVITY_REMINDER_LEAD_MINUTES + 24 * 60) % (24 * 60);
+  return { hour: Math.floor(total / 60), minute: total % 60 };
+}
+
 /**
- * Schedule a daily recurring local notification for a routine.
- * Returns the notification identifier so it can be cancelled later.
+ * Schedules one daily repeating reminder per routine step, ACTIVITY_REMINDER_LEAD_MINUTES before
+ * that step's time. Replaces every reminder this device previously scheduled for the routine.
+ * Returns the first reminder's identifier ('' when no step has a valid time).
  */
 export async function scheduleRoutineNotification(routine: Routine): Promise<string> {
   await cancelNotificationsForRoutine(routine.id, routine.userId);
 
-  const triggerTime = routine.stepTimes?.[0] ?? routine.scheduledTime;
-  const [hourStr, minuteStr] = triggerTime.split(':');
-  const hour = parseInt(hourStr, 10);
-  const minute = parseInt(minuteStr, 10);
+  const identifiers: string[] = [];
+  for (let stepIndex = 0; stepIndex < routine.activityStack.length; stepIndex += 1) {
+    const step = routine.activityStack[stepIndex] ?? [];
+    const stepTime = routine.stepTimes?.[stepIndex] ?? (stepIndex === 0 ? routine.scheduledTime : undefined);
+    const triggerTime = reminderTriggerTime(stepTime);
+    const activities = step.map((key) => ACTIVITIES[key]).filter(Boolean);
+    if (!triggerTime || activities.length === 0) continue;
 
-  const notificationId = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: `⏰ Time for ${routine.childName}'s routine!`,
-      body: `${routine.childName}, your morning routine is starting now. Tap to begin! 🚀`,
-      data: {
-        routineId: routine.id,
-        userId: routine.userId,
-        url: `kidocoach://routine/${routine.id}`,
+    const label = activities.map((activity) => activity.label).join(' + ');
+    const emoji = activities[0].emoji;
+
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `${emoji} ${label} in ${ACTIVITY_REMINDER_LEAD_MINUTES} minutes`,
+        body: `Get ready, ${routine.childName}! ${label} starts at ${stepTime}.`,
+        data: {
+          routineId: routine.id,
+          userId: routine.userId,
+          stepIndex,
+          url: `kidocoach://routine/${routine.id}`,
+        },
+        sound: true,
       },
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      hour,
-      minute,
-      repeats: true,
-    },
-  });
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: triggerTime.hour,
+        minute: triggerTime.minute,
+        channelId: ROUTINE_CHANNEL_ID,
+      },
+    });
+    identifiers.push(identifier);
+  }
 
-  return notificationId;
+  return identifiers[0] ?? '';
 }
 
 /** The OS notification list is the per-device registry; cloud IDs belong to other devices. */

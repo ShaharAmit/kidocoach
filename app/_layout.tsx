@@ -15,6 +15,19 @@ import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, 
 import { colors, fs, ms, s, vs } from '../theme';
 import { preloadLocalImages, retryLocalImage, useLocalImage } from '../utils/localImages';
 import { ALL_BUNDLED_IMAGES, MOON_IMAGE, SUN_IMAGE } from '../constants/images';
+import { ParentalGateHost, requestParentalGate } from '../components/ParentalGate';
+
+/** Parent-only tabs open only after the parental gate (Kids Category guideline 1.3). */
+function gatedTabListener(href: '/profile' | '/settings') {
+  return {
+    tabPress: (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      void requestParentalGate().then((passed) => {
+        if (passed) router.navigate(href);
+      });
+    },
+  };
+}
 
 
 
@@ -326,6 +339,7 @@ export default function RootLayout() {
           />
           <Tabs.Screen
             name="profile"
+            listeners={gatedTabListener('/profile')}
             options={{
               title: 'Profile',
               headerLeft: () => <NavigationBackButton />,
@@ -340,6 +354,7 @@ export default function RootLayout() {
           />
           <Tabs.Screen
             name="settings"
+            listeners={gatedTabListener('/settings')}
             options={{
               title: 'Settings',
               headerLeft: () => <NavigationBackButton />,
@@ -366,6 +381,7 @@ export default function RootLayout() {
           />
         </Tabs>
       )}
+      <ParentalGateHost />
     </GestureHandlerRootView>
   );
 }

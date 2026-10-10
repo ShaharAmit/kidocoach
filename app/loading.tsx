@@ -16,6 +16,7 @@ import { initPurchases } from '../services/purchases';
 import { Routine } from '../types';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
 import { colors, fs, ms, s, vs } from '../theme';
+import { requestParentalGate } from '../components/ParentalGate';
 import DayNightTransition from '../components/DayNightTransition';
 
 export default function LoadingScreen() {
@@ -152,7 +153,7 @@ export default function LoadingScreen() {
               <TouchableOpacity onPress={() => { setError(''); setAttempt((value) => value + 1); }}>
                 <Text style={styles.percent}>Try again</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.replace('/profile')}>
+              <TouchableOpacity onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }}>
                 <Text style={styles.percent}>Parent sign in</Text>
               </TouchableOpacity>
             </>

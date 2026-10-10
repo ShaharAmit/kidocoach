@@ -27,6 +27,7 @@ import { refreshPaidStatusFromRevenueCat, setPaidStatus } from '../services/subs
 import { scheduleTrialEndingNotification, cancelTrialEndingNotification } from '../services/notifications';
 import { PAYWALL_IMAGES } from '../constants/paywallImages';
 import { colors, fs, ms, s, vs } from '../theme';
+import { requestParentalGate } from '../components/ParentalGate';
 
 const LEGAL_BASE_URL = 'https://kidocoach.app';
 const TRIAL_NOTIFY_ID_KEY = 'trial_notify_id_v1';
@@ -174,6 +175,8 @@ export default function PaywallScreen() {
       return;
     }
 
+    if (!(await requestParentalGate('Subscriptions are for grown-ups.'))) return;
+
     setPurchasing(true);
     try {
       const isEntitled = await purchasePackageAndCheckEntitlement(selectedPackage);
@@ -205,6 +208,7 @@ export default function PaywallScreen() {
 
   const handleRestore = useCallback(async () => {
     if (purchasing || restoring) return;
+    if (!(await requestParentalGate('Restoring purchases is for grown-ups.'))) return;
 
     setRestoring(true);
     try {
@@ -236,7 +240,8 @@ export default function PaywallScreen() {
     }
   }, [purchasing, restoring, unlockAndContinue]);
 
-  const openLegalLink = (path: string) => {
+  const openLegalLink = async (path: string) => {
+    if (!(await requestParentalGate('This opens a web page outside the app.'))) return;
     Linking.openURL(`${LEGAL_BASE_URL}/${path}`).catch(() => {});
   };
 
@@ -331,7 +336,7 @@ export default function PaywallScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.replace('/profile')} disabled={restoring || purchasing}>
+        <TouchableOpacity onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }} disabled={restoring || purchasing}>
           <Text style={[styles.footerLink, { textAlign: 'center', marginVertical: vs(14) }]}>
             Parent sign in / registration
           </Text>
@@ -344,11 +349,11 @@ export default function PaywallScreen() {
             <Text style={styles.footerLink}>{restoring ? 'Restoring…' : 'Restore Purchases'}</Text>
           </TouchableOpacity>
           <Text style={styles.footerDot}>•</Text>
-          <TouchableOpacity onPress={() => openLegalLink('terms')}>
+          <TouchableOpacity onPress={() => { void openLegalLink('terms'); }}>
             <Text style={styles.footerLink}>Terms & Conditions</Text>
           </TouchableOpacity>
           <Text style={styles.footerDot}>•</Text>
-          <TouchableOpacity onPress={() => openLegalLink('privacy')}>
+          <TouchableOpacity onPress={() => { void openLegalLink('privacy'); }}>
             <Text style={styles.footerLink}>Privacy Policy</Text>
           </TouchableOpacity>
         </View>

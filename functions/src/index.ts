@@ -1,79 +1,74 @@
 import * as admin from 'firebase-admin';
-import * as path from 'path';
-import * as os from 'os';
-import * as fs from 'fs';
+import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
+import { setGlobalOptions } from 'firebase-functions/v2';
 import { GoogleGenAI } from '@google/genai';
 
 admin.initializeApp();
 
+// Hard ceiling on parallel instances so a flood of calls cannot scale Gemini spend unbounded.
+setGlobalOptions({ maxInstances: 10 });
+
 const db = admin.firestore();
 const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
-const geminiModel = 'gemini-3.1-flash-tts-preview';
+const geminiModel = 'gemini-3.8-flash-tts';
 
 if (!projectId) {
   throw new Error('Missing GCP project id (GCLOUD_PROJECT / GCP_PROJECT).');
 }
 
+// gemini-3.8-flash-tts is only served from the global Vertex AI endpoint (404 in us-central1).
 const geminiClient = new GoogleGenAI({
   vertexai: true,
   project: projectId,
-  location: 'us-central1',
+  location: 'global',
 });
 
-interface GenerateTTSRequest {
-  cacheKey: string;
-  text: string;
-  childName: string;
-  activityKey: string;
-  avatarId: string;
-  tone?: 'cheerful' | 'encouraging' | 'calm';
-  voice?: 'woman' | 'man';
-}
+type Tone = 'cheerful' | 'encouraging' | 'calm';
+type Voice = 'woman' | 'man';
+type AudioStatus = 'ready' | 'generating';
 
-interface GenerateTTSResponse {
-  audioUrl: string;
-  cacheKey: string;
-}
-
-interface GenerateNameAudioRequest {
-  childName: string;
-}
-
-interface GenerateNameAudioResponse {
-  audioUrl: string | null;
-  cacheKey: string;
-  status: 'ready' | 'generating';
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** audio_cache docs expire after a year without any device requesting them (Firestore TTL on `expireAt`). */
+const AUDIO_CACHE_TTL_MS = 365 * DAY_MS;
+/** Only rewrite `expireAt` on cache hits when it is this stale, to avoid a write per request. */
+const AUDIO_CACHE_TTL_REFRESH_MS = 30 * DAY_MS;
+/** A `generating` claim older than this is assumed to belong to a crashed invocation. */
+const STALE_GENERATION_CLAIM_MS = 3 * 60 * 1000;
+/** New (non-cached) clips a single Firebase user may synthesize per UTC day. */
+const DAILY_GENERATION_LIMIT_PER_USER = 60;
+const MAX_ACTIVITY_KEYS_PER_BATCH = 20;
+const MAX_CHILD_NAME_LENGTH = 30;
+const CHILD_NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M}' .-]*$/u;
 
 interface GeneratePart1AudioRequest {
   childName: string;
   activityKey: string;
-  tone?: 'cheerful' | 'encouraging' | 'calm';
-  voice?: 'woman' | 'man';
+  tone?: Tone;
+  voice?: Voice;
 }
 
 interface GeneratePart1AudioResponse {
-  audioUrl: string | null;
+  storagePath: string | null;
   cacheKey: string;
-  status: 'ready' | 'generating';
+  status: AudioStatus;
 }
 
 interface GenerateRoutinePart1AudioRequest {
   childName: string;
   activityKeys: string[];
-  tone?: 'cheerful' | 'encouraging' | 'calm';
-  voice?: 'woman' | 'man';
+  tone?: Tone;
+  voice?: Voice;
 }
 
 interface GenerateRoutinePart1AudioResponse {
   results: Array<{
     activityKey: string;
-    audioUrl: string | null;
+    storagePath: string | null;
     cacheKey: string;
-    status: 'ready' | 'generating';
+    status: AudioStatus;
   }>;
 }
 
@@ -150,7 +145,7 @@ function extractAudioBuffer(response: unknown): Buffer {
   return Buffer.from(data);
 }
 
-function buildTonePrompt(tone: GenerateTTSRequest['tone'], text: string): string {
+function buildTonePrompt(tone: Tone | undefined, text: string): string {
   if (tone === 'encouraging') {
     return `Say in an encouraging, supportive way for a child named listener: ${text}`;
   }
@@ -162,21 +157,136 @@ function buildTonePrompt(tone: GenerateTTSRequest['tone'], text: string): string
   return `Say in a cheerful, enthusiastic way for a child named listener: ${text}`;
 }
 
-function mapVoiceToGemini(voice: GenerateTTSRequest['voice']): string {
+function mapVoiceToGemini(voice: Voice | undefined): string {
   return voice === 'man' ? 'Kore' : 'Aoede';
 }
 
-/** Normalize a child name into a cache-key-safe token. Mirrors the client normalizer. */
+/**
+ * Cache-key-safe, collision-free name token. MUST stay identical to `utils/nameToken.ts` in the
+ * app. ASCII letters/digits pass through and separators become `_` (unchanged for Latin names);
+ * every other character becomes `0` + 6 hex digits, so distinct non-Latin names (e.g. Hebrew)
+ * never share one audio clip. Validated names contain no digits, so the encoding is unambiguous.
+ */
 function normalizeNameToken(childName: string): string {
-  return childName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  return Array.from(childName.normalize('NFC').trim().toLowerCase())
+    .map((char) => {
+      if (/[a-z0-9]/.test(char)) return char;
+      if (/[\s'.\-_]/.test(char)) return '_';
+      return `0${(char.codePointAt(0) ?? 0).toString(16).padStart(6, '0')}`;
+    })
+    .join('');
 }
 
-/** Firestore/Storage cache key for the reusable per-child name clip. */
-function buildNameAudioKey(childName: string): string {
-  return `name_${normalizeNameToken(childName)}_encouraging`;
+function requireUid(request: CallableRequest<unknown>): string {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  return uid;
 }
 
-const PART1_TEMPLATES: Record<string, { prompt: 'encouraging' | 'calm' | 'cheerful'; textTemplate: string }> = {
+function validateChildName(raw: unknown): string {
+  const name = typeof raw === 'string' ? raw.normalize('NFC').trim() : '';
+  if (!name) {
+    throw new HttpsError('invalid-argument', 'Missing required field: childName');
+  }
+  if (name.length > MAX_CHILD_NAME_LENGTH || !CHILD_NAME_PATTERN.test(name)) {
+    throw new HttpsError(
+      'invalid-argument',
+      `childName must be 1-${MAX_CHILD_NAME_LENGTH} letters (spaces, apostrophes, dots and hyphens allowed).`
+    );
+  }
+  return name;
+}
+
+function parseTone(raw: unknown): Tone | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (raw === 'cheerful' || raw === 'encouraging' || raw === 'calm') return raw;
+  throw new HttpsError('invalid-argument', 'tone must be cheerful, encouraging or calm.');
+}
+
+function parseVoice(raw: unknown): Voice | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (raw === 'woman' || raw === 'man') return raw;
+  throw new HttpsError('invalid-argument', 'voice must be woman or man.');
+}
+
+function audioStoragePath(cacheKey: string): string {
+  return `audio/${cacheKey}.wav`;
+}
+
+function expireAtFromNow(): Timestamp {
+  return Timestamp.fromMillis(Date.now() + AUDIO_CACHE_TTL_MS);
+}
+
+type GenerationClaim =
+  | { action: 'ready' }
+  | { action: 'in-progress' }
+  | { action: 'generate' };
+
+/**
+ * Atomically resolves a cache entry: returns `ready` (refreshing its TTL), `in-progress` when a
+ * live invocation already owns it, or claims it with `status: 'generating'` after charging the
+ * caller's daily generation quota. Cache hits never consume quota.
+ */
+async function claimAudioGeneration(
+  uid: string,
+  cacheRef: DocumentReference,
+  claimFields: Record<string, unknown>
+): Promise<GenerationClaim> {
+  const today = new Date().toISOString().slice(0, 10);
+  const quotaRef = db.collection('rate_limits').doc(`tts_${uid}_${today}`);
+
+  return db.runTransaction(async (tx) => {
+    const [snap, quotaSnap] = await Promise.all([tx.get(cacheRef), tx.get(quotaRef)]);
+    const data = snap.data();
+
+    if (snap.exists && data?.status === 'ready') {
+      const expireAtMs = (data.expireAt as Timestamp | undefined)?.toMillis() ?? 0;
+      if (expireAtMs - Date.now() < AUDIO_CACHE_TTL_MS - AUDIO_CACHE_TTL_REFRESH_MS) {
+        tx.update(cacheRef, { expireAt: expireAtFromNow() });
+      }
+      return { action: 'ready' };
+    }
+
+    const claimedAtMs =
+      (data?.claimedAt as Timestamp | undefined)?.toMillis() ??
+      (data?.createdAt as Timestamp | undefined)?.toMillis() ??
+      0;
+    if (snap.exists && data?.status === 'generating' && Date.now() - claimedAtMs < STALE_GENERATION_CLAIM_MS) {
+      return { action: 'in-progress' };
+    }
+
+    const used = Number(quotaSnap.data()?.count ?? 0);
+    if (used >= DAILY_GENERATION_LIMIT_PER_USER) {
+      throw new HttpsError('resource-exhausted', 'Daily voice generation limit reached. Try again tomorrow.');
+    }
+
+    tx.set(
+      quotaRef,
+      {
+        uid,
+        count: FieldValue.increment(1),
+        expireAt: Timestamp.fromMillis(Date.now() + 2 * DAY_MS),
+      },
+      { merge: true }
+    );
+    tx.set(
+      cacheRef,
+      {
+        ...claimFields,
+        status: 'generating',
+        claimedAt: FieldValue.serverTimestamp(),
+        createdAt: data?.createdAt ?? FieldValue.serverTimestamp(),
+        expireAt: expireAtFromNow(),
+      },
+      { merge: true }
+    );
+    return { action: 'generate' };
+  });
+}
+
+const PART1_TEMPLATES: Record<string, { prompt: Tone; textTemplate: string }> = {
   wake_up: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
   make_bed: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
   brush_teeth: { prompt: 'encouraging', textTemplate: 'Toothbrush time, {name}!' },
@@ -196,8 +306,8 @@ const PART1_TEMPLATES: Record<string, { prompt: 'encouraging' | 'calm' | 'cheerf
 function buildPart1AudioKey(
   activityKey: string,
   childName: string,
-  tone?: 'cheerful' | 'encouraging' | 'calm',
-  voice?: 'woman' | 'man'
+  tone?: Tone,
+  voice?: Voice
 ): string {
   const normalizedName = normalizeNameToken(childName);
   const normalizedActivity = activityKey.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -233,14 +343,14 @@ function hashEmail(value: string): string {
 
 async function synthesizeWithGeminiTts(
   text: string,
-  tone: GenerateTTSRequest['tone'],
-  voice: GenerateTTSRequest['voice']
+  tone: Tone | undefined,
+  voice: Voice | undefined
 ): Promise<Buffer> {
   let lastError: Error | null = null;
   const selectedVoice = mapVoiceToGemini(voice);
   const prompt = buildTonePrompt(tone, text);
 
-  // Gemini 3.1 Flash TTS can occasionally return no audio; retry a few times.
+  // Gemini Flash TTS can occasionally return no audio; retry a few times.
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const response = await geminiClient.models.generateContent({
@@ -268,308 +378,46 @@ async function synthesizeWithGeminiTts(
 }
 
 /**
- * Firebase Cloud Function: generateRoutineAudio
- *
- * Called by the client when saving a routine to generate personalised TTS audio
- * for each activity step. Saves the .mp3 to Firebase Storage and updates the
- * audio_cache Firestore collection.
- *
- * Input: { cacheKey, text, childName, activityKey, avatarId }
- * Output: { audioUrl, cacheKey }
- */
-export const generateRoutineAudio = onCall(
-  { timeoutSeconds: 120, memory: '512MiB' },
-  async (request: CallableRequest<GenerateTTSRequest>): Promise<GenerateTTSResponse> => {
-    const { cacheKey, text, childName, activityKey, avatarId, tone, voice } = request.data;
-
-    if (!cacheKey || !text || !childName || !activityKey || !avatarId) {
-      throw new HttpsError(
-        'invalid-argument',
-        'Missing required fields: cacheKey, text, childName, activityKey, avatarId'
-      );
-    }
-
-    // Sanitize text length to prevent abuse
-    if (text.length > 500) {
-      throw new HttpsError('invalid-argument', 'Text exceeds maximum length of 500 characters.');
-    }
-
-    const cacheRef = db.collection('audio_cache').doc(cacheKey);
-    let tmpFilePath: string | null = null;
-
-    try {
-      const selectedVoice = mapVoiceToGemini(voice);
-      const selectedTone = tone ?? 'cheerful';
-      const rawPcmBuffer = await synthesizeWithGeminiTts(text, selectedTone, voice);
-      const audioBuffer = pcm16ToWav(rawPcmBuffer);
-
-      // Write to temp file
-      const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      tmpFilePath = path.join(os.tmpdir(), `${cacheKey}-${uniqueSuffix}.wav`);
-      fs.writeFileSync(tmpFilePath, audioBuffer);
-
-      // Upload to Firebase Storage
-      const bucket = admin.storage().bucket();
-      const storagePath = `audio/${cacheKey}.wav`;
-
-      await bucket.upload(tmpFilePath, {
-        destination: storagePath,
-        metadata: {
-          contentType: 'audio/wav',
-          metadata: {
-            childName,
-            activityKey,
-            avatarId,
-            ttsProvider: 'gemini',
-            ttsModel: geminiModel,
-            ttsVoice: selectedVoice,
-            ttsTone: selectedTone,
-            generatedAt: new Date().toISOString(),
-          },
-        },
-      });
-
-      // Make publicly readable and return a stable public URL.
-      const file = bucket.file(storagePath);
-      await file.makePublic();
-      const audioUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
-
-      // Update Firestore cache document
-      await cacheRef.set({
-        id: cacheKey,
-        audioUrl,
-        status: 'ready',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        childName,
-        activityKey,
-        avatarId,
-        tone: selectedTone,
-        voice: voice ?? 'woman',
-      });
-
-      console.info(`[generateRoutineAudio] Generated: ${cacheKey}`);
-
-      return { audioUrl, cacheKey };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[generateRoutineAudio] Error for ${cacheKey}:`, message);
-
-      // Mark as error in Firestore
-      await cacheRef.set({ status: 'error', updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-
-      throw new HttpsError('internal', `TTS generation failed: ${message}`);
-    } finally {
-      if (tmpFilePath && fs.existsSync(tmpFilePath)) {
-        try {
-          fs.unlinkSync(tmpFilePath);
-        } catch (cleanupErr) {
-          console.warn('[generateRoutineAudio] Temp cleanup failed:', cleanupErr);
-        }
-      }
-    }
-  });
-
-/**
- * Firebase Cloud Function: generateNameAudio
- *
- * Generates a single reusable "encouraging name" TTS clip (e.g. "Lia") that is overlaid on
- * avatar videos in place of the mis-recorded baked-in name. Globally cached by name so it is
- * only ever generated once. Race-safe via a Firestore transaction that writes
- * status:'generating' before synthesizing.
- *
- * Input: { childName }
- * Output: { audioUrl, cacheKey, status }
- */
-export const generateNameAudio = onCall(
-  { timeoutSeconds: 120, memory: '512MiB' },
-  async (
-    request: CallableRequest<GenerateNameAudioRequest>
-  ): Promise<GenerateNameAudioResponse> => {
-    const childName = (request.data?.childName ?? '').trim();
-
-    if (!childName) {
-      throw new HttpsError('invalid-argument', 'Missing required field: childName');
-    }
-    if (childName.length > 60) {
-      throw new HttpsError('invalid-argument', 'childName exceeds maximum length of 60 characters.');
-    }
-
-    const cacheKey = buildNameAudioKey(childName);
-    const cacheRef = db.collection('audio_cache').doc(cacheKey);
-
-    // Race-condition guard: claim generation atomically.
-    const claim = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(cacheRef);
-      const data = snap.data();
-
-      if (snap.exists && data?.status === 'ready' && data?.audioUrl) {
-        return { action: 'ready' as const, audioUrl: data.audioUrl as string };
-      }
-
-      if (snap.exists && data?.status === 'generating') {
-        return { action: 'in-progress' as const };
-      }
-
-      tx.set(
-        cacheRef,
-        {
-          id: cacheKey,
-          status: 'generating',
-          type: 'name',
-          text: childName,
-          childName,
-          tone: 'encouraging',
-          voice: 'woman',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-      return { action: 'generate' as const };
-    });
-
-    if (claim.action === 'ready') {
-      return { audioUrl: claim.audioUrl, cacheKey, status: 'ready' };
-    }
-    if (claim.action === 'in-progress') {
-      return { audioUrl: null, cacheKey, status: 'generating' };
-    }
-
-    let tmpFilePath: string | null = null;
-    try {
-      const rawPcmBuffer = await synthesizeWithGeminiTts(childName, 'encouraging', 'woman');
-      const audioBuffer = pcm16ToWav(rawPcmBuffer);
-
-      // Server-side WAV validation (client only checks file existence, per design).
-      if (!isValidWavBuffer(audioBuffer)) {
-        throw new Error('Generated audio failed WAV validation.');
-      }
-
-      const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      tmpFilePath = path.join(os.tmpdir(), `${cacheKey}-${uniqueSuffix}.wav`);
-      fs.writeFileSync(tmpFilePath, audioBuffer);
-
-      const bucket = admin.storage().bucket();
-      const storagePath = `audio/${cacheKey}.wav`;
-
-      await bucket.upload(tmpFilePath, {
-        destination: storagePath,
-        metadata: {
-          contentType: 'audio/wav',
-          metadata: {
-            childName,
-            type: 'name',
-            ttsProvider: 'gemini',
-            ttsModel: geminiModel,
-            ttsVoice: 'Aoede',
-            ttsTone: 'encouraging',
-            generatedAt: new Date().toISOString(),
-          },
-        },
-      });
-
-      const file = bucket.file(storagePath);
-      await file.makePublic();
-      const audioUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
-
-      await cacheRef.set(
-        {
-          id: cacheKey,
-          audioUrl,
-          status: 'ready',
-          type: 'name',
-          text: childName,
-          childName,
-          tone: 'encouraging',
-          voice: 'woman',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      console.info(`[generateNameAudio] Generated: ${cacheKey}`);
-      return { audioUrl, cacheKey, status: 'ready' };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error(`[generateNameAudio] Error for ${cacheKey}:`, message);
-
-      // Clear the 'generating' claim so a later attempt can retry.
-      await cacheRef.set(
-        { status: 'error', updatedAt: admin.firestore.FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-
-      throw new HttpsError('internal', `Name audio generation failed: ${message}`);
-    } finally {
-      if (tmpFilePath && fs.existsSync(tmpFilePath)) {
-        try {
-          fs.unlinkSync(tmpFilePath);
-        } catch (cleanupErr) {
-          console.warn('[generateNameAudio] Temp cleanup failed:', cleanupErr);
-        }
-      }
-    }
-  });
-
-/**
  * Internal helper to generate or fetch Part 1 TTS audio for a specific activity & child name.
+ * Generated clips are private Storage objects; clients fetch them with an authenticated
+ * `getDownloadURL(storagePath)`, never through a public URL.
  */
 async function generatePart1AudioInternal(
+  uid: string,
   childName: string,
   activityKey: string,
-  tone?: 'cheerful' | 'encouraging' | 'calm',
-  voice?: 'woman' | 'man'
-): Promise<{ audioUrl: string | null; cacheKey: string; status: 'ready' | 'generating' }> {
-  const trimmedName = childName.trim();
+  tone?: Tone,
+  voice?: Voice
+): Promise<GeneratePart1AudioResponse> {
   const template = PART1_TEMPLATES[activityKey];
   if (!template) {
     throw new HttpsError('invalid-argument', `Unknown activityKey: ${activityKey}`);
   }
 
-  const selectedTone = tone ?? template.prompt ?? 'encouraging';
+  const selectedTone = tone ?? template.prompt;
   const selectedVoice = voice ?? 'woman';
-  const spokenText = template.textTemplate.replace(/\{name\}/g, trimmedName);
-  const cacheKey = buildPart1AudioKey(activityKey, trimmedName, selectedTone, selectedVoice);
+  const spokenText = template.textTemplate.replace(/\{name\}/g, childName);
+  const cacheKey = buildPart1AudioKey(activityKey, childName, selectedTone, selectedVoice);
+  const storagePath = audioStoragePath(cacheKey);
   const cacheRef = db.collection('audio_cache').doc(cacheKey);
 
-  // Race-condition guard: claim generation atomically.
-  const claim = await db.runTransaction(async (tx) => {
-    const snap = await tx.get(cacheRef);
-    const data = snap.data();
-
-    if (snap.exists && data?.status === 'ready' && data?.audioUrl) {
-      return { action: 'ready' as const, audioUrl: data.audioUrl as string };
-    }
-
-    if (snap.exists && data?.status === 'generating') {
-      return { action: 'in-progress' as const };
-    }
-
-    tx.set(
-      cacheRef,
-      {
-        id: cacheKey,
-        status: 'generating',
-        type: 'part1',
-        text: spokenText,
-        childName: trimmedName,
-        activityKey,
-        tone: selectedTone,
-        voice: selectedVoice,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
-    return { action: 'generate' as const };
+  // Data minimization: the doc never stores the child's name in plain text.
+  const claim = await claimAudioGeneration(uid, cacheRef, {
+    id: cacheKey,
+    type: 'part1',
+    activityKey,
+    tone: selectedTone,
+    voice: selectedVoice,
+    storagePath,
   });
 
   if (claim.action === 'ready') {
-    return { audioUrl: claim.audioUrl, cacheKey, status: 'ready' };
+    return { storagePath, cacheKey, status: 'ready' };
   }
   if (claim.action === 'in-progress') {
-    return { audioUrl: null, cacheKey, status: 'generating' };
+    return { storagePath: null, cacheKey, status: 'generating' };
   }
 
-  let tmpFilePath: string | null = null;
   try {
     const rawPcmBuffer = await synthesizeWithGeminiTts(spokenText, selectedTone, selectedVoice);
     const audioBuffer = pcm16ToWav(rawPcmBuffer);
@@ -578,19 +426,11 @@ async function generatePart1AudioInternal(
       throw new Error('Generated audio failed WAV validation.');
     }
 
-    const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    tmpFilePath = path.join(os.tmpdir(), `${cacheKey}-${uniqueSuffix}.wav`);
-    fs.writeFileSync(tmpFilePath, audioBuffer);
-
-    const bucket = admin.storage().bucket();
-    const storagePath = `audio/${cacheKey}.wav`;
-
-    await bucket.upload(tmpFilePath, {
-      destination: storagePath,
+    await admin.storage().bucket().file(storagePath).save(audioBuffer, {
+      resumable: false,
+      contentType: 'audio/wav',
       metadata: {
-        contentType: 'audio/wav',
         metadata: {
-          childName: trimmedName,
           activityKey,
           type: 'part1',
           ttsProvider: 'gemini',
@@ -602,46 +442,29 @@ async function generatePart1AudioInternal(
       },
     });
 
-    const file = bucket.file(storagePath);
-    await file.makePublic();
-    const audioUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
-
     await cacheRef.set(
       {
-        id: cacheKey,
-        audioUrl,
         status: 'ready',
-        type: 'part1',
-        text: spokenText,
-        childName: trimmedName,
-        activityKey,
-        tone: selectedTone,
-        voice: selectedVoice,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ttsModel: geminiModel,
+        updatedAt: FieldValue.serverTimestamp(),
+        expireAt: expireAtFromNow(),
       },
       { merge: true }
     );
 
     console.info(`[generatePart1Audio] Generated: ${cacheKey}`);
-    return { audioUrl, cacheKey, status: 'ready' };
+    return { storagePath, cacheKey, status: 'ready' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error(`[generatePart1Audio] Error for ${cacheKey}:`, message);
 
+    // Release the claim so a later attempt can retry.
     await cacheRef.set(
-      { status: 'error', updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { status: 'error', updatedAt: FieldValue.serverTimestamp() },
       { merge: true }
     );
 
-    throw new HttpsError('internal', `Part 1 audio generation failed: ${message}`);
-  } finally {
-    if (tmpFilePath && fs.existsSync(tmpFilePath)) {
-      try {
-        fs.unlinkSync(tmpFilePath);
-      } catch (cleanupErr) {
-        console.warn('[generatePart1Audio] Temp cleanup failed:', cleanupErr);
-      }
-    }
+    throw new HttpsError('internal', 'Part 1 audio generation failed.');
   }
 }
 
@@ -651,28 +474,23 @@ async function generatePart1AudioInternal(
  * Synthesizes and caches Part 1 greeting audio for an activity step and child name.
  */
 export const generatePart1Audio = onCall(
-  { timeoutSeconds: 120, memory: '512MiB' },
+  { timeoutSeconds: 120, memory: '512MiB', maxInstances: 5 },
   async (
     request: CallableRequest<GeneratePart1AudioRequest>
   ): Promise<GeneratePart1AudioResponse> => {
-    const childName = (request.data?.childName ?? '').trim();
-    const activityKey = (request.data?.activityKey ?? '').trim();
-
-    if (!childName) {
-      throw new HttpsError('invalid-argument', 'Missing required field: childName');
-    }
+    const uid = requireUid(request);
+    const childName = validateChildName(request.data?.childName);
+    const activityKey = typeof request.data?.activityKey === 'string' ? request.data.activityKey.trim() : '';
     if (!activityKey) {
       throw new HttpsError('invalid-argument', 'Missing required field: activityKey');
     }
-    if (childName.length > 60) {
-      throw new HttpsError('invalid-argument', 'childName exceeds maximum length of 60 characters.');
-    }
 
     return generatePart1AudioInternal(
+      uid,
       childName,
       activityKey,
-      request.data?.tone,
-      request.data?.voice
+      parseTone(request.data?.tone),
+      parseVoice(request.data?.voice)
     );
   }
 );
@@ -683,41 +501,40 @@ export const generatePart1Audio = onCall(
  * Batch synthesizes and caches Part 1 greeting audio for all activities in a routine.
  */
 export const generateRoutinePart1Audio = onCall(
-  { timeoutSeconds: 120, memory: '512MiB' },
+  { timeoutSeconds: 120, memory: '512MiB', maxInstances: 5 },
   async (
     request: CallableRequest<GenerateRoutinePart1AudioRequest>
   ): Promise<GenerateRoutinePart1AudioResponse> => {
-    const childName = (request.data?.childName ?? '').trim();
-    const activityKeys = request.data?.activityKeys ?? [];
+    const uid = requireUid(request);
+    const childName = validateChildName(request.data?.childName);
+    const tone = parseTone(request.data?.tone);
+    const voice = parseVoice(request.data?.voice);
+    const rawKeys = request.data?.activityKeys;
 
-    if (!childName) {
-      throw new HttpsError('invalid-argument', 'Missing required field: childName');
-    }
-    if (!Array.isArray(activityKeys) || activityKeys.length === 0) {
+    if (!Array.isArray(rawKeys) || rawKeys.length === 0) {
       throw new HttpsError('invalid-argument', 'Missing or empty activityKeys array');
+    }
+    const activityKeys = Array.from(
+      new Set(rawKeys.filter((key): key is string => typeof key === 'string').map((key) => key.trim()))
+    );
+    if (activityKeys.length === 0 || activityKeys.length > MAX_ACTIVITY_KEYS_PER_BATCH) {
+      throw new HttpsError(
+        'invalid-argument',
+        `activityKeys must contain 1-${MAX_ACTIVITY_KEYS_PER_BATCH} distinct keys.`
+      );
     }
 
     const results = await Promise.all(
       activityKeys.map(async (activityKey) => {
         try {
-          const res = await generatePart1AudioInternal(
-            childName,
-            activityKey,
-            request.data?.tone,
-            request.data?.voice
-          );
-          return {
-            activityKey,
-            audioUrl: res.audioUrl,
-            cacheKey: res.cacheKey,
-            status: res.status,
-          };
+          const res = await generatePart1AudioInternal(uid, childName, activityKey, tone, voice);
+          return { activityKey, ...res };
         } catch (err) {
           console.error(`[generateRoutinePart1Audio] Failed for ${activityKey}:`, err);
           return {
             activityKey,
-            audioUrl: null,
-            cacheKey: buildPart1AudioKey(activityKey, childName, request.data?.tone, request.data?.voice),
+            storagePath: null,
+            cacheKey: buildPart1AudioKey(activityKey, childName, tone, voice),
             status: 'generating' as const,
           };
         }
@@ -725,6 +542,32 @@ export const generateRoutinePart1Audio = onCall(
     );
 
     return { results };
+  }
+);
+
+/**
+ * Firebase Cloud Function: deleteAccount
+ *
+ * Permanently deletes the caller's family data (`users/{uid}` and every subcollection) and the
+ * Firebase Auth user. Shared, name-keyed audio clips are not linked to a UID and expire via TTL.
+ * Store subscriptions are owned by Apple/Google and must be cancelled by the parent.
+ */
+export const deleteAccount = onCall(
+  { timeoutSeconds: 120, memory: '256MiB' },
+  async (request: CallableRequest<unknown>): Promise<{ deleted: true }> => {
+    const uid = requireUid(request);
+
+    await db.recursiveDelete(db.collection('users').doc(uid));
+
+    try {
+      await admin.auth().deleteUser(uid);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      if (code !== 'auth/user-not-found') throw err;
+    }
+
+    console.info(`[deleteAccount] Deleted account ${uid}`);
+    return { deleted: true };
   }
 );
 
@@ -762,7 +605,7 @@ export const submitEarlyAccessLead = onCall(
           emailLower: normalizedEmail,
           emailHash: leadHash,
           source: 'website_welcome_video',
-          migratedAt: admin.firestore.FieldValue.serverTimestamp(),
+          migratedAt: FieldValue.serverTimestamp(),
         });
         transaction.delete(legacyLeadRef);
         return 'exists' as const;
@@ -773,7 +616,7 @@ export const submitEarlyAccessLead = onCall(
         emailLower: normalizedEmail,
         emailHash: leadHash,
         source: 'website_welcome_video',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
       return 'created' as const;
@@ -842,7 +685,7 @@ export const awardRoutineStepStar = onCall(
         {
           userId,
           totalStars: nextTotal,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
@@ -855,7 +698,7 @@ export const awardRoutineStepStar = onCall(
         stepIndex,
         stepId,
         stars,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
       return {

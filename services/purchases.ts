@@ -113,6 +113,16 @@ export async function restorePurchasesAndCheckEntitlement(): Promise<boolean> {
   return isEntitled;
 }
 
+/** Detaches RevenueCat from the (deleted) family so the next customer starts anonymous. */
+export async function logOutPurchasesUser(): Promise<void> {
+  if (!configured) return;
+  try {
+    if (!(await Purchases.isAnonymous())) await Purchases.logOut();
+  } catch (err) {
+    console.warn('[Purchases] Failed to log out RevenueCat customer:', err);
+  }
+}
+
 let identifyInFlight: { uid: string; promise: Promise<CustomerInfo | null> } | null = null;
 
 /**

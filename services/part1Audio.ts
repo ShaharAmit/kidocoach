@@ -1,9 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { httpsCallable } from 'firebase/functions';
-import { doc, getDoc } from 'firebase/firestore';
-import { functions, db, ensureAuth } from './firebase';
+import { getDownloadURL, ref } from 'firebase/storage';
+import { functions, storage, ensureAuth } from './firebase';
 import { localAudioPath } from './assetSync';
 import { ActivityKey, Routine, ToneOption, VoiceOption } from '../types';
+import { normalizeNameToken } from '../utils/nameToken';
 
 interface GeneratePart1AudioRequest {
   childName: string;
@@ -13,7 +14,7 @@ interface GeneratePart1AudioRequest {
 }
 
 interface GeneratePart1AudioResponse {
-  audioUrl: string | null;
+  storagePath: string | null;
   cacheKey: string;
   status: 'ready' | 'generating';
 }
@@ -28,7 +29,7 @@ interface GenerateRoutinePart1AudioRequest {
 interface GenerateRoutinePart1AudioResponse {
   results: Array<{
     activityKey: string;
-    audioUrl: string | null;
+    storagePath: string | null;
     cacheKey: string;
     status: 'ready' | 'generating';
   }>;
@@ -67,7 +68,7 @@ export function buildPart1AudioKey(
   tone?: ToneOption,
   voice?: VoiceOption
 ): string {
-  const normalizedName = (childName || 'child').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'child';
+  const normalizedName = normalizeNameToken((childName || 'child').toString()) || 'child';
   const normalizedActivity = (activityKey || 'activity').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'activity';
   const selectedTone = tone ?? (activityKey ? PART1_DEFAULT_TONES[activityKey] : undefined) ?? 'encouraging';
   const selectedVoice = voice ?? 'woman';
@@ -95,7 +96,8 @@ async function audioFileExists(localPath: string): Promise<boolean> {
   }
 }
 
-async function downloadPart1Audio(localPath: string, audioUrl: string): Promise<boolean> {
+/** Clips are private Storage objects; an authenticated getDownloadURL is the only way to fetch them. */
+async function downloadPart1Audio(localPath: string, storagePath: string): Promise<boolean> {
   await ensureAudioDir();
 
   // If already exists and valid, skip download
@@ -108,6 +110,7 @@ async function downloadPart1Audio(localPath: string, audioUrl: string): Promise<
     await FileSystem.deleteAsync(localPath, { idempotent: true });
   }
 
+  const audioUrl = await getDownloadURL(ref(storage, storagePath));
   const downloadResult = await FileSystem.downloadAsync(audioUrl, localPath);
   const status = (downloadResult as { status?: number }).status;
   if (typeof status === 'number' && status >= 400) {
@@ -145,15 +148,8 @@ export async function ensurePart1AudioReady(
 
     await ensureAuth();
 
-    const cacheRef = doc(db, 'audio_cache', cacheKey);
-    const cached = await getDoc(cacheRef);
-    const cachedData = cached.data();
-
-    if (cached.exists() && cachedData?.status === 'ready' && cachedData?.audioUrl) {
-      const ok = await downloadPart1Audio(localPath, cachedData.audioUrl as string);
-      return ok ? localPath : null;
-    }
-
+    // The callable is the only cache lookup: it returns existing clips without regenerating
+    // and refreshes their server-side retention (audio_cache is not client-readable).
     const generatePart1Audio = httpsCallable<GeneratePart1AudioRequest, GeneratePart1AudioResponse>(
       functions,
       'generatePart1Audio'
@@ -164,10 +160,10 @@ export async function ensurePart1AudioReady(
       tone,
       voice,
     });
-    const { audioUrl, status } = result.data;
+    const { storagePath, status } = result.data;
 
-    if (status === 'ready' && audioUrl) {
-      const ok = await downloadPart1Audio(localPath, audioUrl);
+    if (status === 'ready' && storagePath) {
+      const ok = await downloadPart1Audio(localPath, storagePath);
       return ok ? localPath : null;
     }
 
@@ -219,10 +215,10 @@ export async function ensureRoutinePart1AudioReady(routine: Routine): Promise<vo
     });
 
     const downloads = result.data.results.map(async (item) => {
-      if (item.status === 'ready' && item.audioUrl) {
+      if (item.status === 'ready' && item.storagePath) {
         const localPath = localAudioPath(item.cacheKey);
         if (await audioFileExists(localPath)) return;
-        await downloadPart1Audio(localPath, item.audioUrl);
+        await downloadPart1Audio(localPath, item.storagePath);
       }
     });
 
