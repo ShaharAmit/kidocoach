@@ -12,7 +12,7 @@
       "supportsTablet": true,
       "usesAppleSignIn": true,
       "bundleIdentifier": "com.kidocoach.app",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
