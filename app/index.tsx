@@ -626,6 +626,8 @@ function HomeScreen() {
             isFinalRemainingStep={isFinalRemainingStep}
             durationMinutes={primaryRoutine.stepDurations?.[currentStepIndex]}
             durationMode={primaryRoutine.stepDurationModes?.[currentStepIndex]}
+            tone={primaryRoutine.tone}
+            voice={primaryRoutine.voice}
             showCaptions={showCaptions}
             onComplete={handleStepComplete}
           />

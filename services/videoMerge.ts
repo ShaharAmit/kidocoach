@@ -99,39 +99,61 @@ async function computeSourceSignature(p1Path: string, p2Path: string, audioPath:
   return `v${MERGE_PIPELINE_VERSION}|${p1Sig}|${p2Sig}|${audioSig}`;
 }
 
-async function readStoredSignature(mergedPath: string): Promise<string | null> {
+type StoredSignature = { signature: string; decodeVerified: boolean };
+
+async function readStoredSignature(mergedPath: string): Promise<StoredSignature | null> {
   try {
     const raw = await FileSystem.readAsStringAsync(signaturePath(mergedPath));
     const parsed = JSON.parse(raw);
-    return typeof parsed?.signature === 'string' ? parsed.signature : null;
+    if (typeof parsed?.signature !== 'string') return null;
+    return { signature: parsed.signature, decodeVerified: parsed.decodeVerified === true };
   } catch {
     return null;
   }
 }
 
+/** Only call after the merged file passed a full-timeline decode check. */
 async function writeStoredSignature(mergedPath: string, signature: string): Promise<void> {
   try {
-    await FileSystem.writeAsStringAsync(signaturePath(mergedPath), JSON.stringify({ signature }));
+    await FileSystem.writeAsStringAsync(
+      signaturePath(mergedPath),
+      JSON.stringify({ signature, decodeVerified: true })
+    );
   } catch {
     // Best-effort — worst case we just rebuild the merged file next time.
   }
 }
 
-/** Fast, generation-free lookup for the player: only returns a path if a valid file exists. */
+/**
+ * Fast, generation-free lookup for the player: only returns a path when a valid merged file exists
+ * AND it was baked from the sources currently on disk.
+ */
 export async function getReadyMergedVideoPath(
   activityKey: ActivityKey | string,
   childName: string,
-  avatarId: string
+  avatarId: string,
+  tone?: ToneOption,
+  voice?: VoiceOption
 ): Promise<string | null> {
-  const path = localMergedVideoPath(activityKey, avatarId, childName);
+  const safeName = (childName || 'friend').toString().trim() || 'friend';
+  const safeAvatarId = (avatarId || 'becky').toString().trim() || 'becky';
+  const path = localMergedVideoPath(activityKey, safeAvatarId, safeName);
   if (!(await isValidCachedVideo(path))) return null;
-  // Reject output baked by an older pipeline. The file on disk stays byte-valid across a version
-  // bump, so an existence check alone would keep serving a known-bad merge (e.g. the v2 files
-  // carrying a bogus freeze-frame stutter) right up until the background rebuild replaces it.
-  // Falling back to two-part playback for one pass is strictly better than that.
-  const storedSignature = await readStoredSignature(path);
-  if (!storedSignature || !storedSignature.startsWith(`v${MERGE_PIPELINE_VERSION}|`)) return null;
-  return path;
+  // Reject output baked by an older pipeline or from since-replaced sources (e.g. a re-fetched
+  // Part 1 clip). The file stays byte-valid either way, so an existence check alone would keep
+  // serving the stale merge until the background rebuild replaces it; the caller then joins that
+  // rebuild or falls back to Part 2 instead.
+  const [stored, audioPath] = await Promise.all([
+    readStoredSignature(path),
+    getReadyPart1AudioPath(activityKey, safeName, tone, voice),
+  ]);
+  if (!stored || !audioPath) return null;
+  const current = await computeSourceSignature(
+    localPart1VideoPath(activityKey, safeAvatarId),
+    localPart2VideoPath(activityKey as ActivityKey, safeAvatarId),
+    audioPath
+  );
+  return stored.signature === current ? path : null;
 }
 
 async function cleanupTempFiles(paths: string[]): Promise<void> {
@@ -300,13 +322,17 @@ async function runNativeMediaOp(
   throw lastErr;
 }
 
+// Keyed by merged output path: the background preload and an on-demand player request for the
+// same activity must share one build instead of racing to write the same file.
+const mergeInFlight = new Map<string, Promise<string | null>>();
+
 /**
  * Builds (or reuses the cached) merged single-file video for one activity + child, and keeps
  * the merged caption track in sync with it. Returns `null` if source assets aren't downloaded
  * yet, or if the on-device merge fails for any reason — callers should treat that as "not ready"
  * and fall back to runtime two-part playback rather than failing the routine.
  */
-export async function ensureMergedActivityVideo(
+export function ensureMergedActivityVideo(
   activityKey: ActivityKey,
   childName: string,
   avatarId: string,
@@ -315,7 +341,27 @@ export async function ensureMergedActivityVideo(
 ): Promise<string | null> {
   const safeName = (childName || 'friend').toString().trim() || 'friend';
   const safeAvatarId = (avatarId || 'becky').toString().trim() || 'becky';
+  const mergedPath = localMergedVideoPath(activityKey, safeAvatarId, safeName);
 
+  const existing = mergeInFlight.get(mergedPath);
+  if (existing) return existing;
+
+  const promise = buildMergedActivityVideo(activityKey, safeName, safeAvatarId, mergedPath, tone, voice)
+    .finally(() => {
+      if (mergeInFlight.get(mergedPath) === promise) mergeInFlight.delete(mergedPath);
+    });
+  mergeInFlight.set(mergedPath, promise);
+  return promise;
+}
+
+async function buildMergedActivityVideo(
+  activityKey: ActivityKey,
+  safeName: string,
+  safeAvatarId: string,
+  mergedPath: string,
+  tone?: ToneOption,
+  voice?: VoiceOption
+): Promise<string | null> {
   const p1Path = localPart1VideoPath(activityKey, safeAvatarId);
   const p2Path = localPart2VideoPath(activityKey, safeAvatarId);
 
@@ -333,20 +379,22 @@ export async function ensureMergedActivityVideo(
   }
   if (!audioPath) return null; // TTS still generating — retry on a later preload pass
 
-  const mergedPath = localMergedVideoPath(activityKey, safeAvatarId, safeName);
-
   const signature = await computeSourceSignature(p1Path, p2Path, audioPath);
-  const [mergedExists, storedSignature] = await Promise.all([
+  const [mergedExists, stored] = await Promise.all([
     isValidCachedVideo(mergedPath),
     readStoredSignature(mergedPath),
   ]);
-  if (mergedExists && storedSignature === signature) {
-    // Re-probe rather than trusting the signature alone: a file can be cached with a matching
-    // signature yet have a damaged bitstream (e.g. built by an earlier, buggy pass). Rebuilding
-    // is far cheaper than shipping a video that stalls mid-playback.
+  if (mergedExists && stored?.signature === signature) {
+    // Files written by this pipeline were decode-verified before the signature was stored, so a
+    // matching signature is trusted as-is. Re-decoding ~10 frames per activity on every preload
+    // made each cold start pay seconds of native work for files that never change.
+    if (stored.decodeVerified) return mergedPath;
+    // Legacy entries (no verification marker) may carry a damaged bitstream from an earlier,
+    // buggy pass — verify once, then mark so later passes take the fast path above.
     try {
       const duration = await assertPlayable(mergedPath, `cached ${activityKey}`);
       await assertRegionDecodes(mergedPath, `cached ${activityKey}`, probeTimesMs(0, duration));
+      await writeStoredSignature(mergedPath, signature);
       return mergedPath;
     } catch (err) {
       console.warn(`[VideoMerge] Cached merge for ${activityKey} failed re-validation, rebuilding:`, err);
@@ -509,7 +557,9 @@ export async function ensureRoutineMergedVideosReady(
     uniqueKeys.map((key) => ensureMergedActivityVideo(key, childName, avatarId, tone, voice))
   );
   // Drop any scratch files left behind by an aborted/failed pass so the temp dir can't grow
-  // unbounded across preloads.
+  // unbounded across preloads — but never while another build (e.g. the player's on-demand
+  // merge) is still using it.
+  if (mergeInFlight.size > 0) return;
   try {
     await FileSystem.deleteAsync(MERGE_TEMP_DIR, { idempotent: true });
   } catch {

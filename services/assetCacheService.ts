@@ -236,9 +236,11 @@ export async function preloadRoutineAssetsInBackground(routine: Routine): Promis
  */
 export async function warmAllRoutineAssetsToCompletion(
   routines: Routine[],
-  onProgress?: (stageText: string, progressPercent: number) => void
+  onProgress?: (stageText: string, progressPercent: number) => void,
+  options: { awaitMergedVideos?: boolean } = {}
 ): Promise<void> {
   if (!routines || routines.length === 0) return;
+  const { awaitMergedVideos = true } = options;
 
   status.stage = 'warming-assets';
   emitStatus();
@@ -255,13 +257,24 @@ export async function warmAllRoutineAssetsToCompletion(
       await ensureRoutineMergedVideosReady(uniqueActivityKeys, r.childName, r.avatarId, r.tone, r.voice);
     }
   };
+  // Merges are a playback optimization over sources that are already on disk (ActivityPlayer
+  // joins an in-flight build or falls back to Part 2), so cold starts don't wait on FFmpeg work.
+  const finishMergedVideos = async () => {
+    if (awaitMergedVideos) {
+      await buildMergedVideos();
+      return;
+    }
+    buildMergedVideos().catch((err) => {
+      console.warn('[AssetCache] Background merged-video build failed:', err);
+    });
+  };
 
   // Fast-path: Check if everything is already ready on disk
   const readinessChecks = await Promise.all(routines.map((r) => areAssetsReady(r)));
   const allAlreadyReady = readinessChecks.every(Boolean);
 
   if (allAlreadyReady) {
-    await buildMergedVideos();
+    await finishMergedVideos();
     for (const r of routines) {
       markRoutineWarmed(r.id, true);
     }
@@ -274,18 +287,12 @@ export async function warmAllRoutineAssetsToCompletion(
   onProgress?.('Generating personalized voice...', 60);
 
   // 1. Request and wait for Part 1 greeting audio across all routines (skips cached keys)
-  for (let i = 0; i < routines.length; i++) {
-    const r = routines[i];
-    await ensureRoutinePart1AudioReady(r);
-  }
+  await Promise.all(routines.map((r) => ensureRoutinePart1AudioReady(r)));
 
   onProgress?.('Downloading routine videos and animations...', 75);
 
   // 2. Download all missing routine assets (videos, captions, audio)
-  for (let i = 0; i < routines.length; i++) {
-    const r = routines[i];
-    await syncRoutineAssets(r);
-  }
+  await Promise.all(routines.map((r) => syncRoutineAssets(r)));
 
   onProgress?.('Finalizing experience on device...', 90);
 
@@ -306,7 +313,7 @@ export async function warmAllRoutineAssetsToCompletion(
   // 4. Build merged single-file videos for every activity so the routine plays with zero
   // on-the-fly encoding. Best-effort — a routine whose merge isn't finished yet simply falls
   // back to runtime two-part playback in ActivityPlayer.
-  await buildMergedVideos();
+  await finishMergedVideos();
 
   for (const r of routines) {
     markRoutineWarmed(r.id, true);

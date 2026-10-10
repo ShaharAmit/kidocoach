@@ -13,7 +13,7 @@ import Svg, { ClipPath, Defs, Line, Path, Rect } from 'react-native-svg';
 import { VideoView, useVideoPlayer, VideoSize } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActivityKey, ActivityStep, CaptionCue, DurationMode } from '../types';
+import { ActivityKey, ActivityStep, CaptionCue, DurationMode, ToneOption, VoiceOption } from '../types';
 import { ACTIVITIES, ACTIVITY_TIMER_SECONDS, resolveDurationMode } from '../constants/activities';
 import { isValidCachedVideo, ensureActivityVideoReady } from '../services/assetSync';
 import { getOrBuildMergedCaptions, localPart2VideoPath } from '../services/twoPartVideoService';
@@ -41,6 +41,9 @@ interface ActivityPlayerProps {
   isFinalRemainingStep: boolean;
   durationMinutes?: number;
   durationMode?: DurationMode;
+  /** Routine tone/voice, so the merged video resolves to the clip the routine actually uses. */
+  tone?: ToneOption;
+  voice?: VoiceOption;
   showCaptions?: boolean;
   onComplete: () => void;
 }
@@ -264,6 +267,8 @@ export default function ActivityPlayer({
   isFinalRemainingStep,
   durationMinutes,
   durationMode,
+  tone,
+  voice,
   showCaptions = true,
   onComplete,
 }: ActivityPlayerProps) {
@@ -313,7 +318,9 @@ export default function ActivityPlayer({
       let mergedUri = await getReadyMergedVideoPath(
         currentActivityKey,
         safeChildName,
-        safeAvatarId
+        safeAvatarId,
+        tone,
+        voice
       );
       if (cancelled) return;
 
@@ -325,7 +332,9 @@ export default function ActivityPlayer({
           mergedUri = await ensureMergedActivityVideo(
             currentActivityKey,
             safeChildName,
-            safeAvatarId
+            safeAvatarId,
+            tone,
+            voice
           );
         } catch (err) {
           console.warn(`[ActivityPlayer] on-demand merge failed for ${currentActivityKey}:`, err);
@@ -367,7 +376,7 @@ export default function ActivityPlayer({
     return () => {
       cancelled = true;
     };
-  }, [currentActivityKey, safeChildName, safeAvatarId]);
+  }, [currentActivityKey, safeChildName, safeAvatarId, tone, voice]);
 
   const handleVideoEnded = useCallback(() => {
     setVideoEnded(true);

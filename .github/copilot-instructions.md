@@ -32,7 +32,7 @@ Post-setup core flow:
 - **UI / gestures**: `react-native-gesture-handler` ~2.30, `react-native-reanimated` ^4.3, `react-native-safe-area-context` ~5.6, `react-native-screens` ~4.23, `react-native-worklets` ^0.8
 - **Backend**: Firebase JS SDK ^12 — Firestore, Cloud Functions (callable), Cloud Storage, Anonymous Auth
 - **Cloud Functions runtime**: Node.js, Firebase Functions v2 (`firebase-functions/v2`)
-- **AI voice generation**: Gemini 3.1 Flash TTS (`gemini-3.1-flash-tts-preview`) via `@google/genai` on Vertex AI, server-side only
+- **AI voice generation**: Gemini 3.8 Flash TTS (`gemini-3.8-flash-tts`) via `@google/genai` on Vertex AI, server-side only. The text part is spoken verbatim — tone goes in `speechMetadata.style`, never in the text.
 
 ## Non-Negotiable Architecture Rules
 
@@ -69,13 +69,13 @@ Post-setup core flow:
 ### Cold Start (`app/loading.tsx`)
 1. Animated progress bar renders immediately.
 2. `requestNotificationPermissions()` fires, then `ensureAuth()` signs the user in anonymously.
-3. `downloadWelcomeAssets()` fetches/validates `welcome.mp4` from Firebase Storage into `FileSystem.documentDirectory/welcome/`.
-4. `getPaidStatus()` is checked (currently always `false` — paywall stub).
-5. `hasCompletedOnboarding()` reads `ChildProfile` from AsyncStorage.
-6. **Routing decision:**
-   - Unpaid → `/onboarding/welcome`
-   - Paid + not onboarded → `/onboarding/questionnaire`
-   - Paid + onboarded → `/` (home); also fires `preloadRoutineAssetsInBackground()` before navigating.
+3. The child profile is read; when one exists, `primeHomeBootstrap()` starts immediately so Firestore reads overlap the subscription check (server reads give up after 6 s and use the on-device routine cache).
+4. `refreshPaidStatusFromRevenueCat()` is checked within a 5 s budget, falling back to the cached paid flag.
+5. `downloadWelcomeAssets()` fetches/validates `welcome.mp4` only when the destination is `/onboarding/welcome`.
+6. **Routing decision** (`getAccessRoute`):
+   - No profile → `/onboarding/welcome` (unpaid) or `/onboarding/questionnaire` (paid)
+   - Profile + unpaid → `/paywall`
+   - Paid + onboarded → `/` (home), after `warmAllRoutineAssetsToCompletion()` ensures source media is on disk. Merged videos finish in the background on cold starts; only the post-questionnaire `generating_experience` pass waits for them.
 7. `hasDebugHomeAccess()` short-circuits the paywall during the current session (set by questionnaire save).
 
 ### Onboarding (`app/onboarding/`)
@@ -190,7 +190,7 @@ Post-setup core flow:
 
 **`index.ts`** — Two Firebase Cloud Functions (v2):
 
-- **`generateRoutineAudio`** (callable, 120 s timeout, 512 MiB): Validates the request, synthesizes WAV audio via Gemini 3.1 Flash TTS (retries up to 3×, selects voice `Aoede` for woman / `Kore` for man, applies tone prompt wrapper), converts raw PCM16 to WAV with a hand-written RIFF header, uploads to `audio/{cacheKey}.wav` in Cloud Storage, makes the file public, and writes `status: ready` + the public URL to `audio_cache/{cacheKey}` in Firestore.
+- **`generateRoutineAudio`** (callable, 120 s timeout, 512 MiB): Validates the request, synthesizes WAV audio via Gemini 3.8 Flash TTS (retries up to 3×, selects voice `Aoede` for woman / `Kore` for man, passes tone as `speechMetadata.style`), normalizes the model's WAV (or raw PCM16) output to a canonical 44-byte-header WAV, uploads to `audio/{cacheKey}.wav` in Cloud Storage, makes the file public, and writes `status: ready` + the public URL to `audio_cache/{cacheKey}` in Firestore.
 - **`submitEarlyAccessLead`** (callable, CORS enabled): Normalizes and validates an email address, hashes it with SHA-256, writes to `early_access/{hash}` in a transaction that also migrates any legacy plain-email document.
 
 ### Firestore Collections

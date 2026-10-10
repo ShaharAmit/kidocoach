@@ -111,3 +111,149 @@ test('activity reminders fire 2 minutes before every step, wrapping midnight', a
   assert.equal(scheduled[1].content.title, '🦷 Brush Teeth + Wash Face in 2 minutes');
   assert.equal(scheduled[1].content.data.stepIndex, 1);
 });
+
+/** Evaluates top-level server declarations (functions/consts) straight from functions/src/index.ts. */
+function serverDeclarations(names, injected = {}) {
+  const source = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
+  const blocks = names.map((name) => {
+    const match = new RegExp(
+      `^(?:async )?(?:function ${name}\\(|const ${name}\\b)[\\s\\S]*?\\n(?:\\}|\\};)\\n`,
+      'm'
+    ).exec(source);
+    assert.ok(match, `${name} not found in functions/src/index.ts`);
+    return match[0];
+  });
+  const injectedNames = Object.keys(injected);
+  return new Function(
+    ...injectedNames,
+    `${transpile(blocks.join('\n'))}; return { ${names.join(', ')} };`
+  )(...injectedNames.map((key) => injected[key]));
+}
+
+test('client and server Part 1 audio cache keys are identical', () => {
+  const client = loadModule('services/part1Audio.ts', {
+    'expo-file-system/legacy': {},
+    'firebase/functions': {},
+    'firebase/storage': {},
+    './firebase': {},
+    './assetSync': { localAudioPath: (key) => key },
+    '../types': {},
+  });
+  const server = serverDeclarations(['normalizeNameToken', 'PART1_TEMPLATES', 'buildPart1AudioKey']);
+  const cases = [
+    ['wake_up', 'Liam', undefined, undefined],
+    ['eat_dinner', 'נועה', undefined, 'man'],
+    ['brush_teeth', 'Mary-Ann', 'cheerful', 'woman'],
+    ['go_to_sleep', 'Zoë', 'calm', 'man'],
+  ];
+
+  for (const args of cases) {
+    assert.equal(client.buildPart1AudioKey(...args), server.buildPart1AudioKey(...args), args.join('/'));
+  }
+  // Keys stay stable so a reused name always hits its existing clip.
+  assert.equal(client.buildPart1AudioKey('wake_up', 'Liam'), 'p1_wake_up_liam_encouraging_woman');
+});
+
+test('only clips from the broken 3.8 prompt are regenerated; all other cached clips are reused', () => {
+  const { isReusableReadyClip } = serverDeclarations(['TTS_PROMPT_VERSION', 'isReusableReadyClip']);
+  // 3.1-era docs never stored ttsModel.
+  assert.equal(isReusableReadyClip({ status: 'ready' }), true);
+  assert.equal(isReusableReadyClip({ status: 'ready', ttsModel: 'gemini-3.1-flash-tts-preview' }), true);
+  // Broken: 3.8 before the speechMetadata fix spoke the style direction aloud.
+  assert.equal(isReusableReadyClip({ status: 'ready', ttsModel: 'gemini-3.8-flash-tts' }), false);
+  // Fixed 3.8 clips are reused like any other.
+  assert.equal(
+    isReusableReadyClip({ status: 'ready', ttsModel: 'gemini-3.8-flash-tts', ttsPromptVersion: 2 }),
+    true
+  );
+});
+
+test('device re-fetches only double-wrapped (broken prompt) Part 1 clips', async () => {
+  const files = {
+    '/docs/audio/p1_wake_up_liam_encouraging_woman.wav': { size: 100000, at44: 'AAAAAA==' },
+    '/docs/audio/p1_brush_teeth_liam_encouraging_woman.wav': { size: 100000, at44: 'UklGRg==' },
+  };
+  const client = loadModule('services/part1Audio.ts', {
+    'expo-file-system/legacy': {
+      documentDirectory: '/docs/',
+      EncodingType: { Base64: 'base64' },
+      async getInfoAsync(uri) {
+        const file = files[uri];
+        return file ? { exists: true, size: file.size } : { exists: false };
+      },
+      async readAsStringAsync(uri, options) {
+        assert.deepEqual(options, { encoding: 'base64', position: 44, length: 4 });
+        return files[uri].at44;
+      },
+    },
+    'firebase/functions': {},
+    'firebase/storage': {},
+    './firebase': {},
+    './assetSync': { localAudioPath: (key) => `/docs/audio/${key}.wav` },
+    '../types': {},
+  });
+
+  assert.equal(
+    await client.getReadyPart1AudioPath('wake_up', 'Liam'),
+    '/docs/audio/p1_wake_up_liam_encouraging_woman.wav'
+  );
+  assert.equal(await client.getReadyPart1AudioPath('brush_teeth', 'Liam'), null);
+});
+
+test('TTS sends tone as speechMetadata, never inside the spoken transcript', async () => {
+  const requests = [];
+  const geminiClient = {
+    models: {
+      async generateContent(request) {
+        requests.push(request);
+        return { candidates: [{ content: { parts: [{ inlineData: { data: Buffer.alloc(2048) } }] } }] };
+      },
+    },
+  };
+  const { synthesizeWithGeminiTts } = serverDeclarations(
+    ['buildToneStyle', 'mapVoiceToGemini', 'extractAudioBuffer', 'synthesizeWithGeminiTts'],
+    { geminiClient, geminiModel: 'gemini-3.8-flash-tts' }
+  );
+
+  for (const tone of ['cheerful', 'encouraging', 'calm', undefined]) {
+    await synthesizeWithGeminiTts('Good morning, Liam!', tone, 'man');
+  }
+
+  for (const request of requests) {
+    const [content] = request.contents;
+    assert.deepEqual(content.parts.map((part) => part.text), ['Good morning, Liam!']);
+    assert.ok(content.parts[0].speechMetadata.style.length > 0);
+    assert.equal(request.config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Kore');
+  }
+  assert.match(requests[2].contents[0].parts[0].speechMetadata.style, /calm/);
+});
+
+test('TTS WAV output is re-wrapped with only its data chunk; raw PCM is still wrapped', () => {
+  const { ttsAudioToWav } = serverDeclarations(['pcm16ToWav', 'ttsAudioToWav']);
+  const samples = Buffer.from(Array.from({ length: 4000 }, (_, i) => i % 256));
+  const trailer = Buffer.from('LIST\x04\x00\x00\x00junk', 'binary');
+
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + samples.length + trailer.length, 4);
+  header.write('WAVEfmt ', 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(24000, 24);
+  header.writeUInt32LE(48000, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(samples.length, 40);
+
+  const fromWav = ttsAudioToWav(Buffer.concat([header, samples, trailer]));
+  assert.equal(fromWav.length, 44 + samples.length);
+  assert.equal(fromWav.readUInt32LE(40), samples.length);
+  assert.equal(fromWav.readUInt32LE(28), 48000);
+  assert.ok(fromWav.subarray(44).equals(samples));
+
+  const fromPcm = ttsAudioToWav(samples);
+  assert.equal(fromPcm.toString('ascii', 0, 4), 'RIFF');
+  assert.ok(fromPcm.subarray(44).equals(samples));
+});

@@ -24,12 +24,20 @@ greeting and the baked-in narration sound like one speaker: model
 `gemini-3.8-flash-tts` (`geminiModel` in `functions/src/index.ts`),
 voice **Aoede** for `woman`/default or **Kore** for `man`.
 
+`gemini-3.8-flash-tts` speaks its text input verbatim, so never prefix the
+line with a direction like "Say in a cheerful tone:" — it would be read aloud
+and baked into the render. Send only the spoken line as the text part and put
+the delivery in `speechMetadata.style` (see `synthesizeWithGeminiTts`).
+
 - **Part 1:** use the activity's greeting template from `PART1_TEMPLATES` in
   [`functions/src/index.ts`](../functions/src/index.ts) with a sample name, and
   the template's tone (`encouraging` or `calm`). Example:
-  > Say in an energetic, cheerful, and motivating morning tone: Good morning, Jonathan!
+  > text: `Good morning, Jonathan!` · style: `energetic, cheerful and motivating morning tone`
 - **Part 2:** the activity instructions, with no name. Example:
-  > Say in an enthusiastic, uplifting morning tone: The sun is up, and a brand new adventure is waiting for us! Let's stretch those arms high to the sky, open those eyes, and get this day started! I'm ready when you are!
+  > text: `The sun is up, and a brand new adventure is waiting for us! Let's stretch those arms high to the sky, open those eyes, and get this day started! I'm ready when you are!` · style: `enthusiastic, uplifting morning tone`
+
+The model returns a complete WAV, so save it as-is (don't wrap it in another
+WAV header).
 
 Save as separate WAVs, e.g. `sound/{activityKey}_part1.wav` and
 `sound/{activityKey}_part2.wav`.

@@ -19,6 +19,9 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+// The SDK retries Storage metadata/URL calls on network errors for up to 2 minutes by default,
+// which stalls boot on offline iPads. Callers already fall back to on-device copies.
+storage.maxOperationRetryTime = 15_000;
 export const functions = getFunctions(app);
 
 const appStorage = createAsyncStorage('kids-routine-coach-auth');

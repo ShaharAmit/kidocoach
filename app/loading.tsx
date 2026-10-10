@@ -19,6 +19,24 @@ import { colors, fs, ms, s, vs } from '../theme';
 import { requestParentalGate } from '../components/ParentalGate';
 import DayNightTransition from '../components/DayNightTransition';
 
+const PAID_STATUS_BOOT_BUDGET_MS = 5000;
+
+async function refreshPaidStatusWithinBootBudget(): Promise<boolean> {
+  await initPurchases();
+  let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+  const fallback = new Promise<boolean>((resolve) => {
+    budgetTimer = setTimeout(() => {
+      console.warn('[Loading] RevenueCat refresh exceeded boot budget; using cached paid status.');
+      resolve(getPaidStatus());
+    }, PAID_STATUS_BOOT_BUDGET_MS);
+  });
+  try {
+    return await Promise.race([refreshPaidStatusFromRevenueCat(), fallback]);
+  } finally {
+    clearTimeout(budgetTimer);
+  }
+}
+
 export default function LoadingScreen() {
   const params = useLocalSearchParams<{ mode?: string }>();
   const isPostQuestionnaire = params.mode === 'generating_experience';
@@ -59,7 +77,20 @@ export default function LoadingScreen() {
           profile = await getChildProfile();
         }
 
-        if (!isWarmStart) {
+        const onboardingDone = profile !== null;
+        // Started early so Firestore reads overlap the subscription check.
+        const bootstrap = onboardingDone
+          ? primeHomeBootstrap(user.uid).catch((err) => {
+              console.warn('[Loading] Home bootstrap preload failed:', err);
+            })
+          : null;
+
+        // Purchase arrivals use the cached flag; cold starts refresh RevenueCat within a budget
+        // (offline/slow store falls back to the cached flag; startPaidStatusSync keeps it fresh).
+        const isPaid = isWarmStart ? await getPaidStatus() : await refreshPaidStatusWithinBootBudget();
+        const route = getAccessRoute(isPaid, onboardingDone);
+
+        if (!isWarmStart && route === '/onboarding/welcome') {
           setStage('Preparing your coach...');
           setProgress(35);
           await downloadWelcomeAssets().catch((err) => {
@@ -67,18 +98,11 @@ export default function LoadingScreen() {
           });
         }
 
-        // Purchase arrivals use the cached flag; cold starts refresh RevenueCat.
-        if (!isWarmStart) await initPurchases();
-        const isPaid = isWarmStart ? await getPaidStatus() : await refreshPaidStatusFromRevenueCat();
-        const onboardingDone = profile !== null;
-
         if (onboardingDone && isPaid) {
           setStage('Generating experience...');
           setProgress(50);
 
-          await primeHomeBootstrap(user.uid).catch((err) => {
-            console.warn('[Loading] Home bootstrap preload failed:', err);
-          });
+          await bootstrap;
 
           const snapshot = getHomeBootstrapSnapshot(user.uid);
           const routines: Routine[] = snapshot?.routines ?? [];
@@ -100,11 +124,17 @@ export default function LoadingScreen() {
           }
 
           if (routines.length > 0) {
-            await warmAllRoutineAssetsToCompletion(routines, (stageText, pct) => {
-              if (isCancelled) return;
-              setStage(stageText);
-              setProgress(pct);
-            });
+            // Post-questionnaire is the "generating experience" moment, so it waits for merges;
+            // cold starts let them finish in the background.
+            await warmAllRoutineAssetsToCompletion(
+              routines,
+              (stageText, pct) => {
+                if (isCancelled) return;
+                setStage(stageText);
+                setProgress(pct);
+              },
+              { awaitMergedVideos: isWarmStart }
+            );
           }
         }
 
@@ -114,7 +144,7 @@ export default function LoadingScreen() {
         if (isCancelled) return;
 
         markBootComplete();
-        router.replace(getAccessRoute(isPaid, onboardingDone));
+        router.replace(route);
       } catch (err) {
         console.warn('[Loading] Failed to initialize app:', err);
         if (!isCancelled) {

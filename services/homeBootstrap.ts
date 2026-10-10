@@ -148,12 +148,14 @@ async function readTodaysCompletion(routineId: string): Promise<LocalDailyComple
 }
 
 async function fetchRemoteRoutines(userId: string): Promise<Routine[]> {
-  const userSnap = await getDocFromServer(doc(db, 'users', userId));
+  const [userSnap, routineDocs] = await Promise.all([
+    getDocFromServer(doc(db, 'users', userId)),
+    getDocsFromServer(collection(db, 'users', userId, 'routines')),
+  ]);
   const userProfile = userSnap.exists()
     ? normalizeUserRoutineProfile(userSnap.data() as Record<string, unknown>)
     : null;
 
-  const routineDocs = await getDocsFromServer(collection(db, 'users', userId, 'routines'));
   const routines = await Promise.all(
     routineDocs.docs.map(async (routineDoc) => {
       const meta = normalizeRoutineMeta(routineDoc.id, routineDoc.data() as Record<string, unknown>);
@@ -173,16 +175,38 @@ async function fetchRemoteRoutines(userId: string): Promise<Routine[]> {
   return routines;
 }
 
+// Past this, boot proceeds from the on-device routine cache (when one exists) instead of waiting
+// on a slow or flaky connection; the server result still refreshes the cache when it lands.
+const REMOTE_ROUTINES_BOOT_BUDGET_MS = 6000;
+
 export async function primeHomeBootstrap(userId: string): Promise<HomeBootstrapSnapshot> {
-  let routines: Routine[];
-  try {
-    routines = await fetchRemoteRoutines(userId);
-    await cacheRoutines(userId, routines).catch((err) => {
+  const remote = fetchRemoteRoutines(userId).then(async (fetched) => {
+    await cacheRoutines(userId, fetched).catch((err) => {
       console.warn('[HomeBootstrap] Failed to cache remote routines:', err);
     });
+    return fetched;
+  });
+
+  let routines: Routine[];
+  let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    routines = await Promise.race([
+      remote,
+      new Promise<never>((_, reject) => {
+        budgetTimer = setTimeout(
+          () => reject(new Error('Remote routines exceeded boot budget.')),
+          REMOTE_ROUTINES_BOOT_BUDGET_MS
+        );
+      }),
+    ]);
   } catch (err) {
+    remote.catch(() => {});
     routines = await readCachedRoutines(userId);
-    if (routines.length === 0) throw err;
+    // Nothing usable on device yet (e.g. first launch after sign-in): the server is the only source.
+    if (routines.length === 0) routines = await remote;
+    else console.warn('[HomeBootstrap] Using cached routines:', err);
+  } finally {
+    clearTimeout(budgetTimer);
   }
 
   const completions: Record<string, LocalDailyCompletion> = {};

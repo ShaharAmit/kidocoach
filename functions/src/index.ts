@@ -117,6 +117,42 @@ function pcm16ToWav(pcmData: Buffer, sampleRate = 24000, channels = 1, bitsPerSa
   return Buffer.concat([wavHeader, pcmData]);
 }
 
+/**
+ * Normalizes TTS output to a canonical 44-byte-header PCM WAV (the layout the client's
+ * `getWavAudioDuration` parses). Gemini 3.8 TTS returns a full WAV whose `data` chunk is followed
+ * by trailing bytes; wrapping that whole buffer as PCM would bake its header and trailer into the
+ * clip as audible noise. Older models returned raw PCM16, which is wrapped as before.
+ */
+function ttsAudioToWav(audio: Buffer): Buffer {
+  if (audio.length < 12 || audio.toString('ascii', 0, 4) !== 'RIFF' || audio.toString('ascii', 8, 12) !== 'WAVE') {
+    return pcm16ToWav(audio);
+  }
+
+  let format: { audioFormat: number; channels: number; sampleRate: number; bitsPerSample: number } | null = null;
+  let offset = 12;
+  while (offset + 8 <= audio.length) {
+    const chunkId = audio.toString('ascii', offset, offset + 4);
+    const chunkSize = audio.readUInt32LE(offset + 4);
+    const body = offset + 8;
+    if (chunkId === 'fmt ' && body + 16 <= audio.length) {
+      format = {
+        audioFormat: audio.readUInt16LE(body),
+        channels: audio.readUInt16LE(body + 2),
+        sampleRate: audio.readUInt32LE(body + 4),
+        bitsPerSample: audio.readUInt16LE(body + 14),
+      };
+    } else if (chunkId === 'data') {
+      if (!format || format.audioFormat !== 1) {
+        throw new Error('TTS returned a non-PCM WAV.');
+      }
+      const pcm = audio.subarray(body, Math.min(audio.length, body + chunkSize));
+      return pcm16ToWav(pcm, format.sampleRate, format.channels, format.bitsPerSample);
+    }
+    offset = body + chunkSize + (chunkSize % 2);
+  }
+  throw new Error('TTS returned a WAV without a data chunk.');
+}
+
 function extractAudioBuffer(response: unknown): Buffer {
   const candidates = (response as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string | Uint8Array | Buffer } }> } }> }).candidates;
   if (!candidates?.length) {
@@ -145,16 +181,14 @@ function extractAudioBuffer(response: unknown): Buffer {
   return Buffer.from(data);
 }
 
-function buildTonePrompt(tone: Tone | undefined, text: string): string {
-  if (tone === 'encouraging') {
-    return `Say in an encouraging, supportive way for a child named listener: ${text}`;
-  }
-
-  if (tone === 'calm') {
-    return `Say in a calm, gentle way for a child named listener: ${text}`;
-  }
-
-  return `Say in a cheerful, enthusiastic way for a child named listener: ${text}`;
+/**
+ * Delivery direction for `speechMetadata.style`. Gemini 3.8 TTS speaks the text part verbatim,
+ * so direction must never be concatenated into the transcript or it gets read aloud.
+ */
+function buildToneStyle(tone: Tone | undefined): string {
+  if (tone === 'encouraging') return 'encouraging and supportive, speaking warmly to a young child';
+  if (tone === 'calm') return 'calm and gentle, speaking softly to a young child';
+  return 'cheerful and enthusiastic, speaking warmly to a young child';
 }
 
 function mapVoiceToGemini(voice: Voice | undefined): string {
@@ -225,6 +259,18 @@ type GenerationClaim =
   | { action: 'generate' };
 
 /**
+ * Bumped when the synthesis request changes in a way that invalidates clips already cached. v2
+ * moved tone into `speechMetadata.style`: before that, gemini-3.8-flash-tts spoke the
+ * "Say in a … way:" direction aloud, so only those clips are regenerated (once). Clips from older
+ * models never carried that bug and stay cached.
+ */
+const TTS_PROMPT_VERSION = 2;
+
+function isReusableReadyClip(data: Record<string, unknown>): boolean {
+  return data.ttsModel !== 'gemini-3.8-flash-tts' || data.ttsPromptVersion === TTS_PROMPT_VERSION;
+}
+
+/**
  * Atomically resolves a cache entry: returns `ready` (refreshing its TTL), `in-progress` when a
  * live invocation already owns it, or claims it with `status: 'generating'` after charging the
  * caller's daily generation quota. Cache hits never consume quota.
@@ -241,7 +287,7 @@ async function claimAudioGeneration(
     const [snap, quotaSnap] = await Promise.all([tx.get(cacheRef), tx.get(quotaRef)]);
     const data = snap.data();
 
-    if (snap.exists && data?.status === 'ready') {
+    if (snap.exists && data?.status === 'ready' && isReusableReadyClip(data)) {
       const expireAtMs = (data.expireAt as Timestamp | undefined)?.toMillis() ?? 0;
       if (expireAtMs - Date.now() < AUDIO_CACHE_TTL_MS - AUDIO_CACHE_TTL_REFRESH_MS) {
         tx.update(cacheRef, { expireAt: expireAtFromNow() });
@@ -314,6 +360,7 @@ function buildPart1AudioKey(
   const template = PART1_TEMPLATES[activityKey];
   const selectedTone = tone ?? template?.prompt ?? 'encouraging';
   const selectedVoice = voice ?? 'woman';
+  // MUST stay identical to `buildPart1AudioKey` in services/part1Audio.ts.
   return `p1_${normalizedActivity}_${normalizedName}_${selectedTone}_${selectedVoice}`;
 }
 
@@ -348,14 +395,14 @@ async function synthesizeWithGeminiTts(
 ): Promise<Buffer> {
   let lastError: Error | null = null;
   const selectedVoice = mapVoiceToGemini(voice);
-  const prompt = buildTonePrompt(tone, text);
+  const style = buildToneStyle(tone);
 
   // Gemini Flash TTS can occasionally return no audio; retry a few times.
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const response = await geminiClient.models.generateContent({
         model: geminiModel,
-        contents: prompt,
+        contents: [{ role: 'user', parts: [{ text, speechMetadata: { style } }] }],
         config: {
           responseModalities: ['AUDIO'],
           speechConfig: {
@@ -419,8 +466,8 @@ async function generatePart1AudioInternal(
   }
 
   try {
-    const rawPcmBuffer = await synthesizeWithGeminiTts(spokenText, selectedTone, selectedVoice);
-    const audioBuffer = pcm16ToWav(rawPcmBuffer);
+    const rawAudio = await synthesizeWithGeminiTts(spokenText, selectedTone, selectedVoice);
+    const audioBuffer = ttsAudioToWav(rawAudio);
 
     if (!isValidWavBuffer(audioBuffer)) {
       throw new Error('Generated audio failed WAV validation.');
@@ -446,6 +493,7 @@ async function generatePart1AudioInternal(
       {
         status: 'ready',
         ttsModel: geminiModel,
+        ttsPromptVersion: TTS_PROMPT_VERSION,
         updatedAt: FieldValue.serverTimestamp(),
         expireAt: expireAtFromNow(),
       },

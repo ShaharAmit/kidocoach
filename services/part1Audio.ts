@@ -72,6 +72,7 @@ export function buildPart1AudioKey(
   const normalizedActivity = (activityKey || 'activity').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'activity';
   const selectedTone = tone ?? (activityKey ? PART1_DEFAULT_TONES[activityKey] : undefined) ?? 'encouraging';
   const selectedVoice = voice ?? 'woman';
+  // MUST stay identical to `buildPart1AudioKey` in functions/src/index.ts.
   return `p1_${normalizedActivity}_${normalizedName}_${selectedTone}_${selectedVoice}`;
 }
 
@@ -90,7 +91,29 @@ async function audioFileExists(localPath: string): Promise<boolean> {
     const info = await FileSystem.getInfoAsync(localPath);
     if (!info.exists) return false;
     const size = 'size' in info && typeof info.size === 'number' ? info.size : 0;
-    return size >= MIN_AUDIO_BYTES;
+    if (size < MIN_AUDIO_BYTES) return false;
+    return !(await isBrokenPromptClip(localPath));
+  } catch {
+    return false;
+  }
+}
+
+// base64("RIFF") at byte 44, i.e. a WAV nested inside the data chunk.
+const NESTED_RIFF_BASE64 = 'UklGRg==';
+
+/**
+ * Clips synthesized by gemini-3.8-flash-tts before the speechMetadata fix spoke the style prompt
+ * aloud, and were all double-wrapped (the model's own WAV header sits at byte 44). Treating them as
+ * missing makes the device re-fetch only those clips; the server regenerates them exactly once.
+ */
+async function isBrokenPromptClip(localPath: string): Promise<boolean> {
+  try {
+    const bytes = await FileSystem.readAsStringAsync(localPath, {
+      encoding: FileSystem.EncodingType.Base64,
+      position: 44,
+      length: 4,
+    });
+    return bytes === NESTED_RIFF_BASE64;
   } catch {
     return false;
   }
