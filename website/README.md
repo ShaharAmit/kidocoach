@@ -48,8 +48,8 @@ Example payload:
 ```json
 {
   "welcomeVideoUrl": "https://storage.googleapis.com/<bucket>/public/welcome.mp4",
-  "appStoreUrl": "https://apps.apple.com/app/idXXXXXXXXX",
-  "playStoreUrl": "https://play.google.com/store/apps/details?id=com.example.kidocoach"
+  "appStoreUrl": "https://apps.apple.com/app/id6774532766",
+  "playStoreUrl": "https://play.google.com/store/apps/details?id=com.kidocoach.app"
 }
 ```
 
@@ -66,8 +66,8 @@ Optional overrides:
 
 ```bash
 WEBSITE_WELCOME_VIDEO_URL="https://storage.googleapis.com/<bucket>/public/welcome.mp4" \
-WEBSITE_APP_STORE_URL="https://apps.apple.com/app/idXXXXXXXXX" \
-WEBSITE_PLAY_STORE_URL="https://play.google.com/store/apps/details?id=com.example.kidocoach" \
+WEBSITE_APP_STORE_URL="https://apps.apple.com/app/id6774532766" \
+WEBSITE_PLAY_STORE_URL="https://play.google.com/store/apps/details?id=com.kidocoach.app" \
 npm run seed:public-site
 ```
 

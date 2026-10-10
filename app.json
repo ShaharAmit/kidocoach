@@ -12,12 +12,13 @@
       "supportsTablet": true,
       "usesAppleSignIn": true,
       "bundleIdentifier": "com.kidocoach.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
         ],
+        "NSCameraUsageDescription": "KidoCoach does not use your camera. A bundled video-processing component declares this permission, but the app never requests it.",
         "NSPhotoLibraryUsageDescription": "KidoCoach does not access your photo library. A bundled video-processing component declares this permission, but the app never requests it.",
         "NSPhotoLibraryAddUsageDescription": "KidoCoach does not save to your photo library. A bundled video-processing component declares this permission, but the app never requests it.",
         "ITSAppUsesNonExemptEncryption": false

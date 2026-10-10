@@ -39,15 +39,6 @@ export default function SettingsScreen() {
     return profile.gender === 'girl' ? 'Girl' : 'Boy';
   }, [profile]);
 
-  const voiceLabel = useMemo(() => {
-    if (!profile) return '—';
-    return profile.voice === 'woman' ? 'Woman' : 'Man';
-  }, [profile]);
-
-  const avatarLabel = useMemo(() => {
-    return 'Becky';
-  }, []);
-
   useEffect(() => {
     let mounted = true;
 
@@ -237,27 +228,6 @@ export default function SettingsScreen() {
         </View>
 
         <View style={[styles.card, styles.avatarCard]}>
-          <View style={styles.cardHeader}>
-            <View style={styles.smallIconBubble}>
-              <Text style={styles.smallIconEmoji}>🎭</Text>
-            </View>
-            <View style={styles.cardHeaderTextWrap}>
-              <Text style={styles.cardTitle}>Chosen avatar</Text>
-              <Text style={styles.cardSummary}>Current voice coach settings.</Text>
-            </View>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Avatar</Text>
-            <Text style={styles.infoValue}>{avatarLabel}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Sex</Text>
-            <Text style={styles.infoValue}>Girl</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Voice</Text>
-            <Text style={styles.infoValue}>{voiceLabel}</Text>
-          </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Show Subtitles</Text>
             <Switch
@@ -365,31 +335,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: ms(10),
   },
-  smallIconBubble: {
-    width: ms(32),
-    height: ms(32),
-    borderRadius: ms(16),
-    backgroundColor: '#FFFFFFCC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: ms(10),
-  },
   iconEmoji: {
     fontSize: fs(21),
-  },
-  smallIconEmoji: {
-    fontSize: fs(15),
   },
   cardTitle: {
     fontSize: fs(16),
     fontWeight: '800',
     color: colors.textInk,
     marginBottom: vs(2),
-  },
-  cardSummary: {
-    fontSize: fs(13),
-    color: colors.textSlate,
-    lineHeight: fs(18),
   },
   infoRow: {
     flexDirection: 'row',

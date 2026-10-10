@@ -20,10 +20,10 @@ async function run() {
       'https://storage.googleapis.com/your-bucket/public/welcome.mp4',
     appStoreUrl:
       process.env.WEBSITE_APP_STORE_URL ||
-      'https://apps.apple.com/app/idXXXXXXXXX',
+      'https://apps.apple.com/app/id6774532766',
     playStoreUrl:
       process.env.WEBSITE_PLAY_STORE_URL ||
-      'https://play.google.com/store/apps/details?id=com.example.kidocoach',
+      'https://play.google.com/store/apps/details?id=com.kidocoach.app',
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedBy: 'seed-public-site-config-script',
   };
