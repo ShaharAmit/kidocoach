@@ -1,21 +1,8 @@
-export type ActivityKey =
-  | 'brush_teeth'
-  | 'get_dressed'
-  | 'eat_breakfast'
-  | 'pack_backpack'
-  | 'wash_face'
-  | 'comb_hair'
-  | 'put_shoes_on'
-  | 'drink_water'
-  | 'tidy_room'
-  | 'read_book'
-  | 'put_on_pajamas'
-  | 'bedtime_story'
-  | 'eat_dinner'
-  | 'go_to_sleep'
-  | 'homework'
-  | 'make_bed'
-  | 'wake_up';
+/**
+ * Activity identifier (`[a-z0-9_]+`). Not a closed union: the set of activities comes from the
+ * cloud catalog at runtime (see services/activityCatalog.ts), with bundled defaults as fallback.
+ */
+export type ActivityKey = string;
 
 export type ToneOption = 'cheerful' | 'encouraging' | 'calm';
 export type VoiceOption = 'woman' | 'man';
@@ -162,7 +149,7 @@ export interface ActivityMeta {
   key: ActivityKey;
   label: string;
   promptTemplate: (childName: string) => string;
-  videoFile: string; // local filename e.g. "brush_teeth.mp4"
+  subtitle: string;
   emoji: string;
   color: string;
 }

@@ -15,6 +15,7 @@ import {
 import { router } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import PageBackground from '../../components/PageBackground';
+import { isActivitySelectable } from '../../constants/activities';
 import { InPageHeader } from '../../components/ScreenHeader';
 import {
   ActivityKey,
@@ -270,8 +271,9 @@ export default function QuestionnaireScreen() {
       const tone = toneFromMotivation(answers.motivationStyle);
       const ageBucket = bucketFromAge(age);
       const routineTemplate = AGE_ROUTINE_TEMPLATES[ageBucket];
-      const morningActivityStack = routineTemplate.morning.map((key) => [key]);
-      const eveningActivityStack = routineTemplate.evening.map((key) => [key]);
+      // Templates may name activities whose media isn't in the catalog (yet); skip those.
+      const morningActivityStack = routineTemplate.morning.filter(isActivitySelectable).map((key) => [key]);
+      const eveningActivityStack = routineTemplate.evening.filter(isActivitySelectable).map((key) => [key]);
       const morningStepTimes = buildStepTimes(DEFAULT_SCHEDULED_TIME, morningActivityStack.length);
       const eveningStepTimes = buildStepTimes(DEFAULT_EVENING_TIME, eveningActivityStack.length);
 
@@ -331,6 +333,8 @@ export default function QuestionnaireScreen() {
         const routineWithNotif: Routine = { ...routine, notificationId };
         await saveRoutine(routineWithNotif);
       }
+      // The paywall's purchase/restore buttons sit behind the parental gate (math until the parent
+      // picks their own lock method the first time they open Settings or Profile).
       const isPaid = await getPaidStatus();
       router.replace(isPaid
         ? { pathname: '/loading', params: { mode: 'generating_experience' } }

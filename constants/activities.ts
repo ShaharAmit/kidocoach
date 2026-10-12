@@ -1,218 +1,250 @@
-import { ActivityKey, ActivityMeta, DurationMode } from '../types';
-import { colors} from '../theme';
+import { ActivityKey, ActivityMeta, DurationMode, ToneOption } from '../types';
+import { colors } from '../theme';
 
-export interface ActivityConfig {
-  id: string;
-  uiTitle: string;
-  uiEmoji: string;
-  defaultTTSPhrase: string; // Used by Cloud Function for Gemini TTS
-  avatarVideoRef: string;   // Reference to fetch from CDN -> FileSystem.documentDirectory
+export type ActivityTimeOfDay = 'morning' | 'evening' | 'general';
+
+/**
+ * Everything the app knows about one activity. Bundled defaults below are the offline fallback;
+ * `services/activityCatalog.ts` overlays the Firestore `catalog/activities` document on top of
+ * them at runtime, so activities uploaded to the cloud appear without an app release.
+ */
+export interface ActivityDefinition {
+  key: ActivityKey;
+  label: string;
+  emoji: string;
+  subtitle: string;
+  timeOfDay: ActivityTimeOfDay;
+  timerSeconds: number;
+  durationMode: DurationMode;
+  stars: 0 | 1 | 2;
+  order: number;
+  /** Personalized Part 1 greeting; `{name}` is replaced with the child's name. */
+  part1Text: string;
+  part1Tone: ToneOption;
+  /** Bumped whenever `part1Text`/`part1Tone` change so cached greetings are regenerated. */
+  part1Version: number;
+  /** On-screen line under the player; `{name}` is replaced with the child's name. */
+  promptText: string;
+  /** Parents may add it to a routine (complete media, enabled, supported by this app build). */
+  selectable: boolean;
 }
 
-export const ADDITIONAL_ACTIVITIES: ActivityConfig[] = [
-  {
-    id: 'tidy_room',
-    uiTitle: 'Tidy Room',
-    uiEmoji: '🧸',
-    defaultTTSPhrase: 'Great job {childName}! Now, let\'s tidy up our room.',
-    avatarVideoRef: 'avatar_loop_tidy_room.mp4',
-  },
-  {
-    id: 'read_book',
-    uiTitle: 'Read a Book',
-    uiEmoji: '📚',
-    defaultTTSPhrase: 'Let\'s read a fun book together, {childName}.',
-    avatarVideoRef: 'avatar_loop_read_book.mp4',
-  },
-  {
-    id: 'put_on_pajamas',
-    uiTitle: 'Put on Pajamas',
-    uiEmoji: '👕',
-    defaultTTSPhrase: 'Time to get cozy, {childName}. Let\'s put on our pajamas!',
-    avatarVideoRef: 'avatar_loop_pajamas.mp4',
-  },
-];
+const FALLBACK_TIMER_SECONDS = 120;
 
-export const ACTIVITIES: Record<ActivityKey, ActivityMeta> = {
-  brush_teeth: {
-    key: 'brush_teeth',
-    label: 'Brush Teeth',
-    promptTemplate: (name) => `It is time to brush your teeth, ${name}, for a bright, sparkly smile.`,
-    videoFile: 'brush_teeth.mp4',
-    emoji: '🦷',
-    color: colors.primary,
-  },
-  get_dressed: {
-    key: 'get_dressed',
-    label: 'Get Dressed',
-    promptTemplate: (name) => `Great job, ${name}. Now let us get dressed and ready for an amazing day.`,
-    videoFile: 'get_dressed.mp4',
-    emoji: '👕',
-    color: colors.primary,
-  },
-  eat_breakfast: {
-    key: 'eat_breakfast',
-    label: 'Eat Breakfast',
-    promptTemplate: (name) => `Superstar ${name}, it is breakfast time. Let us eat and fill up with energy for the day.`,
-    videoFile: 'eat_breakfast.mp4',
-    emoji: '🥞',
-    color: colors.primary,
-  },
-  pack_backpack: {
-    key: 'pack_backpack',
-    label: 'Pack Backpack',
-    promptTemplate: (name) => `You are doing great, ${name}. Let us pack your backpack so you are ready for school.`,
-    videoFile: 'pack_backpack.mp4',
-    emoji: '🎒',
-    color: colors.primary,
-  },
-  wash_face: {
-    key: 'wash_face',
-    label: 'Wash Face',
-    promptTemplate: (name) => `Let us wash your face, ${name}, and feel fresh and clean.`,
-    videoFile: 'wash_face.mp4',
-    emoji: '🚿',
-    color: colors.primary,
-  },
-  comb_hair: {
-    key: 'comb_hair',
-    label: 'Comb Hair',
-    promptTemplate: (name) => `Looking good, ${name}. Time to comb your hair so you can look your best.`,
-    videoFile: 'comb_hair.mp4',
-    emoji: '💇',
-    color: colors.primary,
-  },
-  put_shoes_on: {
-    key: 'put_shoes_on',
-    label: 'Put Shoes On',
-    promptTemplate: (name) => `Almost ready, ${name}. Put your shoes on, and we are good to go.`,
-    videoFile: 'put_shoes_on.mp4',
-    emoji: '👟',
-    color: colors.primary,
-  },
-  drink_water: {
-    key: 'drink_water',
-    label: 'Drink Water',
-    promptTemplate: (name) => `Stay healthy, ${name}. Let us drink a big glass of water.`,
-    videoFile: 'drink_water.mp4',
-    emoji: '💧',
-    color: colors.primary,
-  },
-  tidy_room: {
-    key: 'tidy_room',
-    label: 'Tidy Room',
-    promptTemplate: (name) => `Great job ${name}! Now, let us tidy up our room.`,
-    videoFile: 'avatar_loop_tidy_room.mp4',
-    emoji: '🧸',
-    color: colors.primary,
-  },
-  read_book: {
-    key: 'read_book',
-    label: 'Read a Book',
-    promptTemplate: (name) => `Let us read a fun book together, ${name}.`,
-    videoFile: 'avatar_loop_read_book.mp4',
-    emoji: '📚',
-    color: colors.primary,
-  },
-  put_on_pajamas: {
-    key: 'put_on_pajamas',
-    label: 'Put on Pajamas',
-    promptTemplate: (name) => `Time to get cozy, ${name}. Let us put on our pajamas!`,
-    videoFile: 'avatar_loop_pajamas.mp4',
-    emoji: '👕',
-    color: colors.primary,
-  },
-  bedtime_story: {
-    key: 'bedtime_story',
-    label: 'Bedtime Story',
-    promptTemplate: (name) => `Cuddle up, ${name}. Let us read a lovely bedtime story together.`,
-    videoFile: 'bedtime_story.mp4',
-    emoji: '📖',
-    color: colors.primary,
-  },
-  eat_dinner: {
-    key: 'eat_dinner',
-    label: 'Eat Dinner',
-    promptTemplate: (name) => `Dinner time, ${name}! Let us sit down and enjoy a healthy meal.`,
-    videoFile: 'eat_dinner.mp4',
-    emoji: '🍽️',
-    color: colors.primary,
-  },
-  go_to_sleep: {
-    key: 'go_to_sleep',
-    label: 'Go to Sleep',
-    promptTemplate: (name) => `Sweet dreams, ${name}. It is time to close your eyes and go to sleep.`,
-    videoFile: 'go_to_sleep.mp4',
-    emoji: '😴',
-    color: colors.primary,
-  },
-  homework: {
-    key: 'homework',
-    label: 'Homework',
-    promptTemplate: (name) => `Great focus, ${name}! Let us sit down and finish our homework.`,
-    videoFile: 'homework.mp4',
-    emoji: '📝',
-    color: colors.primary,
+type BundledActivity = Omit<ActivityDefinition, 'key' | 'order' | 'part1Version'>;
+
+// Activities without uploaded videos stay known (so existing routines still render) but are not
+// selectable until the cloud catalog reports complete media for them.
+const BUNDLED: Record<string, BundledActivity> = {
+  wake_up: {
+    label: 'Wake Up', emoji: '☀️', subtitle: 'Good morning, rise and shine!', timeOfDay: 'morning',
+    timerSeconds: 60, durationMode: 'variable', stars: 0, selectable: true,
+    part1Text: 'Good morning, {name}!', part1Tone: 'encouraging',
+    promptText: 'Good morning, {name}! Time to wake up and start a wonderful day.',
   },
   make_bed: {
-    key: 'make_bed',
-    label: 'Make Bed',
-    promptTemplate: (name) => `Nice work, ${name}! Let us make the bed nice and tidy.`,
-    videoFile: 'make_bed.mp4',
-    emoji: '🛏️',
-    color: colors.primary,
+    label: 'Make Bed', emoji: '🛏️', subtitle: "Let's make the bed nice and neat", timeOfDay: 'general',
+    timerSeconds: 180, durationMode: 'variable', stars: 2, selectable: true,
+    part1Text: 'Good morning, {name}!', part1Tone: 'encouraging',
+    promptText: 'Nice work, {name}! Let us make the bed nice and tidy.',
   },
-  wake_up: {
-    key: 'wake_up',
-    label: 'Wake Up',
-    promptTemplate: (name) => `Good morning, ${name}! Time to wake up and start a wonderful day.`,
-    videoFile: 'wake_up.mp4',
-    emoji: '☀️',
-    color: colors.primary,
+  brush_teeth: {
+    label: 'Brush Teeth', emoji: '🦷', subtitle: "Let's make those teeth sparkle!", timeOfDay: 'general',
+    timerSeconds: 60, durationMode: 'fixed', stars: 2, selectable: true,
+    part1Text: 'Toothbrush time, {name}!', part1Tone: 'encouraging',
+    promptText: 'It is time to brush your teeth, {name}, for a bright, sparkly smile.',
+  },
+  eat_breakfast: {
+    label: 'Eat Breakfast', emoji: '🥞', subtitle: 'Time to fuel up for the day!', timeOfDay: 'morning',
+    timerSeconds: 600, durationMode: 'variable', stars: 1, selectable: true,
+    part1Text: 'Breakfast time, {name}!', part1Tone: 'encouraging',
+    promptText: 'Superstar {name}, it is breakfast time. Let us eat and fill up with energy for the day.',
+  },
+  get_dressed: {
+    label: 'Get Dressed', emoji: '👕', subtitle: 'Time to put on comfy clothes', timeOfDay: 'general',
+    timerSeconds: 180, durationMode: 'variable', stars: 2, selectable: true,
+    part1Text: "Let's get dressed, {name}!", part1Tone: 'encouraging',
+    promptText: 'Great job, {name}. Now let us get dressed and ready for an amazing day.',
+  },
+  put_shoes_on: {
+    label: 'Put Shoes On', emoji: '👟', subtitle: "Let's get those shoes on!", timeOfDay: 'general',
+    timerSeconds: 90, durationMode: 'variable', stars: 1, selectable: true,
+    part1Text: 'All right, {name}!', part1Tone: 'encouraging',
+    promptText: 'Almost ready, {name}. Put your shoes on, and we are good to go.',
+  },
+  comb_hair: {
+    label: 'Comb Hair', emoji: '💇', subtitle: "Let's look neat and tidy!", timeOfDay: 'general',
+    timerSeconds: 120, durationMode: 'variable', stars: 1, selectable: true,
+    part1Text: "Let's take care of your hair, {name}!", part1Tone: 'encouraging',
+    promptText: 'Looking good, {name}. Time to comb your hair so you can look your best.',
+  },
+  drink_water: {
+    label: 'Drink Water', emoji: '💧', subtitle: 'A little sip for sweet dreams', timeOfDay: 'general',
+    timerSeconds: 30, durationMode: 'fixed', stars: 0, selectable: true,
+    part1Text: 'Water time, {name}!', part1Tone: 'encouraging',
+    promptText: 'Stay healthy, {name}. Let us drink a big glass of water.',
+  },
+  homework: {
+    label: 'Homework', emoji: '📝', subtitle: 'Time to focus and learn!', timeOfDay: 'general',
+    timerSeconds: 900, durationMode: 'variable', stars: 2, selectable: true,
+    part1Text: 'All right, {name}!', part1Tone: 'encouraging',
+    promptText: 'Great focus, {name}! Let us sit down and finish our homework.',
+  },
+  eat_dinner: {
+    label: 'Eat Dinner', emoji: '🍽️', subtitle: 'Yummy food to end the day!', timeOfDay: 'evening',
+    timerSeconds: 900, durationMode: 'variable', stars: 1, selectable: true,
+    part1Text: 'Dinner time, {name}!', part1Tone: 'calm',
+    promptText: 'Dinner time, {name}! Let us sit down and enjoy a healthy meal.',
+  },
+  tidy_room: {
+    label: 'Tidy Room', emoji: '🧸', subtitle: "Let's clean up our space!", timeOfDay: 'general',
+    timerSeconds: 300, durationMode: 'variable', stars: 2, selectable: true,
+    part1Text: 'What a busy day of playing, {name}!', part1Tone: 'encouraging',
+    promptText: 'Great job {name}! Now, let us tidy up our room.',
+  },
+  put_on_pajamas: {
+    label: 'Put on Pajamas', emoji: '👕', subtitle: 'Time to get cozy for bed', timeOfDay: 'evening',
+    timerSeconds: 180, durationMode: 'variable', stars: 1, selectable: true,
+    part1Text: 'Time to transform for the night, {name}!', part1Tone: 'calm',
+    promptText: 'Time to get cozy, {name}. Let us put on our pajamas!',
+  },
+  bedtime_story: {
+    label: 'Bedtime Story', emoji: '📖', subtitle: "Let's read a cozy story", timeOfDay: 'evening',
+    timerSeconds: 600, durationMode: 'variable', stars: 0, selectable: true,
+    part1Text: 'Story time, {name}.', part1Tone: 'calm',
+    promptText: 'Cuddle up, {name}. Let us read a lovely bedtime story together.',
+  },
+  go_to_sleep: {
+    label: 'Go to Sleep', emoji: '😴', subtitle: 'Sweet dreams, sleep tight!', timeOfDay: 'evening',
+    timerSeconds: 300, durationMode: 'variable', stars: 0, selectable: true,
+    part1Text: 'You did it, {name}.', part1Tone: 'calm',
+    promptText: 'Sweet dreams, {name}. It is time to close your eyes and go to sleep.',
+  },
+  pack_backpack: {
+    label: 'Pack Backpack', emoji: '🎒', subtitle: "Let's get ready for school!", timeOfDay: 'general',
+    timerSeconds: 180, durationMode: 'variable', stars: 2, selectable: false,
+    part1Text: 'Backpack time, {name}!', part1Tone: 'encouraging',
+    promptText: 'You are doing great, {name}. Let us pack your backpack so you are ready for school.',
+  },
+  wash_face: {
+    label: 'Wash Face', emoji: '🚿', subtitle: 'A splash of water to wake up!', timeOfDay: 'general',
+    timerSeconds: 90, durationMode: 'fixed', stars: 1, selectable: false,
+    part1Text: 'Face washing time, {name}!', part1Tone: 'encouraging',
+    promptText: 'Let us wash your face, {name}, and feel fresh and clean.',
+  },
+  read_book: {
+    label: 'Read a Book', emoji: '📚', subtitle: "Let's go on an adventure!", timeOfDay: 'general',
+    timerSeconds: 600, durationMode: 'variable', stars: 1, selectable: false,
+    part1Text: 'Reading time, {name}!', part1Tone: 'encouraging',
+    promptText: 'Let us read a fun book together, {name}.',
   },
 };
 
-export const ACTIVITY_KEYS = Object.keys(ACTIVITIES) as Array<keyof typeof ACTIVITIES>;
+export const BUNDLED_ACTIVITY_DEFINITIONS: ActivityDefinition[] = Object.entries(BUNDLED).map(
+  ([key, value], order) => ({ ...value, key, order, part1Version: 1 })
+);
 
-export const ACTIVITY_TIMER_SECONDS: Record<ActivityKey, number> = {
-  wake_up: 60,
-  brush_teeth: 60,
-  wash_face: 90,
-  comb_hair: 120,
-  get_dressed: 180,
-  put_shoes_on: 90,
-  pack_backpack: 180,
-  drink_water: 30,
-  tidy_room: 300,
-  make_bed: 180,
-  eat_breakfast: 600,
-  homework: 900,
-  read_book: 600,
-  put_on_pajamas: 180,
-  eat_dinner: 900,
-  bedtime_story: 600,
-  go_to_sleep: 300,
-};
+function fillName(template: string, name: string): string {
+  return template.replace(/\{\{\s*name\s*\}\}/gi, name).replace(/\{name\}/gi, name);
+}
 
-export const ACTIVITY_DURATION_MODES: Record<ActivityKey, DurationMode> = {
-  wake_up: 'variable',
-  brush_teeth: 'fixed',
-  wash_face: 'fixed',
-  comb_hair: 'variable',
-  get_dressed: 'variable',
-  put_shoes_on: 'variable',
-  pack_backpack: 'variable',
-  drink_water: 'fixed',
-  tidy_room: 'variable',
-  make_bed: 'variable',
-  eat_breakfast: 'variable',
-  homework: 'variable',
-  read_book: 'variable',
-  put_on_pajamas: 'variable',
-  eat_dinner: 'variable',
-  bedtime_story: 'variable',
-  go_to_sleep: 'variable',
-};
+function toMeta(def: ActivityDefinition): ActivityMeta {
+  return {
+    key: def.key,
+    label: def.label,
+    emoji: def.emoji,
+    subtitle: def.subtitle,
+    color: colors.primary,
+    promptTemplate: (name) => fillName(def.promptText, name),
+  };
+}
+
+/** Humanizes an unknown key (e.g. a step synced from a newer catalog) so it still renders. */
+function placeholderDefinition(key: ActivityKey): ActivityDefinition {
+  const label = key
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(' ') || 'Activity';
+  return {
+    key,
+    label,
+    emoji: '⭐',
+    subtitle: "Let's do it together!",
+    timeOfDay: 'general',
+    timerSeconds: FALLBACK_TIMER_SECONDS,
+    durationMode: 'variable',
+    stars: 1,
+    order: Number.MAX_SAFE_INTEGER,
+    part1Text: 'All right, {name}!',
+    part1Tone: 'encouraging',
+    part1Version: 1,
+    promptText: `${label} time, {name}!`,
+    selectable: false,
+  };
+}
+
+// The exported records below are mutated in place by `applyActivityDefinitions`, so every module
+// that already imported them sees catalog updates without re-importing.
+const DEFINITIONS: Record<ActivityKey, ActivityDefinition> = {};
+export const ACTIVITIES: Record<ActivityKey, ActivityMeta> = {};
+export const ACTIVITY_KEYS: ActivityKey[] = [];
+export const ACTIVITY_TIMER_SECONDS: Record<ActivityKey, number> = {};
+export const ACTIVITY_DURATION_MODES: Record<ActivityKey, DurationMode> = {};
+export const ACTIVITY_STARS: Record<ActivityKey, 0 | 1 | 2> = {};
+export const ACTIVITY_TIME_OF_DAY: Record<ActivityKey, ActivityTimeOfDay> = {};
+
+function clearRecord(record: Record<string, unknown>) {
+  for (const key of Object.keys(record)) delete record[key];
+}
+
+/**
+ * Replaces the registry with `definitions`. Keys missing from the new set are kept (as
+ * non-selectable) when they were known before, so routines that still reference a retired
+ * activity keep rendering instead of crashing.
+ */
+export function applyActivityDefinitions(definitions: ActivityDefinition[]): void {
+  const previous = { ...DEFINITIONS };
+  const next: Record<ActivityKey, ActivityDefinition> = {};
+  for (const def of definitions) next[def.key] = def;
+  for (const [key, def] of Object.entries(previous)) {
+    if (!next[key]) next[key] = { ...def, selectable: false };
+  }
+
+  for (const record of [DEFINITIONS, ACTIVITIES, ACTIVITY_TIMER_SECONDS, ACTIVITY_DURATION_MODES, ACTIVITY_STARS, ACTIVITY_TIME_OF_DAY]) {
+    clearRecord(record as Record<string, unknown>);
+  }
+  ACTIVITY_KEYS.length = 0;
+
+  const ordered = Object.values(next).sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
+  for (const def of ordered) {
+    DEFINITIONS[def.key] = def;
+    ACTIVITIES[def.key] = toMeta(def);
+    ACTIVITY_TIMER_SECONDS[def.key] = def.timerSeconds;
+    ACTIVITY_DURATION_MODES[def.key] = def.durationMode;
+    ACTIVITY_STARS[def.key] = def.stars;
+    ACTIVITY_TIME_OF_DAY[def.key] = def.timeOfDay;
+    ACTIVITY_KEYS.push(def.key);
+  }
+}
+
+applyActivityDefinitions(BUNDLED_ACTIVITY_DEFINITIONS);
+
+export function getActivityDefinition(key: ActivityKey): ActivityDefinition {
+  return DEFINITIONS[key] ?? placeholderDefinition(key);
+}
+
+export function getActivityMeta(key: ActivityKey): ActivityMeta {
+  return ACTIVITIES[key] ?? toMeta(placeholderDefinition(key));
+}
+
+export function isKnownActivity(key: ActivityKey): boolean {
+  return Boolean(DEFINITIONS[key]);
+}
+
+export function isActivitySelectable(key: ActivityKey): boolean {
+  return DEFINITIONS[key]?.selectable === true;
+}
 
 export function resolveDurationMode(
   activity: ActivityKey,
@@ -220,73 +252,30 @@ export function resolveDurationMode(
   durationMinutes?: number
 ): DurationMode {
   if (savedMode === 'fixed' || savedMode === 'variable') return savedMode;
-  if (durationMinutes !== undefined && Math.round(durationMinutes * 60) !== ACTIVITY_TIMER_SECONDS[activity]) {
+  const def = getActivityDefinition(activity);
+  if (durationMinutes !== undefined && Math.round(durationMinutes * 60) !== def.timerSeconds) {
     return 'variable';
   }
-  return ACTIVITY_DURATION_MODES[activity];
+  return def.durationMode;
 }
 
 export function defaultDurationMinutes(activity: ActivityKey): number {
-  return ACTIVITY_TIMER_SECONDS[activity] / 60;
+  return getActivityDefinition(activity).timerSeconds / 60;
 }
 
-export const ACTIVITY_STARS: Record<ActivityKey, 0 | 1 | 2> = {
-  brush_teeth: 2,
-  get_dressed: 2,
-  eat_breakfast: 1,
-  pack_backpack: 2,
-  wash_face: 1,
-  comb_hair: 1,
-  put_shoes_on: 1,
-  drink_water: 0,
-  tidy_room: 2,
-  read_book: 1,
-  put_on_pajamas: 1,
-  bedtime_story: 0,
-  eat_dinner: 1,
-  go_to_sleep: 0,
-  homework: 2,
-  make_bed: 2,
-  wake_up: 0,
-};
+export function defaultDurationMode(activity: ActivityKey): DurationMode {
+  return getActivityDefinition(activity).durationMode;
+}
 
 export function starsForStep(step: ActivityKey[]): number {
-  return Math.max(0, ...step.map((activity) => ACTIVITY_STARS[activity]));
+  return Math.max(0, ...step.map((activity) => getActivityDefinition(activity).stars));
 }
 
-export type ActivityTimeOfDay = 'morning' | 'evening' | 'general';
-
-export const ACTIVITY_TIME_OF_DAY: Record<ActivityKey, ActivityTimeOfDay> = {
-  brush_teeth: 'general',
-  get_dressed: 'general',
-  eat_breakfast: 'morning',
-  pack_backpack: 'general',
-  wash_face: 'general',
-  comb_hair: 'general',
-  put_shoes_on: 'general',
-  drink_water: 'general',
-  tidy_room: 'general',
-  read_book: 'general',
-  put_on_pajamas: 'evening',
-  bedtime_story: 'evening',
-  eat_dinner: 'evening',
-  go_to_sleep: 'evening',
-  homework: 'general',
-  make_bed: 'general',
-  wake_up: 'morning',
-};
-
+/** Selectable activities for a picker, in catalog order. */
 export function activityKeysForSegment(segment: 'morning' | 'evening'): ActivityKey[] {
   return ACTIVITY_KEYS.filter((key) => {
-    const timeOfDay = ACTIVITY_TIME_OF_DAY[key];
-    return timeOfDay === 'general' || timeOfDay === segment;
+    const def = DEFINITIONS[key];
+    if (!def?.selectable) return false;
+    return def.timeOfDay === 'general' || def.timeOfDay === segment;
   });
 }
-
-/** Remote base URL for avatar video assets stored in Firebase Storage */
-export const AVATAR_VIDEO_BASE_URL =
-  'https://storage.googleapis.com/kids-routine-coach-app.firebasestorage.app/avatars';
-
-/** Remote base URL for generated TTS audio stored in Firebase Storage */
-export const AUDIO_BASE_URL =
-  'https://storage.googleapis.com/kids-routine-coach-app.firebasestorage.app/audio';

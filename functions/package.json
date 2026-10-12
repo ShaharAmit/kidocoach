@@ -4,6 +4,7 @@
   "scripts": {
     "build": "tsc",
     "seed:public-site": "node scripts/seed-public-site-config.js",
+    "seed:activity-catalog": "npm run build && node scripts/seed-activity-catalog.js",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

@@ -3,9 +3,22 @@ import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/fi
 import { createHash, sign as cryptoSign } from 'crypto';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
+import { onObjectDeleted, onObjectFinalized, type StorageObjectData } from 'firebase-functions/v2/storage';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { GoogleGenAI } from '@google/genai';
+import {
+  applyAssetDeletion,
+  applyAssetUpload,
+  applyImageDeletion,
+  applyImageUpload,
+  applyMetadata,
+  clearMetadata,
+  parseCatalogObjectPath,
+  validateCatalogMetadata,
+  type CatalogActivities,
+  type CatalogEntry,
+} from './catalogModel';
 
 admin.initializeApp();
 
@@ -405,6 +418,7 @@ async function claimAudioGeneration(
   });
 }
 
+/** Pre-catalog greetings; the Firestore catalog (`catalog/activities`) takes precedence. */
 const PART1_TEMPLATES: Record<string, { prompt: Tone; textTemplate: string }> = {
   wake_up: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
   make_bed: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
@@ -422,19 +436,51 @@ const PART1_TEMPLATES: Record<string, { prompt: Tone; textTemplate: string }> = 
   go_to_sleep: { prompt: 'calm', textTemplate: 'You did it, {name}.' },
 };
 
+const CATALOG_DOC_PATH = 'catalog/activities';
+// Short on purpose: each callable runs on its own instances, which a catalog write cannot
+// invalidate; clients additionally reject clips whose key does not match their own.
+const CATALOG_CACHE_TTL_MS = 5 * 1000;
+let catalogCache: { activities: CatalogActivities; fetchedAt: number } | null = null;
+
+async function loadCatalogActivities(): Promise<CatalogActivities> {
+  if (catalogCache && Date.now() - catalogCache.fetchedAt < CATALOG_CACHE_TTL_MS) {
+    return catalogCache.activities;
+  }
+  try {
+    const snap = await db.doc(CATALOG_DOC_PATH).get();
+    const activities = (snap.exists ? snap.get('activities') : undefined) as CatalogActivities | undefined;
+    catalogCache = { activities: activities ?? {}, fetchedAt: Date.now() };
+  } catch (err) {
+    console.warn('[catalog] Failed to read catalog, using last known copy:', err);
+    if (!catalogCache) return {};
+  }
+  return catalogCache.activities;
+}
+
+type Part1Template = { text: string; tone: Tone; version: number };
+
+async function resolvePart1Template(activityKey: string): Promise<Part1Template | null> {
+  const entry = (await loadCatalogActivities())[activityKey];
+  if (entry?.part1?.text) {
+    return { text: entry.part1.text, tone: entry.part1.tone, version: entry.part1.version ?? 1 };
+  }
+  const legacy = PART1_TEMPLATES[activityKey];
+  return legacy ? { text: legacy.textTemplate, tone: legacy.prompt, version: 1 } : null;
+}
+
 function buildPart1AudioKey(
   activityKey: string,
   childName: string,
-  tone?: Tone,
-  voice?: Voice
+  tone: Tone,
+  voice: Voice,
+  version: number
 ): string {
   const normalizedName = normalizeNameToken(childName);
   const normalizedActivity = activityKey.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
-  const template = PART1_TEMPLATES[activityKey];
-  const selectedTone = tone ?? template?.prompt ?? 'encouraging';
-  const selectedVoice = voice ?? 'woman';
+  // Version 1 keeps the original key so clips cached before greeting versioning stay valid.
+  const versionSuffix = version > 1 ? `_v${version}` : '';
   // MUST stay identical to `buildPart1AudioKey` in services/part1Audio.ts.
-  return `p1_${normalizedActivity}_${normalizedName}_${selectedTone}_${selectedVoice}`;
+  return `p1_${normalizedActivity}_${normalizedName}_${tone}_${voice}${versionSuffix}`;
 }
 
 /**
@@ -509,15 +555,15 @@ async function generatePart1AudioInternal(
   tone?: Tone,
   voice?: Voice
 ): Promise<GeneratePart1AudioResponse> {
-  const template = PART1_TEMPLATES[activityKey];
+  const template = await resolvePart1Template(activityKey);
   if (!template) {
     throw new HttpsError('invalid-argument', `Unknown activityKey: ${activityKey}`);
   }
 
-  const selectedTone = tone ?? template.prompt;
+  const selectedTone = tone ?? template.tone;
   const selectedVoice = voice ?? 'woman';
-  const spokenText = template.textTemplate.replace(/\{name\}/g, childName);
-  const cacheKey = buildPart1AudioKey(activityKey, childName, selectedTone, selectedVoice);
+  const spokenText = template.text.replace(/\{name\}/g, childName);
+  const cacheKey = buildPart1AudioKey(activityKey, childName, selectedTone, selectedVoice, template.version);
   const storagePath = audioStoragePath(cacheKey);
   const cacheRef = db.collection('audio_cache').doc(cacheKey);
 
@@ -652,10 +698,17 @@ export const generateRoutinePart1Audio = onCall(
           return { activityKey, ...res };
         } catch (err) {
           console.error(`[generateRoutinePart1Audio] Failed for ${activityKey}:`, err);
+          const template = await resolvePart1Template(activityKey).catch(() => null);
           return {
             activityKey,
             storagePath: null,
-            cacheKey: buildPart1AudioKey(activityKey, childName, tone, voice),
+            cacheKey: buildPart1AudioKey(
+              activityKey,
+              childName,
+              tone ?? template?.tone ?? 'encouraging',
+              voice ?? 'woman',
+              template?.version ?? 1
+            ),
             status: 'generating' as const,
           };
         }
@@ -902,3 +955,123 @@ export const onAudioCacheDocDeleted = onDocumentDeleted(
     }
   }
 );
+
+// ---------------------------------------------------------------------------------------------
+// Activity catalog — kept in sync with Storage uploads so new activities ship without a release.
+// See functions/src/catalogModel.ts for the file layout.
+// ---------------------------------------------------------------------------------------------
+
+/** Applies `mutate` to one catalog entry inside a transaction; returns whether it was written. */
+async function updateCatalogEntry(
+  activityKey: string,
+  mutate: (entry: CatalogEntry | undefined) => CatalogEntry | null
+): Promise<boolean> {
+  const ref = db.doc(CATALOG_DOC_PATH);
+  const written = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const activities = (snap.exists ? snap.get('activities') : undefined) as CatalogActivities | undefined;
+    const next = mutate(activities?.[activityKey]);
+    if (!next) return false;
+    tx.set(
+      ref,
+      { schemaVersion: 1, updatedAt: FieldValue.serverTimestamp(), activities: { [activityKey]: next } },
+      { mergeFields: ['schemaVersion', 'updatedAt', `activities.${activityKey}`] }
+    );
+    return true;
+  });
+  if (written) catalogCache = null;
+  return written;
+}
+
+function assetRefFromObject(object: StorageObjectData) {
+  return {
+    path: object.name,
+    generation: String(object.generation),
+    ...(object.md5Hash ? { md5: object.md5Hash } : {}),
+    ...(Number.isFinite(Number(object.size)) ? { size: Number(object.size) } : {}),
+  };
+}
+
+/** True when `object` is no longer the live generation (a newer upload's event will apply it). */
+async function isSupersededObject(object: StorageObjectData): Promise<boolean> {
+  try {
+    const [metadata] = await admin.storage().bucket(object.bucket).file(object.name).getMetadata();
+    return String(metadata.generation) !== String(object.generation);
+  } catch {
+    return true; // Already deleted again.
+  }
+}
+
+async function objectStillExists(object: StorageObjectData): Promise<boolean> {
+  const [exists] = await admin.storage().bucket(object.bucket).file(object.name).exists();
+  return exists;
+}
+
+export const onCatalogAssetFinalized = onObjectFinalized({ memory: '256MiB', maxInstances: 5 }, async (event) => {
+  const object = event.data;
+  const parsed = parseCatalogObjectPath(object.name ?? '');
+  if (!parsed) return;
+
+  if (parsed.type === 'metadata') {
+    if (await isSupersededObject(object)) return;
+    const [contents] = await admin.storage().bucket(object.bucket).file(object.name).download();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(contents.toString('utf8'));
+    } catch {
+      console.error(`[catalog] ${object.name} is not valid JSON; ignored.`);
+      return;
+    }
+    const result = validateCatalogMetadata(raw);
+    if (!result.ok) {
+      console.error(`[catalog] ${object.name} rejected: ${result.errors.join('; ')}`);
+      return;
+    }
+    await updateCatalogEntry(parsed.activityKey, (entry) => applyMetadata(entry, parsed.activityKey, result.value));
+    console.info(`[catalog] Metadata updated for ${parsed.activityKey}`);
+    return;
+  }
+
+  const ref = assetRefFromObject(object);
+  const written =
+    parsed.type === 'image'
+      ? await updateCatalogEntry(parsed.activityKey, (entry) => applyImageUpload(entry, parsed.activityKey, ref))
+      : await updateCatalogEntry(parsed.activityKey, (entry) =>
+          applyAssetUpload(entry, parsed.activityKey, parsed.avatarId, parsed.kind, ref, parsed.isAlias)
+        );
+  if (written) console.info(`[catalog] Registered ${object.name} (generation ${ref.generation})`);
+});
+
+export const onCatalogAssetDeleted = onObjectDeleted({ memory: '256MiB', maxInstances: 5 }, async (event) => {
+  const object = event.data;
+  const parsed = parseCatalogObjectPath(object.name ?? '');
+  if (!parsed) return;
+  // Overwrites also emit a delete for the previous generation; only real deletions count.
+  if (await objectStillExists(object)) return;
+
+  const generation = String(object.generation);
+  if (parsed.type === 'media' && parsed.kind === 'p2' && !parsed.isAlias) {
+    // The canonical clip is gone; fall back to a `{key}_p2.mp4` alias if one is still uploaded.
+    const alias = admin.storage().bucket(object.bucket).file(`avatars/${parsed.avatarId}/${parsed.activityKey}_p2.mp4`);
+    const [aliasExists] = await alias.exists();
+    if (aliasExists) {
+      const [aliasMeta] = await alias.getMetadata();
+      const aliasRef = assetRefFromObject(aliasMeta as unknown as StorageObjectData);
+      const replaced = await updateCatalogEntry(parsed.activityKey, (entry) => {
+        const removed = applyAssetDeletion(entry, parsed.avatarId, 'p2', object.name, generation);
+        return removed ? applyAssetUpload(removed, parsed.activityKey, parsed.avatarId, 'p2', aliasRef, true) : null;
+      });
+      if (replaced) console.info(`[catalog] ${object.name} deleted; Part 2 now uses ${aliasRef.path}`);
+      return;
+    }
+  }
+  const written =
+    parsed.type === 'metadata'
+      ? await updateCatalogEntry(parsed.activityKey, (entry) => clearMetadata(entry))
+      : parsed.type === 'image'
+        ? await updateCatalogEntry(parsed.activityKey, (entry) => applyImageDeletion(entry, object.name, generation))
+        : await updateCatalogEntry(parsed.activityKey, (entry) =>
+            applyAssetDeletion(entry, parsed.avatarId, parsed.kind, object.name, generation)
+          );
+  if (written) console.info(`[catalog] Removed ${object.name} from catalog`);
+});

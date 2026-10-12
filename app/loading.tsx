@@ -5,8 +5,12 @@ import { ensureAuth } from '../services/firebase';
 import { requestNotificationPermissions } from '../services/notifications';
 import {
   downloadWelcomeAssets,
-  warmAllRoutineAssetsToCompletion,
+  ensureCatalogListener,
+  scheduleBackgroundPrefetch,
+  warmSegmentAssets,
 } from '../services/assetCacheService';
+import { refreshActivityCatalog } from '../services/activityCatalog';
+import { getCurrentSegment } from '../utils/timeOfDay';
 import { getPaidStatus, refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { getChildProfile } from '../services/profile';
 import { recoverSignedInFamily } from '../services/accountSession';
@@ -70,6 +74,9 @@ export default function LoadingScreen() {
         }
 
         const user = await ensureAuth();
+        // Every launch checks the cloud catalog for new/updated activities (bounded, falls back
+        // to the device copy offline). Started now so it overlaps the profile/paywall checks.
+        const catalogRefresh = refreshActivityCatalog();
         let profile = await getChildProfile();
         if (!profile && !user.isAnonymous) {
           setStage('Recovering saved family...');
@@ -124,10 +131,13 @@ export default function LoadingScreen() {
           }
 
           if (routines.length > 0) {
-            // Post-questionnaire is the "generating experience" moment, so it waits for merges;
-            // cold starts let them finish in the background.
-            await warmAllRoutineAssetsToCompletion(
+            await catalogRefresh;
+            // Only the segment on screen blocks the app (post-questionnaire also waits for its
+            // merges, since that screen is the "generating experience" moment). Everything else
+            // downloads in the background while the family uses the app.
+            await warmSegmentAssets(
               routines,
+              getCurrentSegment(),
               (stageText, pct) => {
                 if (isCancelled) return;
                 setStage(stageText);
@@ -135,6 +145,8 @@ export default function LoadingScreen() {
               },
               { awaitMergedVideos: isWarmStart }
             );
+            scheduleBackgroundPrefetch(routines);
+            ensureCatalogListener();
           }
         }
 

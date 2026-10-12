@@ -1,0 +1,245 @@
+{
+  "wake_up": {
+    "label": "Wake Up",
+    "emoji": "☀️",
+    "subtitle": "Good morning, rise and shine!",
+    "timeOfDay": "morning",
+    "timerSeconds": 60,
+    "durationMode": "variable",
+    "stars": 0,
+    "order": 0,
+    "promptText": "Good morning, {name}! Time to wake up and start a wonderful day.",
+    "part1": {
+      "text": "Good morning, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "make_bed": {
+    "label": "Make Bed",
+    "emoji": "🛏️",
+    "subtitle": "Let's make the bed nice and neat",
+    "timeOfDay": "general",
+    "timerSeconds": 180,
+    "durationMode": "variable",
+    "stars": 2,
+    "order": 1,
+    "promptText": "Nice work, {name}! Let us make the bed nice and tidy.",
+    "part1": {
+      "text": "Good morning, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "brush_teeth": {
+    "label": "Brush Teeth",
+    "emoji": "🦷",
+    "subtitle": "Let's make those teeth sparkle!",
+    "timeOfDay": "general",
+    "timerSeconds": 60,
+    "durationMode": "fixed",
+    "stars": 2,
+    "order": 2,
+    "promptText": "It is time to brush your teeth, {name}, for a bright, sparkly smile.",
+    "part1": {
+      "text": "Toothbrush time, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "eat_breakfast": {
+    "label": "Eat Breakfast",
+    "emoji": "🥞",
+    "subtitle": "Time to fuel up for the day!",
+    "timeOfDay": "morning",
+    "timerSeconds": 600,
+    "durationMode": "variable",
+    "stars": 1,
+    "order": 3,
+    "promptText": "Superstar {name}, it is breakfast time. Let us eat and fill up with energy for the day.",
+    "part1": {
+      "text": "Breakfast time, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "get_dressed": {
+    "label": "Get Dressed",
+    "emoji": "👕",
+    "subtitle": "Time to put on comfy clothes",
+    "timeOfDay": "general",
+    "timerSeconds": 180,
+    "durationMode": "variable",
+    "stars": 2,
+    "order": 4,
+    "promptText": "Great job, {name}. Now let us get dressed and ready for an amazing day.",
+    "part1": {
+      "text": "Let's get dressed, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "put_shoes_on": {
+    "label": "Put Shoes On",
+    "emoji": "👟",
+    "subtitle": "Let's get those shoes on!",
+    "timeOfDay": "general",
+    "timerSeconds": 90,
+    "durationMode": "variable",
+    "stars": 1,
+    "order": 5,
+    "promptText": "Almost ready, {name}. Put your shoes on, and we are good to go.",
+    "part1": {
+      "text": "All right, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "comb_hair": {
+    "label": "Comb Hair",
+    "emoji": "💇",
+    "subtitle": "Let's look neat and tidy!",
+    "timeOfDay": "general",
+    "timerSeconds": 120,
+    "durationMode": "variable",
+    "stars": 1,
+    "order": 6,
+    "promptText": "Looking good, {name}. Time to comb your hair so you can look your best.",
+    "part1": {
+      "text": "Let's take care of your hair, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "drink_water": {
+    "label": "Drink Water",
+    "emoji": "💧",
+    "subtitle": "A little sip for sweet dreams",
+    "timeOfDay": "general",
+    "timerSeconds": 30,
+    "durationMode": "fixed",
+    "stars": 0,
+    "order": 7,
+    "promptText": "Stay healthy, {name}. Let us drink a big glass of water.",
+    "part1": {
+      "text": "Water time, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "homework": {
+    "label": "Homework",
+    "emoji": "📝",
+    "subtitle": "Time to focus and learn!",
+    "timeOfDay": "general",
+    "timerSeconds": 900,
+    "durationMode": "variable",
+    "stars": 2,
+    "order": 8,
+    "promptText": "Great focus, {name}! Let us sit down and finish our homework.",
+    "part1": {
+      "text": "All right, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "eat_dinner": {
+    "label": "Eat Dinner",
+    "emoji": "🍽️",
+    "subtitle": "Yummy food to end the day!",
+    "timeOfDay": "evening",
+    "timerSeconds": 900,
+    "durationMode": "variable",
+    "stars": 1,
+    "order": 9,
+    "promptText": "Dinner time, {name}! Let us sit down and enjoy a healthy meal.",
+    "part1": {
+      "text": "Dinner time, {name}!",
+      "tone": "calm"
+    }
+  },
+  "tidy_room": {
+    "label": "Tidy Room",
+    "emoji": "🧸",
+    "subtitle": "Let's clean up our space!",
+    "timeOfDay": "general",
+    "timerSeconds": 300,
+    "durationMode": "variable",
+    "stars": 2,
+    "order": 10,
+    "promptText": "Great job {name}! Now, let us tidy up our room.",
+    "part1": {
+      "text": "What a busy day of playing, {name}!",
+      "tone": "encouraging"
+    }
+  },
+  "put_on_pajamas": {
+    "label": "Put on Pajamas",
+    "emoji": "👕",
+    "subtitle": "Time to get cozy for bed",
+    "timeOfDay": "evening",
+    "timerSeconds": 180,
+    "durationMode": "variable",
+    "stars": 1,
+    "order": 11,
+    "promptText": "Time to get cozy, {name}. Let us put on our pajamas!",
+    "part1": {
+      "text": "Time to transform for the night, {name}!",
+      "tone": "calm"
+    }
+  },
+  "bedtime_story": {
+    "label": "Bedtime Story",
+    "emoji": "📖",
+    "subtitle": "Let's read a cozy story",
+    "timeOfDay": "evening",
+    "timerSeconds": 600,
+    "durationMode": "variable",
+    "stars": 0,
+    "order": 12,
+    "promptText": "Cuddle up, {name}. Let us read a lovely bedtime story together.",
+    "part1": {
+      "text": "Story time, {name}.",
+      "tone": "calm"
+    }
+  },
+  "go_to_sleep": {
+    "label": "Go to Sleep",
+    "emoji": "😴",
+    "subtitle": "Sweet dreams, sleep tight!",
+    "timeOfDay": "evening",
+    "timerSeconds": 300,
+    "durationMode": "variable",
+    "stars": 0,
+    "order": 13,
+    "promptText": "Sweet dreams, {name}. It is time to close your eyes and go to sleep.",
+    "part1": {
+      "text": "You did it, {name}.",
+      "tone": "calm"
+    }
+  },
+  "pack_backpack": {
+    "label": "Pack Backpack",
+    "emoji": "🎒",
+    "subtitle": "Let's get ready for school!",
+    "timeOfDay": "general",
+    "timerSeconds": 180,
+    "durationMode": "variable",
+    "stars": 2,
+    "order": 14,
+    "promptText": "You are doing great, {name}. Let us pack your backpack so you are ready for school."
+  },
+  "wash_face": {
+    "label": "Wash Face",
+    "emoji": "🚿",
+    "subtitle": "A splash of water to wake up!",
+    "timeOfDay": "general",
+    "timerSeconds": 90,
+    "durationMode": "fixed",
+    "stars": 1,
+    "order": 15,
+    "promptText": "Let us wash your face, {name}, and feel fresh and clean."
+  },
+  "read_book": {
+    "label": "Read a Book",
+    "emoji": "📚",
+    "subtitle": "Let's go on an adventure!",
+    "timeOfDay": "general",
+    "timerSeconds": 600,
+    "durationMode": "variable",
+    "stars": 1,
+    "order": 16,
+    "promptText": "Let us read a fun book together, {name}."
+  }
+}

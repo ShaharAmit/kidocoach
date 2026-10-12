@@ -16,7 +16,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { merge, mixAudio, trim, isValidFile, cleanFiles, getFrameAt } from 'react-native-video-trim';
 import { ActivityKey, ToneOption, VoiceOption } from '../types';
-import { isValidCachedVideo } from './assetSync';
+import { isValidCachedVideo, localCaptionsPath } from './assetSync';
 import { getReadyPart1AudioPath, ensurePart1AudioReady } from './part1Audio';
 import {
   getPart1TimingInfo,
@@ -88,15 +88,23 @@ async function fileSignature(path: string): Promise<string | null> {
 // v2: fixed native-output filename collisions that could bake corrupt/Part-1-only files.
 // v3: measure the real Part 1 duration instead of falling back to the 1.1s default, which was
 //     baking a bogus freeze-frame pad (visible as a stuttering 3-frame loop) into every merge.
-const MERGE_PIPELINE_VERSION = 3;
+// v4: the source signature also covers the authored captions file, so a captions-only update in
+//     the cloud rebuilds the merged caption track instead of leaving it stale forever.
+const MERGE_PIPELINE_VERSION = 4;
 
-async function computeSourceSignature(p1Path: string, p2Path: string, audioPath: string): Promise<string> {
-  const [p1Sig, p2Sig, audioSig] = await Promise.all([
+async function computeSourceSignature(
+  p1Path: string,
+  p2Path: string,
+  audioPath: string,
+  captionsPath: string
+): Promise<string> {
+  const [p1Sig, p2Sig, audioSig, captionsSig] = await Promise.all([
     fileSignature(p1Path),
     fileSignature(p2Path),
     fileSignature(audioPath),
+    fileSignature(captionsPath),
   ]);
-  return `v${MERGE_PIPELINE_VERSION}|${p1Sig}|${p2Sig}|${audioSig}`;
+  return `v${MERGE_PIPELINE_VERSION}|${p1Sig}|${p2Sig}|${audioSig}|${captionsSig}`;
 }
 
 type StoredSignature = { signature: string; decodeVerified: boolean };
@@ -150,8 +158,9 @@ export async function getReadyMergedVideoPath(
   if (!stored || !audioPath) return null;
   const current = await computeSourceSignature(
     localPart1VideoPath(activityKey, safeAvatarId),
-    localPart2VideoPath(activityKey as ActivityKey, safeAvatarId),
-    audioPath
+    localPart2VideoPath(activityKey, safeAvatarId),
+    audioPath,
+    localCaptionsPath(activityKey, safeAvatarId)
   );
   return stored.signature === current ? path : null;
 }
@@ -379,7 +388,12 @@ async function buildMergedActivityVideo(
   }
   if (!audioPath) return null; // TTS still generating — retry on a later preload pass
 
-  const signature = await computeSourceSignature(p1Path, p2Path, audioPath);
+  const signature = await computeSourceSignature(
+    p1Path,
+    p2Path,
+    audioPath,
+    localCaptionsPath(activityKey, safeAvatarId)
+  );
   const [mergedExists, stored] = await Promise.all([
     isValidCachedVideo(mergedPath),
     readStoredSignature(mergedPath),
@@ -565,6 +579,47 @@ export async function ensureRoutineMergedVideosReady(
   } catch {
     // Best-effort.
   }
+}
+
+/**
+ * Drops the merged video + caption track for one activity right away (e.g. after its source video
+ * or captions were replaced in the cloud) so a stale merge never plays and its space is reclaimed.
+ */
+export async function discardMergedActivityVideo(
+  activityKey: ActivityKey,
+  avatarId: string,
+  childName: string
+): Promise<void> {
+  const safeName = (childName || 'friend').toString().trim() || 'friend';
+  const mergedPath = localMergedVideoPath(activityKey, avatarId, safeName);
+  if (mergeInFlight.has(mergedPath)) return; // The running build already uses the new sources.
+  await FileSystem.deleteAsync(mergedPath, { idempotent: true });
+  await FileSystem.deleteAsync(signaturePath(mergedPath), { idempotent: true });
+  await invalidateMergedCaptions(activityKey, avatarId, safeName);
+}
+
+/**
+ * Deletes merged videos that are not in `keepPaths` (activities removed from every routine, or a
+ * renamed child). Never touches builds in flight.
+ */
+export async function pruneMergedVideos(keepPaths: string[]): Promise<number> {
+  const keep = new Set(keepPaths.map((path) => path.slice(path.lastIndexOf('/') + 1)));
+  let names: string[];
+  try {
+    names = await FileSystem.readDirectoryAsync(MERGED_VIDEO_DIR);
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const name of names) {
+    if (!name.endsWith('_merged.mp4') || keep.has(name)) continue;
+    const path = `${MERGED_VIDEO_DIR}${name}`;
+    if (mergeInFlight.has(path)) continue;
+    await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => undefined);
+    await FileSystem.deleteAsync(signaturePath(path), { idempotent: true }).catch(() => undefined);
+    removed += 1;
+  }
+  return removed;
 }
 
 /**

@@ -1,0 +1,198 @@
+[
+  {
+    "id": "wake_up",
+    "title": "Wake Up",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Good morning, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "The sun is up and a brand-new adventure is waiting for us. Let's stretch those arms high to the sky, open those eyes, and get this day started. I'm ready when you are!"
+      }
+    }
+  },
+  {
+    "id": "make_bed",
+    "title": "Make the Bed",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Good morning, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Are you ready for a super cool morning mission? Right now, your bed looks a little bit like a bumpy, stormy ocean after a crazy night of sleep. Let's work some magic and turn it into a perfect bed. First, step out of the bed. Grab the top of your blanket. Ready? Pull it all the way up to the top. Now, use your hands to smooth out all those big wrinkles. Push the waves away, wipe them all the way to the edges. Smooth, smooth, smooth. Wow, look at that! The water is getting so calm and flat. Next, we need to fix the fluffy pillows. Give 'em a little pat, pat, pat to make them soft and perfect. Flatten out any bumps so they look like beautiful clouds resting on the water. Stand back and give a big salute. Look at that beautiful bed. You are officially ready to sail into a great day."
+      }
+    }
+  },
+  {
+    "id": "brush_teeth",
+    "title": "Brush Teeth",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Toothbrush time, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Let's get that mouth feeling fresh and clean. Put on your toothpaste, and let's go. Start by biting your teeth together and smiling real big. Brush the front teeth in little circles, round and round. Now move your brush to the side. Scrub the outside of your teeth. Scrub, scrub, scrub. Keep those circles going. Now move to the other side. You're doing great."
+      }
+    }
+  },
+  {
+    "id": "eat_breakfast",
+    "title": "Eat Breakfast",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Breakfast time, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Keep taking those bites. Remember, a full tummy means a happy day. You're doing a great job focusing on your food."
+      }
+    }
+  },
+  {
+    "id": "get_dressed",
+    "title": "Get Dressed",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Let's get dressed, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Let's get out of those pajamas and into your superstar outfit! Shirt over the head, arms through, pants on, one two! Look at you, sharp, ready, and looking great!"
+      }
+    }
+  },
+  {
+    "id": "put_shoes_on",
+    "title": "Put on Shoes",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "All right, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Final morning mission. Let's see how fast those shoes can go on your feet. Left foot, right foot, strap 'em tight. Wow. Let's go!"
+      }
+    }
+  },
+  {
+    "id": "comb_hair",
+    "title": "Comb Hair",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Let's take care of your hair, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Nice and slow. If we find a tricky tangle, just take a deep breath while we brush it out. You are doing such a great job holding still. Smooth, shiny, and perfect."
+      }
+    }
+  },
+  {
+    "id": "drink_water",
+    "title": "Drink Water",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Water time, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Grab your cup or water bottle and take some big gulps. Gulp, gulp, gulp. Ah, refreshing. Your body loves that healthy water. Let's get fully charged."
+      }
+    }
+  },
+  {
+    "id": "homework",
+    "title": "Do Homework",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "All right, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "It's time for a brain workout. Let's sit at the desk, grab a pencil. How smart you are. Your brain is getting stronger and stronger with every single question. Let's do this."
+      }
+    }
+  },
+  {
+    "id": "eat_dinner",
+    "title": "Eat Dinner",
+    "opt_a": {
+      "p1": {
+        "prompt": "Relaxing",
+        "text": "Dinner time, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Relaxing",
+        "text": "Your energy battery is getting a little low after all that playing. Let's eat some delicious food to charge it back up so you can grow super strong. Yummy."
+      }
+    }
+  },
+  {
+    "id": "tidy_room",
+    "title": "Tidy Room",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "What a busy day of playing, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Your toys had so much fun with you today, but just like you, they are getting a little bit tired. It's time for the great toy rescue mission. Let's pretend your toy box or the shelves are their cozy little homes, and it's our job to help them get back safely before bedtime. Let's start with the blocks or the LEGOs. Can you find all the pieces on the floor? Let's pick them up one by one. One, two, three, four. Keep going. Drop them gently into their home. Awesome. Now, let's look around the room again. Do you see any cars, dolls, or action figures left out? Let's scoop them up. Zoom the tiny toys across the room and park them exactly where they belong. We want our floor to be completely clear so nobody trips in the night and your room feels super peaceful. Let's do a final scan with our special superhero eyes. Look under the bed, peek under the chair, grab those last few pieces. Okay, stand up tall and take a nice big, deep breath. Look at this beautifully clean room. The toys are resting safely, and now your room is a quiet, tidy space ready for a perfect night's sleep. I am so proud of your hard work."
+      }
+    }
+  },
+  {
+    "id": "put_on_pajamas",
+    "title": "Put on Pajamas",
+    "opt_a": {
+      "p1": {
+        "prompt": "Relaxing",
+        "text": "Time to transform for the night, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Relaxing",
+        "text": "Let's put on your special sleep clothes. One arm in, two arms in. Perfect. You are officially ready for relaxing time."
+      }
+    }
+  },
+  {
+    "id": "bedtime_story",
+    "title": "Bedtime Story",
+    "opt_a": {
+      "p1": {
+        "prompt": "Relaxing",
+        "text": "Story time, Jonathan."
+      },
+      "p2": {
+        "prompt": "Relaxing",
+        "text": "Grab your favorite book and snuggle up. Let's use our imaginations and go on a quiet adventure together. Look at those pictures, so magical and peaceful."
+      }
+    }
+  },
+  {
+    "id": "go_to_sleep",
+    "title": "Go to Sleep",
+    "opt_a": {
+      "p1": {
+        "prompt": "Relaxing",
+        "text": "You did it, Jonathan."
+      },
+      "p2": {
+        "prompt": "Relaxing",
+        "text": "All your missions are complete. Now lay your head on your soft pillow. Imagine you are floating on a big cozy cloud. Take a deep breath in and let it out. Goodnight."
+      }
+    }
+  }
+]

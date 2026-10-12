@@ -17,23 +17,28 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import ActivityPlayer from '../components/ActivityPlayer';
 import StarsBackground from '../components/StarsBackground';
 import CloudsBackground from '../components/CloudsBackground';
-import { ACTIVITIES, starsForStep } from '../constants/activities';
+import { getActivityMeta, starsForStep } from '../constants/activities';
 import {
   ACTIVITY_FALLBACK_IMAGE,
   ACTIVITY_IMAGES,
   ALL_BUNDLED_IMAGES,
 } from '../constants/images';
+import { useActivityCatalogRevision } from '../services/activityCatalog';
+import { useActivityCloudImageUri } from '../utils/activityImages';
 import { useLocalDailyCompletion } from '../hooks/useLocalDailyCompletion';
 import { useUserRoutines } from '../hooks/useRoutine';
-import { subscribeAssetCacheStatus } from '../services/assetCacheService';
-import { areAssetsReady, syncRoutineAssets } from '../services/assetSync';
+import {
+  isSegmentWarmed,
+  scheduleBackgroundPrefetch,
+  subscribeAssetCacheStatus,
+  warmSegmentAssets,
+} from '../services/assetCacheService';
 import { isBootComplete } from '../services/bootState';
 import { ensureAuth } from '../services/firebase';
-import { getHomeBootstrapSnapshot, isRoutineWarmed, markRoutineWarmed } from '../services/homeBootstrap';
+import { getHomeBootstrapSnapshot } from '../services/homeBootstrap';
 import { setHomeViewMode } from '../services/homeViewState';
 import { getChildProfile } from '../services/profile';
 import { flushPendingStepStars, queueRoutineStepStars } from '../services/stars';
-import { ensureAudioForRoutine } from '../services/tts';
 import { Routine } from '../types';
 import { getCurrentSegment, isMorningTime } from '../utils/timeOfDay';
 import { getTodayISO } from '../utils/date';
@@ -45,30 +50,6 @@ import {
 } from '../utils/localImages';
 import { colors, fs, ms, ROUNDED_FONT, s, vs } from '../theme';
 import { requestParentalGate } from '../components/ParentalGate';
-
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const ACTIVITY_SUBTITLES: Record<string, string> = {
-  brush_teeth: "Let's make those teeth sparkle!",
-  get_dressed: "Time to put on comfy clothes",
-  eat_breakfast: "Time to fuel up for the day!",
-  pack_backpack: "Let's get ready for school!",
-  wash_face: "A splash of water to wake up!",
-  comb_hair: "Let's look neat and tidy!",
-  put_shoes_on: "Let's get those shoes on!",
-  drink_water: "A little sip for sweet dreams",
-  tidy_room: "Let's clean up our space!",
-  read_book: "Let's go on an adventure!",
-  put_on_pajamas: "Time to get cozy for bed",
-  bedtime_story: "Let's read a cozy story",
-  eat_dinner: "Yummy food to end the day!",
-  go_to_sleep: "Sweet dreams, sleep tight!",
-  homework: "Time to focus and learn!",
-  make_bed: "Let's make the bed nice and neat",
-  wake_up: "Good morning, rise and shine!",
-};
-
-const ACTIVITY_FALLBACK_SUBTITLE = 'Close your eyes and rest';
 
 function routineHasActivitiesInSegment(routine: Routine, segment: 'morning' | 'evening'): boolean {
   return routine.activityStack.some((_, index) => {
@@ -105,7 +86,8 @@ function HomeScreen() {
   const [segment, setSegment] = useState<'morning' | 'evening'>(getCurrentSegment());
   const [viewMode, setViewMode] = useState<'activities' | 'player'>('activities');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [assetsReady, setAssetsReady] = useState(false);
+  // `${routineId}:${segment}` whose on-demand warm-up finished on this screen.
+  const [preparedSegmentKey, setPreparedSegmentKey] = useState<string | null>(null);
   const [trophyVisible, setTrophyVisible] = useState(false);
   const [rewardStars, setRewardStars] = useState<number | null>(null);
   const [showCaptions, setShowCaptions] = useState(true);
@@ -121,6 +103,9 @@ function HomeScreen() {
   const [activityImagesRevision, setActivityImagesRevision] = useState(0);
   // Re-renders this screen as bundled activity artwork finishes resolving to local file URIs.
   const localImagesRevision = useLocalImagesRevision(ALL_BUNDLED_IMAGES);
+  // Re-render when the cloud catalog or downloaded cloud artwork changes.
+  useActivityCatalogRevision();
+  const getCloudImageUri = useActivityCloudImageUri();
   const [trophyShownThisSession, setTrophyShownThisSession] = useState<Record<'morning' | 'evening', boolean>>({
     morning: false,
     evening: false,
@@ -332,70 +317,31 @@ function HomeScreen() {
     }
   }, [visibleStepIndexes, currentStepIndex]);
 
+  // Routine edits (here or on another device) re-plan background downloads; duplicate work
+  // collapses in the queue and up-to-date files cost only a stat.
   useEffect(() => {
-    if (!primaryRoutine) return;
+    if (mergedRoutines.length > 0) scheduleBackgroundPrefetch(mergedRoutines);
+  }, [mergedRoutines]);
+
+  const assetsReady = Boolean(primaryRoutine) && (
+    isSegmentWarmed(primaryRoutine!.id, segment) || preparedSegmentKey === `${primaryRoutine!.id}:${segment}`
+  );
+
+  useEffect(() => {
+    if (!primaryRoutine || isSegmentWarmed(primaryRoutine.id, segment)) return;
+    // Boot already warmed the segment that was on screen; this covers a segment flip while the
+    // app stays open (e.g. morning → evening) before background prefetch got to it.
     const routine = primaryRoutine;
-
-    async function prepareAssets() {
-      setAssetsReady(false);
-
-      try {
-        if (isRoutineWarmed(routine.id)) {
-          setAssetsReady(true);
-          // Backfill any newly-added variants (e.g. caption videos) without blocking the UI.
-          syncRoutineAssets(routine).catch((err) =>
-            console.warn('[Home] Background asset backfill failed:', err)
-          );
-          return;
-        }
-
-        const ready = await areAssetsReady(routine);
-        if (ready) {
-          markRoutineWarmed(routine.id, true);
-          setAssetsReady(true);
-          // Base video/audio are ready, but caption videos are best-effort and may not have been
-          // downloaded yet (e.g. toggled on after the routine was first synced) — backfill them.
-          syncRoutineAssets(routine).catch((err) =>
-            console.warn('[Home] Background asset backfill failed:', err)
-          );
-          return;
-        }
-
-        const { missingAudioKeys } = await syncRoutineAssets(routine);
-        if (missingAudioKeys.length === 0) {
-          markRoutineWarmed(routine.id, true);
-          setAssetsReady(true);
-          return;
-        }
-
-        await ensureAudioForRoutine(routine);
-
-        let stillMissing = missingAudioKeys;
-        for (let attempt = 1; attempt <= 4; attempt += 1) {
-          await wait(1500);
-          const retry = await syncRoutineAssets(routine);
-          stillMissing = retry.missingAudioKeys;
-          if (stillMissing.length === 0) {
-            break;
-          }
-        }
-
-        if (stillMissing.length > 0) {
-          console.warn('[Home] Audio still pending after retries:', stillMissing);
-          markRoutineWarmed(routine.id, false);
-        } else {
-          markRoutineWarmed(routine.id, true);
-        }
-        setAssetsReady(true);
-      } catch (err) {
-        console.error('[Home] Asset prep error:', err);
-        markRoutineWarmed(routine.id, false);
-        setAssetsReady(true);
-      }
-    }
-
-    prepareAssets();
-  }, [primaryRoutine]);
+    let cancelled = false;
+    warmSegmentAssets([routine], segment)
+      .catch((err) => console.error('[Home] Asset prep error:', err))
+      .finally(() => {
+        if (!cancelled) setPreparedSegmentKey(`${routine.id}:${segment}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryRoutine, segment]);
 
   // Reset the trophy guard when a new day starts while this screen remains mounted.
   useEffect(() => {
@@ -542,13 +488,13 @@ function HomeScreen() {
               >
                 {visibleStepIndexes.map((index, listIdx) => {
                   const step = primaryRoutine.activityStack[index] ?? [];
-                  const metas = step.map((key) => ACTIVITIES[key]).filter(Boolean);
-                  const primaryLabel = metas[0]?.label ?? 'Activity';
+                  const primaryLabel = step[0] ? getActivityMeta(step[0]).label : 'Activity';
                   const stepId = primaryRoutine.stepIds?.[index] ?? `step_${index}`;
                   const done = completedStepIds.has(stepId);
                   const primaryActivityKey = step[0] ?? '';
                   const activityImage = ACTIVITY_IMAGES[primaryActivityKey] ?? ACTIVITY_FALLBACK_IMAGE;
-                  const activitySubtitle = ACTIVITY_SUBTITLES[primaryActivityKey] ?? ACTIVITY_FALLBACK_SUBTITLE;
+                  const cloudImageUri = getCloudImageUri(primaryActivityKey);
+                  const activitySubtitle = getActivityMeta(primaryActivityKey).subtitle;
 
                   return (
                     <TouchableOpacity
@@ -563,10 +509,12 @@ function HomeScreen() {
                       <View style={styles.activityImageWrap}>
                         <Image
                           key={`${stepId}-${activityImagesRevision}-${localImagesRevision}`}
-                          source={localImageSource(activityImage)}
+                          source={cloudImageUri ? { uri: cloudImageUri } : localImageSource(activityImage)}
                           style={styles.activityImage}
                           resizeMode="contain"
-                          onError={() => retryLocalImage(activityImage)}
+                          onError={() => {
+                            if (!cloudImageUri) retryLocalImage(activityImage);
+                          }}
                         />
                       </View>
 

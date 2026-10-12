@@ -4,6 +4,7 @@ import { getDownloadURL, ref } from 'firebase/storage';
 import { functions, storage, ensureAuth } from './firebase';
 import { localAudioPath } from './assetSync';
 import { ActivityKey, Routine, ToneOption, VoiceOption } from '../types';
+import { getActivityDefinition } from '../constants/activities';
 import { normalizeNameToken } from '../utils/nameToken';
 
 interface GeneratePart1AudioRequest {
@@ -36,24 +37,9 @@ interface GenerateRoutinePart1AudioResponse {
 }
 
 const MIN_AUDIO_BYTES = 1024;
+// Mirrors MAX_ACTIVITY_KEYS_PER_BATCH in functions/src/index.ts.
+const MAX_KEYS_PER_BATCH = 20;
 const AUDIO_DIR = `${FileSystem.documentDirectory}audio/`;
-
-const PART1_DEFAULT_TONES: Record<string, ToneOption> = {
-  wake_up: 'encouraging',
-  make_bed: 'encouraging',
-  brush_teeth: 'encouraging',
-  eat_breakfast: 'encouraging',
-  get_dressed: 'encouraging',
-  put_shoes_on: 'encouraging',
-  comb_hair: 'encouraging',
-  drink_water: 'encouraging',
-  homework: 'encouraging',
-  eat_dinner: 'calm',
-  tidy_room: 'encouraging',
-  put_on_pajamas: 'calm',
-  bedtime_story: 'calm',
-  go_to_sleep: 'calm',
-};
 
 async function ensureAudioDir(): Promise<void> {
   const info = await FileSystem.getInfoAsync(AUDIO_DIR);
@@ -70,10 +56,13 @@ export function buildPart1AudioKey(
 ): string {
   const normalizedName = normalizeNameToken((childName || 'child').toString()) || 'child';
   const normalizedActivity = (activityKey || 'activity').toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'activity';
-  const selectedTone = tone ?? (activityKey ? PART1_DEFAULT_TONES[activityKey] : undefined) ?? 'encouraging';
+  const definition = getActivityDefinition(activityKey || 'activity');
+  const selectedTone = tone ?? definition.part1Tone;
   const selectedVoice = voice ?? 'woman';
+  // Version 1 keeps the original key so clips cached before greeting versioning stay valid.
+  const versionSuffix = definition.part1Version > 1 ? `_v${definition.part1Version}` : '';
   // MUST stay identical to `buildPart1AudioKey` in functions/src/index.ts.
-  return `p1_${normalizedActivity}_${normalizedName}_${selectedTone}_${selectedVoice}`;
+  return `p1_${normalizedActivity}_${normalizedName}_${selectedTone}_${selectedVoice}${versionSuffix}`;
 }
 
 export function localPart1AudioPath(
@@ -185,7 +174,9 @@ export async function ensurePart1AudioReady(
     });
     const { storagePath, status } = result.data;
 
-    if (status === 'ready' && storagePath) {
+    // A server whose catalog is a version behind would hand back the previous greeting; storing it
+    // under the new key would pin the old audio forever, so only accept an exact key match.
+    if (status === 'ready' && storagePath && result.data.cacheKey === cacheKey) {
       const ok = await downloadPart1Audio(localPath, storagePath);
       return ok ? localPath : null;
     }
@@ -198,57 +189,72 @@ export async function ensurePart1AudioReady(
 }
 
 /**
- * Preloads Part 1 greeting audio for all activities in a routine in batch.
- * Skips generation and downloads for any audio files that already exist on device.
+ * Batch-ensures Part 1 greeting audio for `activityKeys` (one callable round-trip for everything
+ * not yet on device). Clips the server is still generating are left for a later pass.
  */
-export async function ensureRoutinePart1AudioReady(routine: Routine): Promise<void> {
-  const childName = (routine.childName ?? '').trim();
-  if (!childName) return;
+export async function ensurePart1AudioForActivities(
+  activityKeys: ActivityKey[],
+  childName: string,
+  tone?: ToneOption,
+  voice?: VoiceOption
+): Promise<void> {
+  const name = (childName ?? '').trim();
+  if (!name) return;
 
-  const rawKeys = routine.activityStack.flat();
-  const uniqueKeys = Array.from(new Set(rawKeys));
-  if (uniqueKeys.length === 0) return;
-
-  // Filter out activities that already have valid audio cached on device
   const missingKeys: string[] = [];
-  for (const activityKey of uniqueKeys) {
-    const localPath = localPart1AudioPath(activityKey, childName, routine.tone, routine.voice);
-    const exists = await audioFileExists(localPath);
-    if (!exists) {
+  for (const activityKey of Array.from(new Set(activityKeys)).filter(Boolean)) {
+    if (!(await audioFileExists(localPart1AudioPath(activityKey, name, tone, voice)))) {
       missingKeys.push(activityKey);
     }
   }
-
-  // If everything is already cached locally, no need to call Cloud Function
   if (missingKeys.length === 0) return;
 
   try {
     await ensureAuth();
-
     const generateRoutinePart1Audio = httpsCallable<
       GenerateRoutinePart1AudioRequest,
       GenerateRoutinePart1AudioResponse
     >(functions, 'generateRoutinePart1Audio');
 
-    const result = await generateRoutinePart1Audio({
-      childName,
-      activityKeys: missingKeys,
-      tone: routine.tone,
-      voice: routine.voice,
-    });
-
-    const downloads = result.data.results.map(async (item) => {
-      if (item.status === 'ready' && item.storagePath) {
-        const localPath = localAudioPath(item.cacheKey);
-        if (await audioFileExists(localPath)) return;
-        await downloadPart1Audio(localPath, item.storagePath);
-      }
-    });
-
-    await Promise.allSettled(downloads);
+    for (let i = 0; i < missingKeys.length; i += MAX_KEYS_PER_BATCH) {
+      const result = await generateRoutinePart1Audio({
+        childName: name,
+        activityKeys: missingKeys.slice(i, i + MAX_KEYS_PER_BATCH),
+        tone,
+        voice,
+      });
+      // Only keep clips whose server key matches ours: if either side's catalog is a greeting
+      // version behind, the clip is skipped and re-requested on a later pass.
+      await Promise.allSettled(
+        result.data.results.map(async (item) => {
+          if (item.status !== 'ready' || !item.storagePath) return;
+          if (item.cacheKey !== buildPart1AudioKey(item.activityKey, name, tone, voice)) return;
+          await downloadPart1Audio(localAudioPath(item.cacheKey), item.storagePath);
+        })
+      );
+    }
   } catch (err) {
-    console.warn('[Part1Audio] Failed batch preload for routine:', err);
+    console.warn('[Part1Audio] Failed batch preload:', err);
   }
+}
+
+/** Preloads Part 1 greeting audio for all activities in a routine. */
+export async function ensureRoutinePart1AudioReady(routine: Routine): Promise<void> {
+  await ensurePart1AudioForActivities(routine.activityStack.flat(), routine.childName, routine.tone, routine.voice);
+}
+
+/** Deletes greeting clips that no longer match any wanted (activity, name, tone, voice, version). */
+export async function prunePart1Audio(keepPaths: string[]): Promise<number> {
+  const keep = new Set(keepPaths.map((path) => path.slice(path.lastIndexOf('/') + 1)));
+  let names: string[];
+  try {
+    names = await FileSystem.readDirectoryAsync(AUDIO_DIR);
+  } catch {
+    return 0;
+  }
+  const stale = names.filter((name) => name.startsWith('p1_') && !keep.has(name));
+  await Promise.allSettled(stale.map((name) => FileSystem.deleteAsync(`${AUDIO_DIR}${name}`, { idempotent: true })));
+  return stale.length;
 }
 
 /**

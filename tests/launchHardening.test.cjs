@@ -148,7 +148,16 @@ test('client and server Part 1 audio cache keys are identical', () => {
   ];
 
   for (const args of cases) {
-    assert.equal(client.buildPart1AudioKey(...args), server.buildPart1AudioKey(...args), args.join('/'));
+    const [activityKey, childName, tone, voice] = args;
+    // The server resolves defaults from its template before keying; version 1 = pre-catalog key.
+    const serverKey = server.buildPart1AudioKey(
+      activityKey,
+      childName,
+      tone ?? server.PART1_TEMPLATES[activityKey].prompt,
+      voice ?? 'woman',
+      1
+    );
+    assert.equal(client.buildPart1AudioKey(...args), serverKey, args.join('/'));
   }
   // Keys stay stable so a reused name always hits its existing clip.
   assert.equal(client.buildPart1AudioKey('wake_up', 'Liam'), 'p1_wake_up_liam_encouraging_woman');

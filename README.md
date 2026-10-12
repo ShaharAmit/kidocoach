@@ -130,7 +130,7 @@ The **Profile** tab sits alongside Routines, Rewards, and Settings. Parent sign-
 
 | Family state | Route |
 | --- | --- |
-| New, unpaid, no setup | Welcome video → questionnaire → paywall → app after purchase |
+| New, unpaid, no setup | Welcome video → questionnaire → paywall (purchase behind the math gate) → app after purchase |
 | Saved setup, unpaid | Paywall → app after purchase |
 | Saved setup, paid | App |
 | Restored active purchase, no recoverable setup | Questionnaire → app, without another purchase |
@@ -228,14 +228,10 @@ kidocoach://routine/{routineId}
 
 expo-router intercepts this URL and renders `app/routine/[id].tsx` directly, even when the app is cold-started.
 
-## 🎬 Avatar Videos
+## 🎬 Activities & avatar videos
 
-Place `.mp4` silent avatar loop files in Firebase Storage under:
-```
-avatars/{avatarId}/{activityKey}.mp4
-```
-
-Example: `avatars/becky/brush_teeth.mp4`
+Activities come from the cloud. To add or update one, see
+[docs/ADDING_ACTIVITIES.md](docs/ADDING_ACTIVITIES.md).
 
 ## 🔒 Security & privacy
 
@@ -246,7 +242,7 @@ Example: `avatars/becky/brush_teeth.mp4`
 - Audio cache docs carry `expireAt`; a Firestore TTL policy deletes clips no device has requested for 12 months (`onAudioCacheDocDeleted` removes the Storage object). Docs store no plain-text child name.
 - `deleteAccount` removes `users/{uid}` recursively and the Auth user; the app also revokes the Google grant and wipes local data. Store subscriptions are not cancelled by deletion.
 - Sign in with Apple revocation happens server-side without a prompt: on Apple sign-in/connect the app sends the one-time authorization code to `registerAppleAuthorization`, which stores a refresh token in server-only `apple_tokens/{uid}`. `deleteAccount` revokes it before deleting. With no usable stored token (accounts linked before this, or a failed exchange), `deleteAccount` returns `failed-precondition` / `apple-reauth-required`, and the app shows Apple's sheet once, revokes via Firebase, then retries. Configure before deploying functions: `firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY` (the `.p8` contents of a key with Sign in with Apple enabled), plus `APPLE_TEAM_ID` and `APPLE_KEY_ID` (prompted on deploy or set in `functions/.env.<projectId>`). `APPLE_CLIENT_ID` defaults to the bundle ID `com.kidocoach.app`.
-- Purchases, restores, external links and parent areas (Profile, Settings, Activity Manager) sit behind a parental gate (`components/ParentalGate.tsx`).
+- Purchases, restores, external links and parent areas (Profile, Settings, Activity Manager) sit behind a parental gate (`components/ParentalGate.tsx`). The first time a parent opens Settings or Profile (after the questionnaire) they must pick the unlock method (4-digit PIN or math question); it can be changed later in Settings. Until then the math question is used. There is no grace window — every gated action asks again. "Forgot PIN?" waits 30 s, then asks two harder questions in a row, then requires a new PIN — so recovery is never easier than the math gate, and a child who gets through changes the PIN (the parent notices).
 - After deploying these rules/functions, run `node functions/scripts/lock-audio-cache.js --apply --purge-legacy` once to make previously public audio private, backfill TTLs and strip stored names (dry run without `--apply`).
 
 ## 🧪 Testing

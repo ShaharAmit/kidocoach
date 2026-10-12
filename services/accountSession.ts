@@ -7,6 +7,7 @@ import {
 import { completionStorageKey } from '../utils/dailyCompletion';
 import { auth } from './firebase';
 import { scheduleRoutineNotification } from './notifications';
+import { clearLocalParentalLock } from './parentalLock';
 
 export async function backUpCurrentFamily(): Promise<void> {
   const profile = await getChildProfile();
@@ -16,6 +17,7 @@ export async function backUpCurrentFamily(): Promise<void> {
 export async function clearLocalFamilySession(): Promise<void> {
   clearHomeBootstrap();
   await clearChildProfile();
+  await clearLocalParentalLock();
   const notifications = await Notifications.getAllScheduledNotificationsAsync();
   for (const notification of notifications) {
     if (typeof notification.content.data?.routineId === 'string') {

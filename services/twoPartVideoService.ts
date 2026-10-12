@@ -11,23 +11,6 @@ import { localPart1AudioPath } from './part1Audio';
 const CAPTIONS_DIR = `${FileSystem.documentDirectory}captions/`;
 const DEFAULT_PART1_VIDEO_DURATION_SECONDS = 1.1; // Default fallback for HeyGen part 1 clips
 
-export const PART1_TEMPLATES: Record<string, { prompt: string; textTemplate: string }> = {
-  wake_up: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
-  make_bed: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
-  brush_teeth: { prompt: 'encouraging', textTemplate: 'Toothbrush time, {name}!' },
-  eat_breakfast: { prompt: 'encouraging', textTemplate: 'Breakfast time, {name}!' },
-  get_dressed: { prompt: 'encouraging', textTemplate: "Let's get dressed, {name}!" },
-  put_shoes_on: { prompt: 'encouraging', textTemplate: 'All right, {name}!' },
-  comb_hair: { prompt: 'encouraging', textTemplate: "Let's take care of your hair, {name}!" },
-  drink_water: { prompt: 'encouraging', textTemplate: 'Water time, {name}!' },
-  homework: { prompt: 'encouraging', textTemplate: 'All right, {name}!' },
-  eat_dinner: { prompt: 'calm', textTemplate: 'Dinner time, {name}!' },
-  tidy_room: { prompt: 'encouraging', textTemplate: 'What a busy day of playing, {name}!' },
-  put_on_pajamas: { prompt: 'calm', textTemplate: 'Time to transform for the night, {name}!' },
-  bedtime_story: { prompt: 'calm', textTemplate: 'Story time, {name}.' },
-  go_to_sleep: { prompt: 'calm', textTemplate: 'You did it, {name}.' },
-};
-
 export interface Part1TimingInfo {
   audioDuration: number;
   videoDuration: number;

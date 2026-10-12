@@ -14,7 +14,7 @@ import { VideoView, useVideoPlayer, VideoSize } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActivityKey, ActivityStep, CaptionCue, DurationMode, ToneOption, VoiceOption } from '../types';
-import { ACTIVITIES, ACTIVITY_TIMER_SECONDS, resolveDurationMode } from '../constants/activities';
+import { defaultDurationMinutes, getActivityMeta, resolveDurationMode } from '../constants/activities';
 import { isValidCachedVideo, ensureActivityVideoReady } from '../services/assetSync';
 import { getOrBuildMergedCaptions, localPart2VideoPath } from '../services/twoPartVideoService';
 import { getReadyMergedVideoPath, ensureMergedActivityVideo } from '../services/videoMerge';
@@ -292,11 +292,13 @@ export default function ActivityPlayer({
     return [] as ActivityKey[];
   }, [activityStep]);
 
-  const currentActivityKey = normalizedSteps[activityIndex] ?? normalizedSteps[0] ?? 'brush_teeth';
-  const activity = ACTIVITIES[currentActivityKey] ?? ACTIVITIES['brush_teeth'];
+  // No substitute activity: an unknown/empty key resolves to "unavailable" instead of silently
+  // playing some other activity's video.
+  const currentActivityKey = normalizedSteps[activityIndex] ?? normalizedSteps[0] ?? '';
+  const activity = getActivityMeta(currentActivityKey);
   const safeChildName = (childName || 'friend').trim() || 'friend';
   const safeAvatarId = (avatarId || 'becky').trim() || 'becky';
-  const defaultDurationSeconds = ACTIVITY_TIMER_SECONDS[currentActivityKey];
+  const defaultDurationSeconds = Math.round(defaultDurationMinutes(currentActivityKey) * 60);
   const hasCustomDuration = durationMinutes !== undefined && Number.isFinite(durationMinutes) && durationMinutes > 0;
   const durationSeconds = hasCustomDuration ? Math.round(durationMinutes * 60) : defaultDurationSeconds;
   const isVariableDuration = resolveDurationMode(currentActivityKey, durationMode, durationMinutes) === 'variable';
@@ -315,6 +317,10 @@ export default function ActivityPlayer({
     setTimerSecondsRemaining(null);
 
     async function resolveSource() {
+      if (!currentActivityKey) {
+        setResolved({ kind: 'unavailable' });
+        return;
+      }
       let mergedUri = await getReadyMergedVideoPath(
         currentActivityKey,
         safeChildName,

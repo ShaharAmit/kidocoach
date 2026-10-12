@@ -75,7 +75,7 @@ Post-setup core flow:
 6. **Routing decision** (`getAccessRoute`):
    - No profile → `/onboarding/welcome` (unpaid) or `/onboarding/questionnaire` (paid)
    - Profile + unpaid → `/paywall`
-   - Paid + onboarded → `/` (home), after `warmAllRoutineAssetsToCompletion()` ensures source media is on disk. Merged videos finish in the background on cold starts; only the post-questionnaire `generating_experience` pass waits for them.
+   - Paid + onboarded → `/` (home), after `refreshActivityCatalog()` (5 s budget, device copy offline) and `warmSegmentAssets()` ensure only the **current segment's** activities (Part 1/Part 2 video, captions, Part 1 greeting) are on disk. `scheduleBackgroundPrefetch()` then downloads the other segment and every other catalog activity while the family uses the app. Merged videos finish in the background on cold starts; only the post-questionnaire `generating_experience` pass waits for the current segment's merges.
 7. `hasDebugHomeAccess()` short-circuits the paywall during the current session (set by questionnaire save).
 
 ### Onboarding (`app/onboarding/`)
@@ -87,14 +87,17 @@ Post-setup core flow:
   4. Re-saves the routine with the returned `notificationId`.
   5. Persists `ChildProfile` to AsyncStorage via `saveChildProfile()`.
   6. Calls `grantDebugHomeAccess()` so the session can reach home.
-  7. Fires `preloadRoutineAssetsInBackground()` (non-blocking).
-  8. Navigates to `/`.
+  7. Navigates to `/loading?mode=generating_experience` (paid) or `/paywall`. Purchase/restore are behind the strict (math) parental gate; the parent picks a lock method later, on first entry to Settings/Profile.
+  Age templates only include activities the catalog marks selectable.
+- **Parent lock**: no onboarding step. `ParentLockFirstRun` (mounted in Settings and Profile) shows `ParentLockSetup` full-screen on the first visit after onboarding, when `getParentalLockSetupState()` is `unset` (cloud-confirmed; skipped offline): 4-digit PIN or math question (default). Biometrics and "no lock" were removed; a saved `biometric`/`none` reads as unset, so the parent picks again.
+- **Parental gate**: `requestParentalGate()` has no grace window — every call challenges. "Forgot PIN?" (parent-tapped; wrong tries only lock entry) runs a 30 s wait → 2 harder questions in a row (`newRecoveryChallenge`, `utils/parentalChallenge.ts`) → mandatory new PIN, so recovery is never weaker than the math gate.
 
 ### Home Dashboard (`app/index.tsx`)
 - Subscribes to `useUserRoutines(userId)` for real-time Firestore updates.
 - Splits routines into morning (04:00–14:59) and evening (15:00–03:59) segments.
 - Shows a sun graphic panel (morning) and moon panel (evening), each with a CTA button.
-- A "Preparing media…" badge appears while `assetCacheService` is in `warming-assets` stage.
+- A "Preparing media…" badge appears while `assetCacheService` is in `warming-assets` stage (only while the segment on screen is being warmed, e.g. after a morning → evening flip; background catalog prefetch never shows it).
+- Every routine change re-plans background prefetch (`scheduleBackgroundPrefetch`).
 - Header hamburger menu opens an animated popover with links to Settings, Questionnaire, and Add Routine.
 
 ### Routine Execution (`app/routine/[id].tsx`)
@@ -118,6 +121,7 @@ Post-setup core flow:
 - "Clear All Cached Assets" calls `clearAllLocalCachedAssets()` (deletes all local video/audio + welcome dir).
 - "Reset App" calls `clearChildProfile()` + `clearDebugHomeAccess()` then navigates to `/onboarding/welcome`.
 - Subscribes to `subscribeAssetCacheStatus()` to show live progress label.
+- "Parent lock" re-verifies with the current method (`requestParentalGate(...)`), then opens `ParentLockSetup` in a modal.
 
 ### Add Routine (`app/parent/create.tsx`)
 - Pre-populates child name, age, avatar, voice, tone, and scheduled time from the stored `ChildProfile`.
@@ -162,9 +166,21 @@ Post-setup core flow:
 
 **`firebase.ts`** — Firebase app initialization with singleton guard for Fast Refresh. Exports `db` (Firestore), `storage` (Cloud Storage), `functions` (Cloud Functions), and `auth`. `ensureAuth()` returns the current user or signs in anonymously; safe to call multiple times.
 
-**`assetCacheService.ts`** — Top-level asset orchestration layer. Owns the welcome video lifecycle (download, version check via Storage metadata, repair). Runs `preloadRoutineAssetsInBackground()` which calls `ensureAudioForRoutine()` then `syncRoutineAssets()`. Exposes `subscribeAssetCacheStatus(listener)` — a lightweight pub/sub for progress UI. Stage values: `idle` → `downloading-welcome` → `warming-assets` → `done`.
+**`assetCacheService.ts`** — Top-level asset orchestration layer. Owns the welcome video lifecycle (download, version check via Storage metadata, repair) and routine media:
+- `warmSegmentAssets(routines, segment)` — the only media the loading screen waits for (current segment; retries up to 4×, then proceeds offline). `isSegmentWarmed()` lets Home skip it.
+- `scheduleBackgroundPrefetch(routines)` — priority queue (`prefetchQueue.ts`, concurrency 2): current segment (with merges) → other segment → every other selectable catalog activity (videos, captions, artwork, Part 1 greeting). Safe to call often; up-to-date files cost a stat.
+- `prioritizeActivityAssets(keys, routine?)` — jumps the queue when a parent picks/saves an activity.
+- `onAppEnteredForeground()` / `onAppLeftForeground()` — every app entry refreshes the catalog from the server, re-plans prefetch, and runs the live catalog listener only while foregrounded.
+- When a cached video/captions file is replaced, the affected merged video is discarded and rebuilt. After the queue drains (with a server catalog), unused media is pruned: removed activities, superseded artwork, greetings for an old name/tone/version, and merges nothing plays.
+- `subscribeAssetCacheStatus(listener)` — progress pub/sub. Stage values: `idle` → `downloading-welcome` → `warming-assets` → `done`.
 
-**`assetSync.ts`** — Low-level download + validation. `syncRoutineAssets(routine)` downloads all avatar videos from `avatars/{avatarId}/{activityKey}.mp4` and audio from the URL stored in `audio_cache/{cacheKey}.audioUrl`. Validates files by size threshold and RIFF/WAVE header bytes. Returns `{ missingAudioKeys }` for keys not yet generated. Exports `localVideoPath()`, `localAudioPath()`, `buildAudioCacheKey()`, `areAssetsReady()`, `clearAllRoutineAssets()`.
+**`assetSync.ts`** — Low-level download + validation. `syncActivityMedia(key, avatarId)` syncs Part 1 (`_p1.mp4`), Part 2 (`.mp4`) and captions (`_captions.json`). Versions come from the catalog (`generation`; no network when unchanged) or, without a catalog, one Storage `getMetadata` (throttled to once per 10 min). Downloads go to `<path>.download`, are size/format/MD5 verified, then moved over the old file — a playable copy is never deleted before its replacement is ready. Version markers live in AsyncStorage (`asset_version_v2_{relativePath}`). Also: `syncActivityImage()` (cloud artwork, generation in filename), `isActivityMediaReady()`, `ensureActivityVideoReady()` (player repair), `subscribeAssetUpdates()`, `pruneLocalAssets()`, `clearAllRoutineAssets()`. `syncRoutineAssets(routine)` remains for legacy TTS audio (disabled by `TTS_AUDIO_ENABLED`).
+
+**`activityCatalog.ts`** — Runtime activity catalog: Firestore `catalog/activities` (single doc), mirrored to AsyncStorage (`activity_catalog_v1`) for offline launches. Applying it mutates the registry in `constants/activities.ts` in place. `refreshActivityCatalog(timeoutMs)` (server read), `startActivityCatalogListener()`, `getCatalogAssetRef()` (`undefined` = no catalog → path conventions; `null` = asset doesn't exist), `useActivityCatalogRevision()` for re-rendering pickers. Parsing/validation is in `utils/activityCatalogModel.ts`.
+
+**`prefetchQueue.ts`** — Pure priority queue (dedupe by id, priority bumps, one re-run for jobs re-enqueued mid-flight).
+
+**`part1Audio.ts`** — Personalized Part 1 greetings. Cache key `p1_{activity}_{name}_{tone}_{voice}[_v{part1Version}]` (the suffix is omitted for version 1, so pre-catalog clips stay valid; MUST match `buildPart1AudioKey` in `functions/src/index.ts`). `ensurePart1AudioForActivities()` batches via `generateRoutinePart1Audio`; `prunePart1Audio()` removes stale clips.
 
 **`tts.ts`** — Client-side TTS orchestration. `ensureAudioForRoutine(routine)` iterates `activityStack`, checks Firestore `audio_cache/{cacheKey}` for `status === 'ready'`, and calls the `generateRoutineAudio` Cloud Function for any missing entries. `getAudioCacheForRoutine(routine)` fetches all cache entries for display/debugging.
 
@@ -176,21 +192,25 @@ Post-setup core flow:
 
 **`debugFlow.ts`** — In-memory session flag. `grantDebugHomeAccess()` is called after questionnaire save so the current app session can navigate home without a paid subscription. `clearDebugHomeAccess()` is called when the app backgrounds, ensuring the next cold start re-evaluates the paywall.
 
+**`parentalLock.ts`** — Parent-chosen gate method (`pin` | `math`). Stored per-UID in `expo-secure-store` (PIN as salted SHA-256 only) and mirrored to `users/{uid}.parentalLock`; the cloud copy is read only when the device has none. PIN entry locks for 60 s after 5 wrong tries; setting a new PIN clears the lockout. Math is the fallback whenever the lock can't be read. `clearLocalFamilySession()` clears it.
+
 **`mobileVideoCache.ts`** — `getOrExtractMobilePoster(localVideoUri)` generates a JPEG thumbnail at 50 ms via `expo-video-thumbnails` and persists it alongside the video file (`.mp4` → `.jpg`). Fast-paths on subsequent calls by checking if the `.jpg` already exists. Used by `welcome.tsx` to show a poster frame during video engine initialization.
 
 ### `types/`
 
-**`index.ts`** — Shared TypeScript types for the entire app. Key types: `ActivityKey` (union of all 12 activity strings), `Routine`, `ChildProfile`, `AudioCacheEntry`, `ActivityMeta`. Utility functions: `normalizeActivityStack()` (coerces `string[]` or `string[][]` to `ActivityStep[]`) and `normalizeStepTimes()` (pads/trims the times array to match stack length).
+**`index.ts`** — Shared TypeScript types for the entire app. Key types: `ActivityKey` (`string` matching `[a-z0-9_]+` — activities come from the cloud catalog), `Routine`, `ChildProfile`, `AudioCacheEntry`, `ActivityMeta`. Utility functions: `normalizeActivityStack()` (coerces `string[]` or `string[][]` to `ActivityStep[]`) and `normalizeStepTimes()` (pads/trims the times array to match stack length).
 
 ### `constants/`
 
-**`activities.ts`** — `ACTIVITIES` record mapping each `ActivityKey` to an `ActivityMeta` object (label, emoji, color, TTS `promptTemplate`, `videoFile`). `ACTIVITY_KEYS` is the ordered array of all keys. `ADDITIONAL_ACTIVITIES` holds the `ActivityConfig` shape used for CDN video references and default TTS phrases.
+**`activities.ts`** — Activity registry. Bundled `ActivityDefinition`s (label, emoji, subtitle, time of day, timer, duration mode, stars, Part 1 text/tone/version, `selectable`) are the offline fallback; `applyActivityDefinitions()` overlays the cloud catalog **in place**, so `ACTIVITIES`, `ACTIVITY_KEYS`, `ACTIVITY_TIMER_SECONDS`, etc. stay valid references. Keys dropped from the catalog stay renderable but not selectable. Use `getActivityMeta()`/`getActivityDefinition()` (placeholder for unknown keys — never substitute another activity), `isActivitySelectable()`, `activityKeysForSegment()` (selectable only).
 
 ### `functions/src/`
 
 **`index.ts`** — Two Firebase Cloud Functions (v2):
 
 - **`generateRoutineAudio`** (callable, 120 s timeout, 512 MiB): Validates the request, synthesizes WAV audio via Gemini 3.8 Flash TTS (retries up to 3×, selects voice `Aoede` for woman / `Kore` for man, passes tone as `speechMetadata.style`), normalizes the model's WAV (or raw PCM16) output to a canonical 44-byte-header WAV, uploads to `audio/{cacheKey}.wav` in Cloud Storage, makes the file public, and writes `status: ready` + the public URL to `audio_cache/{cacheKey}` in Firestore.
+- **`generatePart1Audio` / `generateRoutinePart1Audio`**: Part 1 greeting text/tone/version come from `catalog/activities` (60 s in-memory cache), falling back to the legacy `PART1_TEMPLATES`.
+- **`onCatalogAssetFinalized` / `onCatalogAssetDeleted`** (Storage triggers): keep `catalog/activities` in sync with uploads using `catalogModel.ts` (transactional; ignore out-of-order generations, `_p2` aliases when `{key}.mp4` exists, and the delete event an overwrite emits). `functions/scripts/seed-activity-catalog.js` rebuilds refs from a bucket listing.
 - **`submitEarlyAccessLead`** (callable, CORS enabled): Normalizes and validates an email address, hashes it with SHA-256, writes to `early_access/{hash}` in a transaction that also migrates any legacy plain-email document.
 
 ### Firestore Collections
@@ -203,3 +223,4 @@ Post-setup core flow:
 | `users/{userId}/awards` | `{date}_{routineId}_{segment}[_stepIndex]` | Idempotent star-award events |
 | `audio_cache` | `{name}_{activityKey}_{avatarId}_{tone}_{voice}` | TTS asset registry; `status` field gates downloads |
 | `early_access` | SHA-256 hash of email | Website lead capture; deduped by hash |
+| `catalog` | `activities` | Activity catalog: `activities.{key}` = metadata, `part1 {text, tone, version}`, `image`, `assets.{avatarId}.{p1,p2,captions}` = `{path, generation, md5, size}`. Signed-in read; written only by Storage triggers / seed script |

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Switch,
@@ -21,6 +22,11 @@ import { db } from '../services/firebase';
 import { cancelRoutineNotification } from '../services/notifications';
 import PageBackground from '../components/PageBackground';
 import { getNativeHeaderOptions } from '../components/ScreenHeader';
+import { requestParentalGate } from '../components/ParentalGate';
+import ParentLockSetup from '../components/ParentLockSetup';
+import ParentLockFirstRun from '../components/ParentLockFirstRun';
+import { getParentalLockMethod, parentalLockLabel, type ParentalLockMethod } from '../services/parentalLock';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
   const [profile, setProfile] = useState<ChildProfile | null>(null);
@@ -28,6 +34,8 @@ export default function SettingsScreen() {
   const [isResetting, setIsResetting] = useState(false);
   const [isSavingCaptions, setIsSavingCaptions] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
+  const [lockMethod, setLockMethod] = useState<ParentalLockMethod | null>(null);
+  const [isEditingLock, setIsEditingLock] = useState(false);
 
   const avatarEmoji = useMemo(() => {
     if (!profile) return '🙂';
@@ -57,6 +65,10 @@ export default function SettingsScreen() {
       if (!mounted) return;
       setStarsCount(typeof remoteStars === 'number' ? remoteStars : loadedProfile.totalStarsEarned ?? 0);
     }
+
+    getParentalLockMethod().then((method) => {
+      if (mounted) setLockMethod(method);
+    }).catch(() => undefined);
 
     loadSettingsData().catch((err) => {
       console.warn('[Settings] failed to load profile:', err);
@@ -170,6 +182,11 @@ export default function SettingsScreen() {
     );
   };
 
+  const openParentLockEditor = async () => {
+    if (!(await requestParentalGate('Confirm it is you before changing the parent lock.'))) return;
+    setIsEditingLock(true);
+  };
+
   const handleToggleCaptions = async (value: boolean) => {
     if (!profile || isSavingCaptions) return;
 
@@ -239,6 +256,18 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        <TouchableOpacity style={[styles.card, styles.actionCard]} onPress={() => void openParentLockEditor()}>
+          <View style={styles.rowBetween}>
+            <View style={styles.actionTextWrap}>
+              <Text style={styles.actionTitle}>Parent lock</Text>
+              <Text style={styles.actionSubtitle}>
+                {lockMethod ? parentalLockLabel(lockMethod) : 'Loading…'}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </View>
+        </TouchableOpacity>
+
         <TouchableOpacity style={[styles.card, styles.actionCard]} onPress={() => router.push('/parent/create' as never)}>
           <View style={styles.rowBetween}>
             <View style={styles.actionTextWrap}>
@@ -285,6 +314,22 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
       </ScrollView>
+      <Modal visible={isEditingLock} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsEditingLock(false)}>
+        <SafeAreaView style={styles.lockModal}>
+          {lockMethod ? (
+            <ParentLockSetup
+              initialMethod={lockMethod}
+              doneLabel="Save"
+              onCancel={() => setIsEditingLock(false)}
+              onDone={(method) => {
+                setLockMethod(method);
+                setIsEditingLock(false);
+              }}
+            />
+          ) : null}
+        </SafeAreaView>
+      </Modal>
+      <ParentLockFirstRun onChosen={setLockMethod} />
     </PageBackground>
   );
 }
@@ -408,6 +453,11 @@ const styles = StyleSheet.create({
     fontSize: fs(24),
     color: colors.dangerStrong,
     fontWeight: '800',
+  },
+  lockModal: {
+    flex: 1,
+    padding: ms(18),
+    backgroundColor: colors.white,
   },
   disabledCard: {
     opacity: 0.6,

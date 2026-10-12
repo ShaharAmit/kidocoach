@@ -19,6 +19,12 @@ service firebase.storage {
       allow write: if false; // Upload only via admin/deployment scripts
     }
 
+    // Activity catalog sources (metadata JSON + artwork) — signed-in app users only, no listing.
+    match /catalog/activities/{file} {
+      allow get: if request.auth != null;
+      allow write: if false; // Upload only via console/admin scripts
+    }
+
     // Generated TTS audio (names embedded in keys) — signed-in users only, no listing.
     match /audio/{allPaths=**} {
       allow get: if request.auth != null;

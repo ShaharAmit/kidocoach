@@ -48,6 +48,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Activity catalog (labels, timings, media versions) — no personal data. Maintained only by
+    // the onCatalogAsset* Storage triggers and functions/scripts/seed-activity-catalog.js.
+    match /catalog/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // Public website bootstrap config (landing video/store links) — no personal data.
     match /public_site/{docId} {
       allow read: if true;

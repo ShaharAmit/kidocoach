@@ -64,7 +64,22 @@
       ],
       "expo-video",
       "expo-apple-authentication",
-      "@react-native-community/datetimepicker"
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": false
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "usePrecompiledModules": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

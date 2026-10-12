@@ -9,6 +9,7 @@ import { getPaidStatus, startPaidStatusSync } from '../services/subscription';
 import { hasCompletedOnboarding } from '../services/profile';
 import { getAccessRoute } from '../utils/accessRoute';
 import { isBootComplete } from '../services/bootState';
+import { onAppEnteredForeground, onAppLeftForeground } from '../services/assetCacheService';
 import { auth, ensureAuth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
@@ -110,6 +111,22 @@ export default function RootLayout() {
       }
     });
 
+    return () => sub.remove();
+  }, []);
+
+  // Every return to the app re-checks the cloud catalog for new or updated activities and
+  // re-validates cached media against it; the live catalog listener only runs while foregrounded.
+  // Cold starts are covered by app/loading.tsx, which runs the same refresh before booting.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        if (isBootComplete()) {
+          onAppEnteredForeground().catch((err) => console.warn('[RootLayout] Catalog refresh failed:', err));
+        }
+      } else if (state === 'background') {
+        onAppLeftForeground();
+      }
+    });
     return () => sub.remove();
   }, []);
 

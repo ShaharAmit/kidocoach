@@ -18,10 +18,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { saveRoutine } from '../../hooks/useRoutine';
 import { cancelNotificationsForRoutine, scheduleRoutineNotification } from '../../services/notifications';
-import { syncRoutineAssets } from '../../services/assetSync';
+import { prioritizeActivityAssets } from '../../services/assetCacheService';
+import { useActivityCatalogRevision } from '../../services/activityCatalog';
 import { ensureAudioForRoutine } from '../../services/tts';
 import { ChildProfile, Routine, ActivityKey, DurationMode } from '../../types';
-import { ACTIVITIES, ACTIVITY_DURATION_MODES, activityKeysForSegment, defaultDurationMinutes, resolveDurationMode, starsForStep } from '../../constants/activities';
+import { activityKeysForSegment, defaultDurationMinutes, defaultDurationMode, getActivityMeta, resolveDurationMode, starsForStep } from '../../constants/activities';
 import { db, ensureAuth } from '../../services/firebase';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { colors, fs, ms, s, vs } from '../../theme';
@@ -246,6 +247,8 @@ export default function CreateRoutineScreen() {
   });
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Re-render the activity picker when the cloud catalog adds, removes or edits activities.
+  useActivityCatalogRevision();
   const [selectedCollapsed, setSelectedCollapsed] = useState(false);
   const [catalogCollapsed, setCatalogCollapsed] = useState(false);
   const [segmentCollapsed, setSegmentCollapsed] = useState(false);
@@ -336,6 +339,8 @@ export default function CreateRoutineScreen() {
   }, [activeSegment]);
 
   const openAddTime = useCallback((activityKey: ActivityKey) => {
+    // Start downloading as soon as the parent picks it, ahead of the background catalog prefetch.
+    prioritizeActivityAssets([activityKey]);
     const current = drafts[activeSegment];
     const suggested =
       current.entries.length > 0
@@ -348,7 +353,7 @@ export default function CreateRoutineScreen() {
       mode: 'add',
       time: coerceTimeToSegment(suggested, activeSegment),
       durationMinutes: String(defaultDurationMinutes(activityKey)),
-      durationMode: ACTIVITY_DURATION_MODES[activityKey],
+      durationMode: defaultDurationMode(activityKey),
       stars: starsForStep([activityKey]),
       activityKey,
     });
@@ -510,9 +515,10 @@ export default function CreateRoutineScreen() {
           await ensureAudioForRoutine(routine);
           nextNotificationId = await scheduleRoutineNotification(routine);
           await saveRoutine({ ...routine, notificationId: nextNotificationId });
-          syncRoutineAssets({ ...routine, notificationId: nextNotificationId }).catch((err) => {
-            console.warn(`[CreateRoutine] Asset sync error for ${segment}:`, err);
-          });
+          prioritizeActivityAssets(
+            normalizedEntries.map((entry) => entry.key),
+            { ...routine, notificationId: nextNotificationId }
+          );
         } else {
           await cancelNotificationsForRoutine(routine.id, routine.userId);
           nextNotificationId = undefined;
@@ -693,7 +699,7 @@ export default function CreateRoutineScreen() {
                 <View style={styles.sectionBorder}>
                   <ScrollView style={styles.selectedScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                     {activeDraft.entries.map((entry, index) => {
-                      const activity = ACTIVITIES[entry.key];
+                      const activity = getActivityMeta(entry.key);
                       return (
                         <View key={entry.id} style={[styles.selectedRow, isEvening && styles.selectedRowEvening]}>
                           <Text style={[styles.selectedOrder, isEvening && styles.selectedOrderEvening]}>
@@ -747,7 +753,7 @@ export default function CreateRoutineScreen() {
                 <ScrollView style={styles.catalogScroll} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   <View style={styles.catalogGrid}>
                     {activityKeysForSegment(activeSegment).map((key) => {
-                      const activity = ACTIVITIES[key];
+                      const activity = getActivityMeta(key);
                       const selectedCount = selectedCounts.get(key) ?? 0;
                       return (
                         <TouchableOpacity
@@ -777,7 +783,7 @@ export default function CreateRoutineScreen() {
                               isEvening && styles.catalogStateEvening,
                             ]}
                           >
-                            {selectedCount > 0 ? `Added ×${selectedCount}` : `Add · ${ACTIVITY_DURATION_MODES[key]}`}
+                            {selectedCount > 0 ? `Added ×${selectedCount}` : `Add · ${defaultDurationMode(key)}`}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -803,7 +809,7 @@ export default function CreateRoutineScreen() {
             </Text>
             <Text style={styles.modalFieldLabel}>Task</Text>
             <Text style={styles.modalTaskName}>
-              {pickerActivityKey ? ACTIVITIES[pickerActivityKey].label : ''}
+              {pickerActivityKey ? getActivityMeta(pickerActivityKey).label : ''}
             </Text>
             <Text style={styles.modalFieldLabel}>Time of task</Text>
             <ScrollView style={styles.timeList} showsVerticalScrollIndicator={false}>

@@ -18,6 +18,7 @@ import {
 import { backUpCurrentFamily, clearLocalFamilySession, recoverSignedInFamily } from '../services/accountSession';
 import { deleteFamilyAccount } from '../services/accountDeletion';
 import { requestParentalGate } from '../components/ParentalGate';
+import ParentLockFirstRun from '../components/ParentLockFirstRun';
 import { getChildProfile } from '../services/profile';
 import { refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { ChildProfile } from '../types';
@@ -139,7 +140,8 @@ export default function ProfileScreen() {
     ]
   );
 
-  const openSubscriptionSettings = () => {
+  const openSubscriptionSettings = async () => {
+    if (!(await requestParentalGate('This opens your store subscription settings.'))) return;
     const url = Platform.OS === 'ios'
       ? 'https://apps.apple.com/account/subscriptions'
       : 'https://play.google.com/store/account/subscriptions';
@@ -274,6 +276,7 @@ export default function ProfileScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <ParentLockFirstRun />
     </PageBackground>
   );
 }

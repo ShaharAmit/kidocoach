@@ -48,6 +48,7 @@ function family(userId = 'guest') {
 
 function harness(extraMocks = {}) {
   const items = new Map();
+  const secureItems = new Map([['parental_lock_v1', '{"userId":"guest","method":"none","updatedAt":1}']]);
   const auth = { currentUser: { uid: 'guest', isAnonymous: true }, authStateReady: async () => {} };
   const state = { remote: null, remoteError: null, writes: [], cancelled: [], scheduled: [], links: [], calls: [] };
   const storage = {
@@ -102,6 +103,11 @@ function harness(extraMocks = {}) {
     'expo-constants': { __esModule: true, default: {}, ExecutionEnvironment: { StoreClient: 'storeClient' } },
     'expo-apple-authentication': { isAvailableAsync: async () => false },
     'expo-crypto': {},
+    'expo-secure-store': {
+      getItemAsync: async (key) => secureItems.get(key) ?? null,
+      setItemAsync: async (key, value) => { secureItems.set(key, value); },
+      deleteItemAsync: async (key) => { secureItems.delete(key); },
+    },
     'firebase/auth': {
       EmailAuthProvider: { credential: (email, password) => ({ email, password }) },
       linkWithCredential: async (user, credential) => {
@@ -119,7 +125,7 @@ function harness(extraMocks = {}) {
     },
     ...extraMocks,
   };
-  return { auth, items, state, load: loader(mocks) };
+  return { auth, items, secureItems, state, load: loader(mocks) };
 }
 
 test('access matrix keeps purchase access independent of child setup', () => {
@@ -140,7 +146,7 @@ test('complete profiles round-trip and reject invalid or foreign cloud data', ()
   for (const invalid of [
     { ...profile, userId: 'someone-else' }, { ...profile, age: NaN },
     { ...profile, scheduledTime: '25:00' }, { ...profile, stepTimes: ['bad'] },
-    { ...profile, activityStack: [['unknown']] }, { ...profile, activityStack: [] },
+    { ...profile, activityStack: [['Not A Key!']] }, { ...profile, activityStack: [] },
     { ...profile, answers: { helpLevel: 'bad' } }, { ...profile, gender: undefined },
   ]) assert.equal(normalizeChildProfile(invalid, 'guest'), null);
 });
@@ -213,7 +219,7 @@ test('offline same-account recovery preserves the usable local setup and reminde
 });
 
 test('failed cross-account recovery isolates the previous family without clearing paid access', async () => {
-  const { load, auth, items, state } = harness();
+  const { load, auth, items, secureItems, state } = harness();
   auth.currentUser = { uid: 'linked', isAnonymous: false };
   items.set('child_profile_v1', JSON.stringify(family()));
   items.set('daily_completion_morning', 'old family progress');
@@ -223,6 +229,7 @@ test('failed cross-account recovery isolates the previous family without clearin
   assert.equal(items.has('child_profile_v1'), false);
   assert.equal(items.has('daily_completion_morning'), false);
   assert.equal(items.get('paid_status_v2'), '1');
+  assert.equal(secureItems.has('parental_lock_v1'), false, 'previous family parent lock is cleared');
   assert.deepEqual(state.cancelled, ['routine-old']);
 });
 

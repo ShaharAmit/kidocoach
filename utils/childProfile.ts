@@ -1,4 +1,4 @@
-import { ACTIVITY_KEYS } from '../constants/activities';
+import { ACTIVITY_KEY_PATTERN } from './activityCatalogModel';
 import {
   ActivityKey,
   ChildProfile,
@@ -14,8 +14,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const isTime = (value: unknown): value is string =>
   typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 
+// Format check only: activities come from the cloud catalog, so a key this build has never seen
+// is still valid (it renders as a placeholder until the catalog loads).
 const isActivity = (value: unknown): value is ActivityKey =>
-  ACTIVITY_KEYS.some((key) => key === value);
+  typeof value === 'string' && ACTIVITY_KEY_PATTERN.test(value);
 
 export function normalizeChildProfile(value: unknown, userId?: string): ChildProfile | null {
   if (!isRecord(value)) return null;
