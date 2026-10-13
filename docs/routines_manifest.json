@@ -194,5 +194,19 @@
         "text": "All your missions are complete. Now lay your head on your soft pillow. Imagine you are floating on a big cozy cloud. Take a deep breath in and let it out. Goodnight."
       }
     }
+  },
+  {
+    "id": "pack_backpack",
+    "title": "Pack Backpack",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Backpack time, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Ready for today's mission? Let's pack our backpack for an awesome day ahead! First step: Unzip! Zip-zap-zoom! Look at that, your bag is ready for your special things. Step one: Grab your water bottle! Slide it right into the side pocket. Boom! Hydration power unlocked! Step two: In goes your yummy lunchbox! And if you're heading to big-kid school, pencil case and folder go right inside. Look at you packing like a pro! Quick look inside... Did we miss anything? Nope, all set! Zip it all the way closed. Snap, shut, and ready to roll! You did that all by yourself! Look at how independent you are! Give me a high-five on the screen! You are totally ready to shine today!"
+      }
+    }
   }
 ]

@@ -108,7 +108,33 @@ test('bundled greetings and the catalog seed match the server legacy templates',
     assert.deepEqual(seed[def.key].part1, { text: def.part1Text, tone: def.part1Tone }, def.key);
   }
   // Activities without uploaded videos carry no greeting, so the catalog keeps them hidden.
-  for (const key of ['pack_backpack', 'wash_face', 'read_book']) assert.equal(seed[key].part1, undefined, key);
+  for (const key of ['pack_backpack', 'wash_face']) assert.equal(seed[key].part1, undefined, key);
+  assert.equal(seed.read_book, undefined);
+
+  // The recording manifest renders greetings with a sample name; the clips' Part 1 audio must say the same thing.
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'docs/routines_manifest.json'), 'utf8'));
+  const manifestTone = { Encouraging: 'encouraging', Cheerful: 'cheerful', Relaxing: 'calm' };
+  const manifestIds = new Set(manifest.map((e) => e.id));
+  for (const def of activities.BUNDLED_ACTIVITY_DEFINITIONS.filter((d) => d.selectable)) {
+    assert.ok(manifestIds.has(def.key), `${def.key} missing from routines_manifest.json`);
+  }
+  for (const entry of manifest) {
+    const def = activities.BUNDLED_ACTIVITY_DEFINITIONS.find((d) => d.key === entry.id);
+    if (!def) {
+      // Cloud-only activity (published via catalog/activities): its greeting lives in the details JSON.
+      assert.match(entry.id, /^[a-z0-9_]+$/, entry.id);
+      for (const [opt, o] of Object.entries(entry).filter(([k]) => k.startsWith('opt_'))) {
+        assert.ok(o.p1.text.includes('Jonathan') && o.p1.prompt in manifestTone, `${entry.id}.${opt} p1`);
+        assert.ok(o.p2.text && !o.p2.text.includes('Jonathan'), `${entry.id}.${opt} p2`);
+      }
+      continue;
+    }
+    assert.deepEqual(
+      { text: entry.opt_a.p1.text, tone: manifestTone[entry.opt_a.p1.prompt] },
+      { text: def.part1Text.replace('{name}', 'Jonathan'), tone: def.part1Tone },
+      entry.id
+    );
+  }
 });
 
 function catalogEntry(overrides = {}) {

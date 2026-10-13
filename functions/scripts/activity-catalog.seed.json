@@ -230,16 +230,5 @@
     "stars": 1,
     "order": 15,
     "promptText": "Let us wash your face, {name}, and feel fresh and clean."
-  },
-  "read_book": {
-    "label": "Read a Book",
-    "emoji": "📚",
-    "subtitle": "Let's go on an adventure!",
-    "timeOfDay": "general",
-    "timerSeconds": 600,
-    "durationMode": "variable",
-    "stars": 1,
-    "order": 16,
-    "promptText": "Let us read a fun book together, {name}."
   }
 }
