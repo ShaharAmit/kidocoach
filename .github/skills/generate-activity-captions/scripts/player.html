@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KidoCoach — New Captions Review</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --line:#334155; --muted:#94a3b8; --new:#38bdf8; --old:#f59e0b; --word:#facc15; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; display:flex; height:100vh; overflow:hidden; }
+  aside { width:220px; background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; padding:12px 8px; flex-shrink:0; }
+  aside h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:4px 8px 10px; }
+  aside button { display:block; width:100%; text-align:left; background:none; border:0; color:#e2e8f0; padding:8px 10px; border-radius:8px; cursor:pointer; font-size:.9rem; }
+  aside button:hover { background:#273449; }
+  aside button.active { background:#2563eb; color:#fff; }
+  main { flex:1; display:flex; flex-direction:column; min-width:0; padding:16px 20px; gap:12px; overflow:hidden; }
+  .top { display:flex; gap:20px; min-height:0; flex:1; }
+  .stage { position:relative; background:#000; border-radius:18px; overflow:hidden; border:2px solid var(--line); aspect-ratio:9/16; height:100%; max-height:calc(100vh - 230px); flex-shrink:0; }
+  .stage video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .stage video.hidden { visibility:hidden; }
+  .captionBar { position:absolute; left:0; right:0; bottom:0; padding:10px 16px; background:rgba(0,0,0,.55); text-align:center; font-weight:700; font-size:18px; line-height:23px; min-height:43px; display:none; }
+  .captionBar.on { display:block; }
+  .captionBar .w { transition:color 40ms; }
+  .captionBar .w.said { color:var(--word); }
+  .partTag { position:absolute; top:10px; left:10px; background:rgba(0,0,0,.6); padding:3px 8px; border-radius:6px; font-size:.75rem; font-variant-numeric:tabular-nums; }
+  .side { flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; min-height:0; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .controls button, .controls select, .controls input { background:#2563eb; color:#fff; border:0; border-radius:8px; padding:8px 12px; font-weight:600; cursor:pointer; font-size:.85rem; }
+  .controls select, .controls input { background:var(--panel); border:1px solid var(--line); }
+  .controls input { width:110px; cursor:text; }
+  .controls .ghost { background:var(--panel); border:1px solid var(--line); }
+  .controls label { font-size:.8rem; color:var(--muted); display:flex; gap:6px; align-items:center; }
+  .clock { font-variant-numeric:tabular-nums; font-size:1rem; color:#e2e8f0; min-width:150px; }
+  .meta { font-size:.8rem; color:var(--muted); }
+  .cueList { flex:1; overflow-y:auto; background:var(--panel); border-radius:10px; border:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  td { padding:6px 10px; border-bottom:1px solid #26344a; vertical-align:top; }
+  td.t { font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; width:1%; }
+  tr { cursor:pointer; }
+  tr:hover td { background:#24334a; }
+  tr.cur td { background:#1d4ed8; color:#fff; }
+  tr.cur td.t { color:#dbeafe; }
+  .timelineWrap { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px; }
+  canvas { width:100%; height:150px; display:block; cursor:crosshair; }
+  .legend { display:flex; gap:14px; font-size:.75rem; color:var(--muted); margin-top:4px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  kbd { background:#0b1222; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:.72rem; }
+</style>
+</head>
+<body>
+<aside><h2>Activities</h2><div id="list"></div></aside>
+<main>
+  <div class="top">
+    <div class="stage" id="stage">
+      <video id="v1" playsinline preload="auto"></video>
+      <video id="v2" playsinline preload="auto" class="hidden"></video>
+      <div class="partTag" id="partTag">Part 1</div>
+      <div class="captionBar" id="captionBar"></div>
+    </div>
+    <div class="side">
+      <div class="controls">
+        <button id="play">▶ Play</button>
+        <button class="ghost" id="restart">⟲ Restart</button>
+        <select id="mode" title="Caption track">
+          <option value="new">New captions</option>
+          <option value="old">Old captions</option>
+          <option value="off">Captions off</option>
+        </select>
+        <select id="rate" title="Playback speed">
+          <option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option>
+        </select>
+        <input id="name" value="Liam" title="Child name for {{name}}">
+        <label><input type="checkbox" id="karaoke" checked style="width:auto"> word highlight</label>
+        <span class="clock" id="clock">0.000 / 0.000</span>
+      </div>
+      <div class="meta" id="meta"></div>
+      <div class="meta"><kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> prev/next cue · <kbd>,</kbd>/<kbd>.</kbd> step one frame (40 ms) · click waveform to seek</div>
+      <div class="cueList"><table id="cues"></table></div>
+    </div>
+  </div>
+  <div class="timelineWrap">
+    <canvas id="timeline"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--new)"></i>New cues</span>
+      <span><i style="background:var(--old)"></i>Old cues</span>
+      <span><i style="background:#64748b"></i>Audio waveform</span>
+      <span><i style="background:#f43f5e"></i>Part 1 | Part 2 splice</span>
+      <span>Wheel = zoom · drag = pan</span>
+    </div>
+  </div>
+</main>
+<script src="captions_data.js"></script>
+<script>
+const DATA = window.CAPTIONS_DATA;
+const FRAME = 0.04;
+const $ = (id) => document.getElementById(id);
+const v1 = $('v1'), v2 = $('v2'), bar = $('captionBar'), canvas = $('timeline'), ctx = canvas.getContext('2d');
+let key = null, d = null, part = 1, playing = false, lastCueIdx = -2;
+let view = { start: 0, span: 10 };
+
+function total() { return d.p1 + d.p2; }
+function now() { return part === 1 ? Math.min(v1.currentTime, d.p1) : d.p1 + v2.currentTime; }
+function cueSet() { const m = $('mode').value; return m === 'old' ? d.old : m === 'new' ? d.cues : []; }
+function fmt(t) { return t.toFixed(3); }
+function esc(s) { return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+function nameOf(text) { return text.replace(/\{\{\s*name\s*\}\}/gi, $('name').value.trim() || 'friend'); }
+
+function load(k) {
+  key = k; d = DATA[k];
+  document.querySelectorAll('aside button').forEach((b) => b.classList.toggle('active', b.dataset.k === k));
+  pause();
+  v1.src = `${k}/${k}_p1.mp4`;
+  v2.src = `${k}/${k}.mp4`;
+  v1.load(); v2.load();
+  setPart(1); v1.currentTime = 0;
+  view = { start: 0, span: Math.min(total(), 12) };
+  $('meta').textContent = `Part 1: ${fmt(d.p1)} s · Part 2: ${fmt(d.p2)} s · Total: ${fmt(total())} s · ${d.cues.length} new cues (${d.old.length} old)`;
+  renderCueTable(); lastCueIdx = -2; tick(true);
+}
+
+function setPart(p) {
+  part = p;
+  v1.classList.toggle('hidden', p !== 1);
+  v2.classList.toggle('hidden', p !== 2);
+  $('partTag').textContent = p === 1 ? 'Part 1' : 'Part 2';
+}
+
+function applyRate() { v1.playbackRate = v2.playbackRate = Number($('rate').value); }
+
+function play() {
+  if (now() >= total() - 0.01) seek(0);
+  applyRate(); playing = true; $('play').textContent = '❚❚ Pause';
+  (part === 1 ? v1 : v2).play();
+}
+function pause() { playing = false; v1.pause(); v2.pause(); $('play').textContent = '▶ Play'; }
+
+function seek(t) {
+  t = Math.max(0, Math.min(total() - 0.001, t));
+  if (t < d.p1) {
+    v2.pause(); v2.currentTime = 0; setPart(1); v1.currentTime = t;
+    if (playing) v1.play();
+  } else {
+    v1.pause(); setPart(2); v2.currentTime = t - d.p1;
+    if (playing) v2.play();
+  }
+  tick(true);
+}
+
+v1.addEventListener('ended', () => {
+  setPart(2); v2.currentTime = 0; applyRate();
+  if (playing) v2.play();
+});
+v2.addEventListener('ended', () => { pause(); });
+
+function renderCueTable() {
+  const cues = cueSet();
+  $('cues').innerHTML = cues.map((c, i) =>
+    `<tr data-i="${i}"><td class="t">${fmt(c.start)}</td><td class="t">${fmt(c.end)}</td><td class="t">${(c.end - c.start).toFixed(2)}s</td><td>${esc(nameOf(c.text))}</td></tr>`
+  ).join('');
+  $('cues').querySelectorAll('tr').forEach((tr) => tr.onclick = () => seek(cues[+tr.dataset.i].start));
+}
+
+function activeCueIdx(t) { return cueSet().findIndex((c) => t >= c.start && t < c.end); }
+
+function renderCaption(t) {
+  const cues = cueSet(), i = activeCueIdx(t);
+  if (i < 0) { bar.classList.remove('on'); bar.innerHTML = ''; return i; }
+  const cue = cues[i];
+  bar.classList.add('on');
+  const useWords = $('mode').value === 'new' && $('karaoke').checked && i > 0;
+  if (!useWords) { bar.textContent = nameOf(cue.text); return i; }
+  const ws = d.words.filter((w) => w.c === i);
+  bar.innerHTML = ws.map((w) => `<span class="w${t >= w.s ? ' said' : ''}">${esc(w.w)}</span>`).join(' ');
+  return i;
+}
+
+function tick(force) {
+  if (!d) return;
+  const t = now();
+  $('clock').textContent = `${fmt(t)} / ${fmt(total())}`;
+  const i = renderCaption(t);
+  if (i !== lastCueIdx || force) {
+    lastCueIdx = i;
+    $('cues').querySelectorAll('tr').forEach((tr) => tr.classList.toggle('cur', +tr.dataset.i === i));
+    const cur = $('cues').querySelector('tr.cur');
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }
+  if (playing && (t < view.start || t > view.start + view.span * 0.85)) view.start = Math.max(0, Math.min(total() - view.span, t - view.span * 0.15));
+  draw(t);
+}
+
+function loop() { tick(false); requestAnimationFrame(loop); }
+
+function draw(t) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  if (canvas.width !== W * dpr) { canvas.width = W * dpr; canvas.height = H * dpr; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const x = (s) => ((s - view.start) / view.span) * W;
+  const waveTop = 46, waveH = H - waveTop - 14, mid = waveTop + waveH / 2;
+
+  // seconds grid
+  ctx.fillStyle = '#64748b'; ctx.font = '10px -apple-system, sans-serif'; ctx.strokeStyle = '#26344a'; ctx.lineWidth = 1;
+  const step = view.span > 30 ? 5 : view.span > 12 ? 2 : view.span > 4 ? 1 : 0.25;
+  for (let s = Math.ceil(view.start / step) * step; s <= view.start + view.span; s += step) {
+    ctx.beginPath(); ctx.moveTo(x(s), 0); ctx.lineTo(x(s), H); ctx.stroke();
+    ctx.fillText(s.toFixed(step < 1 ? 2 : 0) + 's', x(s) + 2, H - 3);
+  }
+
+  // waveform
+  ctx.fillStyle = '#64748b';
+  const per = d.peaks.length / total();
+  for (let px = 0; px < W; px++) {
+    const s0 = view.start + (px / W) * view.span, s1 = view.start + ((px + 1) / W) * view.span;
+    let m = 0;
+    for (let j = Math.floor(s0 * per); j <= Math.min(d.peaks.length - 1, Math.ceil(s1 * per)); j++) m = Math.max(m, d.peaks[j] || 0);
+    const h = Math.max(0.5, m * waveH / 2);
+    ctx.fillRect(px, mid - h, 1, h * 2);
+  }
+
+  // cue lanes
+  const lane = (cues, y, color) => {
+    cues.forEach((c, i) => {
+      const a = x(c.start), b = x(c.end);
+      if (b < 0 || a > W) return;
+      ctx.fillStyle = color; ctx.globalAlpha = i === 0 ? 0.45 : 0.85;
+      ctx.fillRect(a, y, Math.max(1, b - a - 1), 16); ctx.globalAlpha = 1;
+      ctx.save(); ctx.beginPath(); ctx.rect(a, y, b - a - 2, 16); ctx.clip();
+      ctx.fillStyle = '#0f172a'; ctx.font = '600 10px -apple-system, sans-serif';
+      ctx.fillText(nameOf(c.text), a + 3, y + 12); ctx.restore();
+    });
+  };
+  lane(d.cues, 4, '#38bdf8');
+  lane(d.old, 24, '#f59e0b');
+
+  // word boundaries (new) — thin ticks on the waveform
+  if (view.span <= 15) {
+    ctx.strokeStyle = 'rgba(250,204,21,.55)';
+    d.words.forEach((w) => { [w.s].forEach((s) => { const px = x(s); if (px >= 0 && px <= W) { ctx.beginPath(); ctx.moveTo(px, waveTop); ctx.lineTo(px, waveTop + waveH); ctx.stroke(); } }); });
+  }
+
+  // splice + end
+  ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x(d.p1), 0); ctx.lineTo(x(d.p1), H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x(total()), 0); ctx.lineTo(x(total()), H); ctx.stroke();
+
+  // playhead
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x(t), 0); ctx.lineTo(x(t), H); ctx.stroke();
+}
+
+// timeline interaction: click seek, drag pan, wheel zoom
+let drag = null;
+canvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, start: view.start, moved: false }; });
+window.addEventListener('mousemove', (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x;
+  if (Math.abs(dx) > 3) drag.moved = true;
+  if (drag.moved) { view.start = Math.max(0, Math.min(total() - view.span, drag.start - dx / canvas.clientWidth * view.span)); draw(now()); }
+});
+window.addEventListener('mouseup', (e) => {
+  if (drag && !drag.moved) {
+    const r = canvas.getBoundingClientRect();
+    seek(view.start + ((e.clientX - r.left) / r.width) * view.span);
+  }
+  drag = null;
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const at = view.start + ((e.clientX - r.left) / r.width) * view.span;
+  const span = Math.max(0.5, Math.min(total(), view.span * (e.deltaY > 0 ? 1.2 : 1 / 1.2)));
+  view.start = Math.max(0, Math.min(total() - span, at - ((e.clientX - r.left) / r.width) * span));
+  view.span = span; draw(now());
+}, { passive: false });
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') return;
+  const cues = cueSet(), t = now();
+  if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.key === 'ArrowRight') { const n = cues.find((c) => c.start > t + 0.01); if (n) seek(n.start); }
+  else if (e.key === 'ArrowLeft') { const p = [...cues].reverse().find((c) => c.start < t - 0.25); seek(p ? p.start : 0); }
+  else if (e.key === '.') { pause(); seek(t + FRAME); }
+  else if (e.key === ',') { pause(); seek(t - FRAME); }
+});
+
+$('play').onclick = () => (playing ? pause() : play());
+$('restart').onclick = () => { seek(0); };
+$('mode').onchange = () => { renderCueTable(); lastCueIdx = -2; tick(true); };
+$('rate').onchange = applyRate;
+$('name').oninput = () => { renderCueTable(); tick(true); };
+$('karaoke').onchange = () => tick(true);
+
+$('list').innerHTML = Object.keys(DATA).sort().map((k) => `<button data-k="${k}">${k.replace(/_/g, ' ')}</button>`).join('');
+$('list').querySelectorAll('button').forEach((b) => b.onclick = () => load(b.dataset.k));
+load(location.hash.slice(1) in DATA ? location.hash.slice(1) : Object.keys(DATA).sort()[0]);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
