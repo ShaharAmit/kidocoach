@@ -12,6 +12,17 @@
     "part1": {
       "text": "Good morning, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "wake_up"
+    ],
+    "routine": {
+      "morning": {
+        "position": 10,
+        "levels": {
+          "2": 1
+        }
+      }
     }
   },
   "make_bed": {
@@ -27,6 +38,18 @@
     "part1": {
       "text": "Good morning, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "chores",
+      "bed"
+    ],
+    "routine": {
+      "morning": {
+        "position": 15,
+        "levels": {
+          "6": 3
+        }
+      }
     }
   },
   "brush_teeth": {
@@ -42,6 +65,24 @@
     "part1": {
       "text": "Toothbrush time, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "hygiene"
+    ],
+    "routine": {
+      "morning": {
+        "position": 40,
+        "levels": {
+          "2": 2,
+          "4": 1
+        }
+      },
+      "evening": {
+        "position": 45,
+        "levels": {
+          "2": 3
+        }
+      }
     }
   },
   "eat_breakfast": {
@@ -57,6 +98,17 @@
     "part1": {
       "text": "Breakfast time, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "food"
+    ],
+    "routine": {
+      "morning": {
+        "position": 90,
+        "levels": {
+          "2": 1
+        }
+      }
     }
   },
   "get_dressed": {
@@ -72,6 +124,18 @@
     "part1": {
       "text": "Let's get dressed, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "dressing",
+      "clothes"
+    ],
+    "routine": {
+      "morning": {
+        "position": 60,
+        "levels": {
+          "2": 1
+        }
+      }
     }
   },
   "put_shoes_on": {
@@ -87,6 +151,18 @@
     "part1": {
       "text": "All right, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "dressing",
+      "shoes"
+    ],
+    "routine": {
+      "morning": {
+        "position": 70,
+        "levels": {
+          "2": 2
+        }
+      }
     }
   },
   "comb_hair": {
@@ -102,6 +178,17 @@
     "part1": {
       "text": "Let's take care of your hair, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "grooming"
+    ],
+    "routine": {
+      "morning": {
+        "position": 50,
+        "levels": {
+          "4": 3
+        }
+      }
     }
   },
   "drink_water": {
@@ -117,6 +204,18 @@
     "part1": {
       "text": "Water time, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "hydration"
+    ],
+    "routine": {
+      "morning": {
+        "position": 20,
+        "levels": {
+          "2": 2,
+          "4": 0
+        }
+      }
     }
   },
   "homework": {
@@ -132,6 +231,17 @@
     "part1": {
       "text": "All right, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "school"
+    ],
+    "routine": {
+      "evening": {
+        "position": 10,
+        "levels": {
+          "6": 2
+        }
+      }
     }
   },
   "eat_dinner": {
@@ -147,6 +257,17 @@
     "part1": {
       "text": "Dinner time, {name}!",
       "tone": "calm"
+    },
+    "tags": [
+      "food"
+    ],
+    "routine": {
+      "evening": {
+        "position": 30,
+        "levels": {
+          "2": 1
+        }
+      }
     }
   },
   "tidy_room": {
@@ -162,6 +283,25 @@
     "part1": {
       "text": "What a busy day of playing, {name}!",
       "tone": "encouraging"
+    },
+    "tags": [
+      "chores",
+      "toys"
+    ],
+    "routine": {
+      "morning": {
+        "position": 75,
+        "levels": {
+          "2": 3,
+          "6": 0
+        }
+      },
+      "evening": {
+        "position": 20,
+        "levels": {
+          "2": 2
+        }
+      }
     }
   },
   "put_on_pajamas": {
@@ -177,6 +317,19 @@
     "part1": {
       "text": "Time to transform for the night, {name}!",
       "tone": "calm"
+    },
+    "tags": [
+      "dressing",
+      "clothes",
+      "bedtime"
+    ],
+    "routine": {
+      "evening": {
+        "position": 40,
+        "levels": {
+          "2": 1
+        }
+      }
     }
   },
   "bedtime_story": {
@@ -192,6 +345,18 @@
     "part1": {
       "text": "Story time, {name}.",
       "tone": "calm"
+    },
+    "tags": [
+      "reading",
+      "bedtime"
+    ],
+    "routine": {
+      "evening": {
+        "position": 60,
+        "levels": {
+          "2": 2
+        }
+      }
     }
   },
   "go_to_sleep": {
@@ -207,6 +372,17 @@
     "part1": {
       "text": "You did it, {name}.",
       "tone": "calm"
+    },
+    "tags": [
+      "bedtime"
+    ],
+    "routine": {
+      "evening": {
+        "position": 70,
+        "levels": {
+          "2": 1
+        }
+      }
     }
   },
   "pack_backpack": {
@@ -218,7 +394,19 @@
     "durationMode": "variable",
     "stars": 2,
     "order": 14,
-    "promptText": "You are doing great, {name}. Let us pack your backpack so you are ready for school."
+    "promptText": "You are doing great, {name}. Let us pack your backpack so you are ready for school.",
+    "tags": [
+      "school"
+    ],
+    "routine": {
+      "morning": {
+        "position": 80,
+        "levels": {
+          "4": 2,
+          "6": 1
+        }
+      }
+    }
   },
   "wash_face": {
     "label": "Wash Face",
@@ -229,6 +417,18 @@
     "durationMode": "fixed",
     "stars": 1,
     "order": 15,
-    "promptText": "Let us wash your face, {name}, and feel fresh and clean."
+    "promptText": "Let us wash your face, {name}, and feel fresh and clean.",
+    "tags": [
+      "hygiene"
+    ],
+    "routine": {
+      "morning": {
+        "position": 30,
+        "levels": {
+          "4": 2,
+          "6": 1
+        }
+      }
+    }
   }
 }

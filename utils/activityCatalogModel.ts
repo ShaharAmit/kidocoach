@@ -1,5 +1,6 @@
 import type { ActivityDefinition, ActivityTimeOfDay } from '../constants/activities';
 import type { ActivityKey, DurationMode, ToneOption } from '../types';
+import { parseActivityTags, parseRoutineRules } from './routineComposer';
 
 /**
  * Pure model for the Firestore `catalog/activities` document (no Firebase imports, so it is unit
@@ -139,6 +140,8 @@ export function parseActivityCatalog(
         : 1,
       promptText: str(entry.promptText, 300) ?? base?.promptText ?? part1Text,
       selectable: entry.enabled !== false && supported && Boolean(remotePart1Text && media?.p1 && media?.p2),
+      tags: parseActivityTags(entry.tags) ?? base?.tags ?? [],
+      routine: parseRoutineRules(entry.routine) ?? base?.routine ?? {},
     });
   }
 

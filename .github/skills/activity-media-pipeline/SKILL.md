@@ -93,7 +93,7 @@ If a `script≠voice` diff is a real TTS deviation, re-render the audio. Don't p
 
 Archive to `~/workspace/kidocoach-assets/routines/KEY/option_{a|b}/`: `part1.wav`, `part2.wav`, `part1.mp4`, `part2.mp4` (as uploaded), `part1_last_frame.png`, `part{1,2}.srt/.vtt`, `captions_combined.srt/.vtt`, `captions.json`, `player.html`, and `takes/` (every raw render, never deleted; the published take gets `_PUBLISHED`, a replaced one `_superseded`).
 
-For **publish-activity**, build the details JSON from the manifest: `label` = `title`, `part1` = `catalog_part1` from `manifest.py show`. Get the other fields (emoji, subtitle, timeOfDay, timerSeconds, durationMode, stars, order) from the user.
+For **publish-activity**, build the details JSON from the manifest: `label` = `title`, `part1` = `catalog_part1` from `manifest.py show`. Get the other fields (emoji, subtitle, timeOfDay, timerSeconds, durationMode, stars, order, tags, routine) from the user.
 
 When filing an existing video, transcribe it and match the text against `docs/routines_manifest.json` and the `part*.srt` files. Never guess from the file name.
 

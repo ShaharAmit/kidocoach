@@ -41,6 +41,10 @@ export interface CatalogEntry {
   enabled?: boolean;
   minAppVersion?: string;
   promptText?: string;
+  /** Category keys used by the app's routine composer (utils/routineComposer.ts). */
+  tags?: string[];
+  /** Auto-composition per segment: `levels` maps fromAge → 0 never · 1 survival · 2 recommended · 3 independence. */
+  routine?: Partial<Record<'morning' | 'evening', { position: number; levels: Record<string, 0 | 1 | 2 | 3> }>>;
   part1?: CatalogPart1;
   image?: AssetRef;
   assets?: Record<string, Partial<Record<AssetKind, AssetRef>>>;
@@ -104,6 +108,30 @@ function optionalString(raw: Record<string, unknown>, field: string, max: number
   return value.trim();
 }
 
+/** Mirrors `parseRoutineRules` in utils/routineComposer.ts; `undefined` when invalid. */
+function validateRoutineRules(raw: unknown): CatalogEntry['routine'] | undefined {
+  if (!isRecord(raw)) return undefined;
+  const segments = ['morning', 'evening'] as const;
+  if (Object.keys(raw).some((key) => !(segments as readonly string[]).includes(key))) return undefined;
+  const rules: NonNullable<CatalogEntry['routine']> = {};
+  for (const segment of segments) {
+    const placement = raw[segment];
+    if (placement === undefined) continue;
+    if (!isRecord(placement) || !isRecord(placement.levels)) return undefined;
+    if (typeof placement.position !== 'number' || !Number.isFinite(placement.position)) return undefined;
+    const entries = Object.entries(placement.levels);
+    if (!entries.length) return undefined;
+    const levels: Record<string, 0 | 1 | 2 | 3> = {};
+    for (const [age, level] of entries) {
+      if (!/^\d{1,2}$/.test(age) || Number(age) > 17) return undefined;
+      if (level !== 0 && level !== 1 && level !== 2 && level !== 3) return undefined;
+      levels[String(Number(age))] = level;
+    }
+    rules[segment] = { position: placement.position, levels };
+  }
+  return rules;
+}
+
 /** Validates a `catalog/activities/{key}.json` payload. */
 export function validateCatalogMetadata(raw: unknown): { ok: true; value: CatalogMetadata } | { ok: false; errors: string[] } {
   if (!isRecord(raw)) return { ok: false, errors: ['metadata must be a JSON object'] };
@@ -145,6 +173,17 @@ export function validateCatalogMetadata(raw: unknown): { ok: true; value: Catalo
   if (raw.enabled !== undefined) {
     if (typeof raw.enabled === 'boolean') value.enabled = raw.enabled;
     else errors.push('enabled must be a boolean');
+  }
+  if (raw.tags !== undefined) {
+    const tags = raw.tags;
+    if (Array.isArray(tags) && tags.length <= 12 && tags.every((tag) => typeof tag === 'string' && /^[a-z0-9_]{1,32}$/.test(tag))) {
+      value.tags = [...new Set(tags as string[])];
+    } else errors.push('tags must be an array of at most 12 [a-z0-9_] keys');
+  }
+  if (raw.routine !== undefined) {
+    const routine = validateRoutineRules(raw.routine);
+    if (routine) value.routine = routine;
+    else errors.push('routine must be { morning?, evening? } of { position: number, levels: { "<age 0-17>": 0|1|2|3 } }');
   }
 
   if (raw.part1 !== undefined) {

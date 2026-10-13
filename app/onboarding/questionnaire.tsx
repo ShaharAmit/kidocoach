@@ -15,10 +15,12 @@ import {
 import { router } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import PageBackground from '../../components/PageBackground';
-import { isActivitySelectable } from '../../constants/activities';
+import { getSelectableActivityDefinitions } from '../../constants/activities';
+import { composeRoutine } from '../../utils/routineComposer';
+import { refreshActivityCatalog } from '../../services/activityCatalog';
 import { InPageHeader } from '../../components/ScreenHeader';
 import {
-  ActivityKey,
+  ChildGender,
   ChildProfile,
   HelpLevel,
   MasteredTask,
@@ -49,81 +51,6 @@ const DEFAULT_EVENING_TIME = '19:00';
 const MIN_AGE = 2;
 const MAX_AGE = 12;
 
-type AgeBucket = 'toddlers' | 'kindergarten' | 'school';
-
-const AGE_ROUTINE_TEMPLATES: Record<
-  AgeBucket,
-  { morning: ActivityKey[]; evening: ActivityKey[] }
-> = {
-  toddlers: {
-    morning: [
-      'wake_up',
-      'drink_water',
-      'brush_teeth',
-      'get_dressed',
-      'put_shoes_on',
-      'eat_breakfast',
-    ],
-    evening: [
-      'tidy_room',
-      'eat_dinner',
-      'put_on_pajamas',
-      'bedtime_story',
-      'go_to_sleep',
-    ],
-  },
-  kindergarten: {
-    morning: [
-      'wake_up',
-      'drink_water',
-      'wash_face',
-      'brush_teeth',
-      'comb_hair',
-      'get_dressed',
-      'put_shoes_on',
-      'pack_backpack',
-      'eat_breakfast',
-    ],
-    evening: [
-      'tidy_room',
-      'eat_dinner',
-      'put_on_pajamas',
-      'read_book',
-      'bedtime_story',
-      'go_to_sleep',
-    ],
-  },
-  school: {
-    morning: [
-      'wake_up',
-      'drink_water',
-      'wash_face',
-      'brush_teeth',
-      'comb_hair',
-      'get_dressed',
-      'put_shoes_on',
-      'make_bed',
-      'pack_backpack',
-      'eat_breakfast',
-    ],
-    evening: [
-      'homework',
-      'tidy_room',
-      'eat_dinner',
-      'put_on_pajamas',
-      'read_book',
-      'bedtime_story',
-      'go_to_sleep',
-    ],
-  },
-};
-
-function bucketFromAge(age: number): AgeBucket {
-  if (age <= 3) return 'toddlers';
-  if (age <= 5) return 'kindergarten';
-  return 'school';
-}
-
 function buildStepTimes(startTime: string, count: number, intervalMinutes = 10): string[] {
   const [hoursRaw, minutesRaw] = startTime.split(':');
   const hours = Number(hoursRaw);
@@ -144,36 +71,49 @@ type Option<T extends string> = { key: T; label: string };
 const MORNING_STUCK_OPTIONS: Option<MorningStuckPoint>[] = [
   { key: 'getting_out_of_bed', label: 'Getting out of bed' },
   { key: 'getting_dressed', label: 'Getting dressed' },
-  { key: 'brushing_washing', label: 'Brushing teeth & washing' },
-  { key: 'turning_off_screens', label: 'Turning off screens' },
-  { key: 'everything_negotiation', label: 'Everything is a negotiation!' },
+  { key: 'brushing_washing', label: 'Brushing teeth & washing up' },
+  { key: 'turning_off_screens', label: 'Putting screens away' },
+  { key: 'everything_negotiation', label: "Honestly? Everything's a negotiation" },
 ];
 
 const MOTIVATION_OPTIONS: Option<MotivationStyle>[] = [
-  { key: 'race_game', label: 'Turning it into a race/game' },
-  { key: 'autonomy_choose', label: 'Giving them autonomy to choose' },
+  { key: 'race_game', label: 'Turning it into a race or game' },
+  { key: 'autonomy_choose', label: 'Letting them choose' },
   { key: 'praise_encouragement', label: 'Lots of praise and encouragement' },
-  { key: 'hug_connection', label: 'A warm hug and connection' },
+  { key: 'hug_connection', label: 'A warm hug and some connection' },
 ];
 
 const MASTERED_OPTIONS: Option<MasteredTask>[] = [
   { key: 'eating_breakfast', label: 'Eating breakfast' },
-  { key: 'choosing_clothes', label: 'Choosing clothes' },
+  { key: 'choosing_clothes', label: 'Choosing their clothes' },
   { key: 'putting_toys_away', label: 'Putting toys away' },
-  { key: 'none_yet', label: "None yet — that's why I'm here!" },
+  { key: 'none_yet', label: "None yet, that's why we're here!" },
 ];
 
 const HELP_OPTIONS: Option<HelpLevel>[] = [
-  { key: 'independent', label: '"I do it myself!" (Completely independent)' },
+  { key: 'independent', label: '"I can do it myself!" (fully independent)' },
   { key: 'little_push', label: 'Needs a little push to get started' },
-  { key: 'step_by_step', label: 'Needs me step-by-step' },
+  { key: 'step_by_step', label: 'Needs me there step by step' },
 ];
 
 const SPEED_OPTIONS: Option<MorningSpeed>[] = [
-  { key: 'fast_energetic', label: 'Fast & energetic' },
+  { key: 'fast_energetic', label: 'Fast and full of energy' },
   { key: 'slow_dreamy', label: 'Slow and dreamy' },
   { key: 'easily_distracted', label: 'Easily distracted' },
 ];
+
+const GENDER_OPTIONS: { key: ChildGender; label: string; emoji: string }[] = [
+  { key: 'boy', label: 'Boy', emoji: '👦' },
+  { key: 'girl', label: 'Girl', emoji: '👧' },
+];
+
+/** Multi-select toggle where `exclusive` clears every other choice (and vice versa). */
+function toggleMulti<T extends string>(current: T[] | undefined, key: T, exclusive: T): T[] {
+  const list = current ?? [];
+  if (list.includes(key)) return list.filter((item) => item !== key);
+  if (key === exclusive) return [key];
+  return [...list.filter((item) => item !== exclusive), key];
+}
 
 /** Map the motivation answer to the TTS tone used by the rest of the app. */
 function toneFromMotivation(style: MotivationStyle | undefined): ToneOption {
@@ -189,7 +129,7 @@ function toneFromMotivation(style: MotivationStyle | undefined): ToneOption {
   }
 }
 
-// Step 0 = name + age, steps 1..5 = single-select questions. Final = trust screen.
+// Step 0 = name + gender + age, steps 1..5 = questions (1 and 3 are multi-select). Final = trust screen.
 const QUESTION_STEP_COUNT = 6;
 
 export default function QuestionnaireScreen() {
@@ -199,6 +139,7 @@ export default function QuestionnaireScreen() {
   const [saving, setSaving] = useState(false);
 
   const [childName, setChildName] = useState('');
+  const [gender, setGender] = useState<ChildGender | null>(null);
   const [birthDate, setBirthDate] = useState(() => isoDateYearsAgo(6));
 
   const age = useMemo(() => calculateAgeFromISO(birthDate), [birthDate]);
@@ -211,6 +152,7 @@ export default function QuestionnaireScreen() {
       .then((profile) => {
         if (!profile || !mounted) return;
         setChildName(profile.childName);
+        setGender(profile.gender);
         setBirthDate(profile.birthDate ?? isoDateYearsAgo(profile.age));
         if (profile.answers) setAnswers(profile.answers);
       })
@@ -237,13 +179,13 @@ export default function QuestionnaireScreen() {
   const canContinue = useMemo(() => {
     switch (stepIndex) {
       case 0:
-        return isValidChildName(childName) && age >= MIN_AGE && age <= MAX_AGE;
+        return isValidChildName(childName) && !!gender && age >= MIN_AGE && age <= MAX_AGE;
       case 1:
-        return !!answers.morningStuck;
+        return !!answers.stuckPoints?.length;
       case 2:
         return !!answers.motivationStyle;
       case 3:
-        return !!answers.masteredTask;
+        return !!answers.masteredTasks?.length;
       case 4:
         return !!answers.helpLevel;
       case 5:
@@ -251,7 +193,7 @@ export default function QuestionnaireScreen() {
       default:
         return false;
     }
-  }, [stepIndex, childName, age, answers]);
+  }, [stepIndex, childName, gender, age, answers]);
 
   const handleContinue = useCallback(() => {
     if (!canContinue) return;
@@ -269,11 +211,20 @@ export default function QuestionnaireScreen() {
       const user = await ensureAuth();
       const userId = user.uid;
       const tone = toneFromMotivation(answers.motivationStyle);
-      const ageBucket = bucketFromAge(age);
-      const routineTemplate = AGE_ROUTINE_TEMPLATES[ageBucket];
-      // Templates may name activities whose media isn't in the catalog (yet); skip those.
-      const morningActivityStack = routineTemplate.morning.filter(isActivitySelectable).map((key) => [key]);
-      const eveningActivityStack = routineTemplate.evening.filter(isActivitySelectable).map((key) => [key]);
+      // Composition rules (tags/levels) come only from the cloud catalog, so make sure it's loaded.
+      await refreshActivityCatalog();
+      // Only selectable activities (complete media) are used.
+      const selectable = getSelectableActivityDefinitions();
+      const morningActivityStack = composeRoutine(selectable, 'morning', age, answers).map((key) => [key]);
+      const eveningActivityStack = composeRoutine(selectable, 'evening', age, answers).map((key) => [key]);
+      if (!morningActivityStack.length || !eveningActivityStack.length) {
+        Alert.alert(
+          'No connection',
+          "We couldn't load the activities. Check your internet connection and try again."
+        );
+        setSaving(false);
+        return;
+      }
       const morningStepTimes = buildStepTimes(DEFAULT_SCHEDULED_TIME, morningActivityStack.length);
       const eveningStepTimes = buildStepTimes(DEFAULT_EVENING_TIME, eveningActivityStack.length);
 
@@ -282,7 +233,7 @@ export default function QuestionnaireScreen() {
         childName: childName.trim(),
         age,
         birthDate,
-        gender: 'boy',
+        gender: gender ?? 'boy',
         avatarId: DEFAULT_AVATAR_ID,
         voice: DEFAULT_VOICE,
         tone,
@@ -344,7 +295,7 @@ export default function QuestionnaireScreen() {
       Alert.alert('Save failed', 'Could not save setup. Please try again.');
       setSaving(false);
     }
-  }, [age, birthDate, answers, childName, saving]);
+  }, [age, birthDate, answers, childName, gender, saving]);
 
   return (
     <PageBackground variant="clouds">
@@ -395,6 +346,8 @@ export default function QuestionnaireScreen() {
                     <NameAgeStep
                       childName={childName}
                       onChangeName={setChildName}
+                      gender={gender}
+                      onChangeGender={setGender}
                       birthDate={birthDate}
                       age={age}
                       onChangeBirthDate={setBirthDate}
@@ -403,10 +356,17 @@ export default function QuestionnaireScreen() {
 
                   {stepIndex === 1 && (
                     <SelectStep
-                      title={'Where do mornings usually get "stuck"?'}
+                      title="Where do mornings usually get stuck?"
+                      hint="Pick all that apply"
                       options={MORNING_STUCK_OPTIONS}
-                      selected={answers.morningStuck}
-                      onSelect={(key) => setAnswers((a) => ({ ...a, morningStuck: key }))}
+                      selected={answers.stuckPoints ?? []}
+                      multi
+                      onSelect={(key) =>
+                        setAnswers((a) => ({
+                          ...a,
+                          stuckPoints: toggleMulti(a.stuckPoints, key, 'everything_negotiation'),
+                        }))
+                      }
                     />
                   )}
 
@@ -414,17 +374,24 @@ export default function QuestionnaireScreen() {
                     <SelectStep
                       title={`When ${displayName} is dragging their feet, what helps most?`}
                       options={MOTIVATION_OPTIONS}
-                      selected={answers.motivationStyle}
+                      selected={answers.motivationStyle ? [answers.motivationStyle] : []}
                       onSelect={(key) => setAnswers((a) => ({ ...a, motivationStyle: key }))}
                     />
                   )}
 
                   {stepIndex === 3 && (
                     <SelectStep
-                      title={`What is a routine task ${displayName} already does like a pro?`}
+                      title={`Which activities does ${displayName} already handle like a pro?`}
+                      hint="Pick all that apply"
                       options={MASTERED_OPTIONS}
-                      selected={answers.masteredTask}
-                      onSelect={(key) => setAnswers((a) => ({ ...a, masteredTask: key }))}
+                      selected={answers.masteredTasks ?? []}
+                      multi
+                      onSelect={(key) =>
+                        setAnswers((a) => ({
+                          ...a,
+                          masteredTasks: toggleMulti(a.masteredTasks, key, 'none_yet'),
+                        }))
+                      }
                     />
                   )}
 
@@ -432,16 +399,16 @@ export default function QuestionnaireScreen() {
                     <SelectStep
                       title={`How much help does ${displayName} usually need in the morning?`}
                       options={HELP_OPTIONS}
-                      selected={answers.helpLevel}
+                      selected={answers.helpLevel ? [answers.helpLevel] : []}
                       onSelect={(key) => setAnswers((a) => ({ ...a, helpLevel: key }))}
                     />
                   )}
 
                   {stepIndex === 5 && (
                     <SelectStep
-                      title={`What is ${displayName}'s natural morning speed?`}
+                      title={`What's ${displayName}'s natural morning pace?`}
                       options={SPEED_OPTIONS}
-                      selected={answers.morningSpeed}
+                      selected={answers.morningSpeed ? [answers.morningSpeed] : []}
                       onSelect={(key) => setAnswers((a) => ({ ...a, morningSpeed: key }))}
                     />
                   )}
@@ -475,12 +442,16 @@ export default function QuestionnaireScreen() {
 function NameAgeStep({
   childName,
   onChangeName,
+  gender,
+  onChangeGender,
   birthDate,
   age,
   onChangeBirthDate,
 }: {
   childName: string;
   onChangeName: (value: string) => void;
+  gender: ChildGender | null;
+  onChangeGender: (value: ChildGender) => void;
   birthDate: string;
   age: number;
   onChangeBirthDate: (value: string) => void;
@@ -535,6 +506,28 @@ function NameAgeStep({
           returnKeyType="done"
           maxLength={MAX_CHILD_NAME_LENGTH}
         />
+      </View>
+
+      <Text style={[styles.fieldLabel, { marginTop: vs(22) }]}>Boy or girl?</Text>
+      <View style={styles.genderRow} accessibilityRole="radiogroup">
+        {GENDER_OPTIONS.map((option) => {
+          const active = gender === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              style={[styles.option, styles.genderOption, active && styles.optionSelected]}
+              onPress={() => onChangeGender(option.key)}
+              activeOpacity={0.85}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
+            >
+              <Text style={styles.inputIcon}>{option.emoji}</Text>
+              <Text style={[styles.optionLabel, active && styles.optionLabelSelected]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <Text style={[styles.fieldLabel, { marginTop: vs(22) }]}>How old are they?</Text>
@@ -600,30 +593,44 @@ function NameAgeStep({
 
 function SelectStep<T extends string>({
   title,
+  hint,
   options,
   selected,
+  multi = false,
   onSelect,
 }: {
   title: string;
+  hint?: string;
   options: Option<T>[];
-  selected: T | undefined;
+  selected: T[];
+  multi?: boolean;
   onSelect: (key: T) => void;
 }) {
   return (
     <View>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <View style={styles.optionsList}>
+      <Text style={[styles.cardTitle, hint ? styles.cardTitleWithHint : null]}>{title}</Text>
+      {hint ? <Text style={styles.selectHint}>{hint}</Text> : null}
+      <View style={styles.optionsList} accessibilityRole={multi ? undefined : 'radiogroup'}>
         {options.map((option) => {
-          const active = selected === option.key;
+          const active = selected.includes(option.key);
           return (
             <TouchableOpacity
               key={option.key}
               style={[styles.option, active && styles.optionSelected]}
               onPress={() => onSelect(option.key)}
               activeOpacity={0.85}
+              accessibilityRole={multi ? 'checkbox' : 'radio'}
+              accessibilityState={{ checked: active }}
             >
-              <View style={[styles.radio, active && styles.radioSelected]}>
-                {active && <View style={styles.radioInner} />}
+              <View
+                style={[
+                  styles.radio,
+                  multi && styles.checkbox,
+                  active && styles.radioSelected,
+                  active && multi && styles.checkboxSelected,
+                ]}
+              >
+                {active && (multi ? <Text style={styles.checkmark}>✓</Text> : <View style={styles.radioInner} />)}
               </View>
               <Text style={[styles.optionLabel, active && styles.optionLabelSelected]}>
                 {option.label}
@@ -654,9 +661,9 @@ function FinalCard({
           <Text style={styles.finalEmoji}>🎉</Text>
           <Text style={styles.finalTitle}>Awesome!</Text>
           <Text style={styles.finalBody}>
-            Becky is customizing a routine specifically to help{' '}
-            <Text style={styles.finalName}>{name}</Text> build independence, while leaving plenty
-            of time for the things they love.
+            Becky is building a routine just for{' '}
+            <Text style={styles.finalName}>{name}</Text>, focused on the moments that get stuck,
+            with plenty of time left for the things they love.
           </Text>
           <Text style={styles.finalCta}>Let&apos;s go!</Text>
         </View>
@@ -775,6 +782,15 @@ const styles = StyleSheet.create({
     color: TEAL_DARK,
     marginBottom: vs(24),
   },
+  cardTitleWithHint: {
+    marginBottom: vs(6),
+  },
+  selectHint: {
+    fontSize: fs(14),
+    color: '#5C7A78',
+    fontWeight: '600',
+    marginBottom: vs(18),
+  },
   heartIcon: {
     fontSize: fs(22),
   },
@@ -870,6 +886,15 @@ const styles = StyleSheet.create({
     paddingVertical: vs(16),
     gap: s(14),
   },
+  genderRow: {
+    flexDirection: 'row',
+    gap: s(12),
+  },
+  genderOption: {
+    flex: 1,
+    paddingVertical: vs(12),
+    gap: s(8),
+  },
   optionSelected: {
     borderColor: TEAL,
     backgroundColor: '#EAF7F6',
@@ -891,6 +916,18 @@ const styles = StyleSheet.create({
     height: s(12),
     borderRadius: ms(6),
     backgroundColor: TEAL,
+  },
+  checkbox: {
+    borderRadius: ms(7),
+  },
+  checkboxSelected: {
+    backgroundColor: TEAL,
+  },
+  checkmark: {
+    color: colors.white,
+    fontSize: fs(14),
+    fontWeight: '800',
+    lineHeight: fs(16),
   },
   optionLabel: {
     flex: 1,

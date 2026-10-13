@@ -336,13 +336,8 @@ export default function PaywallScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }} disabled={restoring || purchasing}>
-          <Text style={[styles.footerLink, { textAlign: 'center', marginVertical: vs(14) }]}>
-            Parent sign in / registration
-          </Text>
-        </TouchableOpacity>
         <Text style={[styles.planBilled, { textAlign: 'center', marginBottom: vs(12) }]}>
-          Restore Purchases restores paid access only. Sign in to a linked parent account to recover your family.
+          Restore Purchases restores paid access only. sign in to a linked parent account to recover your family.
         </Text>
         <View style={styles.footerRow}>
           <TouchableOpacity onPress={handleRestore} disabled={restoring || purchasing}>
@@ -531,10 +526,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFF',
-    borderRadius: ms(16),
-    paddingVertical: vs(14),
-    paddingHorizontal: s(16),
-    marginBottom: vs(16),
+    borderRadius: ms(12),
+    paddingVertical: vs(10),
+    paddingHorizontal: s(12),
+    marginBottom: vs(12),
   },
   notifyLabel: {
     fontSize: fs(15),

@@ -2,6 +2,8 @@ import { ACTIVITY_KEY_PATTERN } from './activityCatalogModel';
 import {
   ActivityKey,
   ChildProfile,
+  MasteredTask,
+  MorningStuckPoint,
   QuestionnaireAnswers,
   normalizeActivityStack,
   normalizeStepTimes,
@@ -18,6 +20,50 @@ const isTime = (value: unknown): value is string =>
 // is still valid (it renders as a placeholder until the catalog loads).
 const isActivity = (value: unknown): value is ActivityKey =>
   typeof value === 'string' && ACTIVITY_KEY_PATTERN.test(value);
+
+const STUCK_POINTS: readonly MorningStuckPoint[] = [
+  'getting_out_of_bed', 'getting_dressed', 'brushing_washing', 'turning_off_screens', 'everything_negotiation',
+];
+const MASTERED_TASKS: readonly MasteredTask[] = ['eating_breakfast', 'choosing_clothes', 'putting_toys_away', 'none_yet'];
+const SINGLE_CHOICES = {
+  motivationStyle: ['race_game', 'autonomy_choose', 'praise_encouragement', 'hug_connection'],
+  helpLevel: ['independent', 'little_push', 'step_by_step'],
+  morningSpeed: ['fast_energetic', 'slow_dreamy', 'easily_distracted'],
+} as const;
+
+/**
+ * Multi-select answer: the new array field, else the legacy single-value field (profiles saved
+ * before multi-select). `null` = invalid. An exclusive option wins over everything else.
+ */
+function parseMultiAnswer<T extends string>(
+  list: unknown,
+  legacy: unknown,
+  allowed: readonly T[],
+  exclusive: T
+): T[] | undefined | null {
+  const raw = list !== undefined ? list : legacy !== undefined ? [legacy] : undefined;
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw) || !raw.every((item) => allowed.includes(item as T))) return null;
+  const unique = allowed.filter((option) => raw.includes(option));
+  if (!unique.length) return undefined;
+  return unique.includes(exclusive) ? [exclusive] : unique;
+}
+
+function normalizeAnswers(raw: Record<string, unknown>): QuestionnaireAnswers | null {
+  const answers: QuestionnaireAnswers = {};
+  const stuckPoints = parseMultiAnswer(raw.stuckPoints, raw.morningStuck, STUCK_POINTS, 'everything_negotiation');
+  const masteredTasks = parseMultiAnswer(raw.masteredTasks, raw.masteredTask, MASTERED_TASKS, 'none_yet');
+  if (stuckPoints === null || masteredTasks === null) return null;
+  if (stuckPoints) answers.stuckPoints = stuckPoints;
+  for (const [key, allowed] of Object.entries(SINGLE_CHOICES) as [keyof typeof SINGLE_CHOICES, readonly string[]][]) {
+    const answer = raw[key];
+    if (answer === undefined) continue;
+    if (typeof answer !== 'string' || !allowed.includes(answer)) return null;
+    (answers as Record<string, string>)[key] = answer;
+  }
+  if (masteredTasks) answers.masteredTasks = masteredTasks;
+  return answers;
+}
 
 export function normalizeChildProfile(value: unknown, userId?: string): ChildProfile | null {
   if (!isRecord(value)) return null;
@@ -54,18 +100,9 @@ export function normalizeChildProfile(value: unknown, userId?: string): ChildPro
   let answers: QuestionnaireAnswers | undefined;
   if (value.answers !== undefined) {
     if (!isRecord(value.answers)) return null;
-    const choices = {
-      morningStuck: ['getting_out_of_bed', 'getting_dressed', 'brushing_washing', 'turning_off_screens', 'everything_negotiation'],
-      motivationStyle: ['race_game', 'autonomy_choose', 'praise_encouragement', 'hug_connection'],
-      masteredTask: ['eating_breakfast', 'choosing_clothes', 'putting_toys_away', 'none_yet'],
-      helpLevel: ['independent', 'little_push', 'step_by_step'],
-      morningSpeed: ['fast_energetic', 'slow_dreamy', 'easily_distracted'],
-    };
-    for (const [key, allowed] of Object.entries(choices)) {
-      const answer = value.answers[key];
-      if (answer !== undefined && (typeof answer !== 'string' || !allowed.includes(answer))) return null;
-    }
-    answers = value.answers;
+    const parsed = normalizeAnswers(value.answers);
+    if (!parsed) return null;
+    answers = parsed;
   }
 
   return {

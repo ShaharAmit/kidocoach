@@ -35,9 +35,11 @@ export type HelpLevel = 'independent' | 'little_push' | 'step_by_step';
 export type MorningSpeed = 'fast_energetic' | 'slow_dreamy' | 'easily_distracted';
 
 export interface QuestionnaireAnswers {
-  morningStuck?: MorningStuckPoint;
+  /** Multi-select. `everything_negotiation` is exclusive. Replaces the legacy single `morningStuck`. */
+  stuckPoints?: MorningStuckPoint[];
   motivationStyle?: MotivationStyle;
-  masteredTask?: MasteredTask;
+  /** Multi-select. `none_yet` is exclusive. Replaces the legacy single `masteredTask`. */
+  masteredTasks?: MasteredTask[];
   helpLevel?: HelpLevel;
   morningSpeed?: MorningSpeed;
 }

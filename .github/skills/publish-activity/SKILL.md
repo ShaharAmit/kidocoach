@@ -43,6 +43,7 @@ Validate before upload:
 - `part1.tone` ∈ `encouraging|cheerful|calm`.
 - `timeOfDay` ∈ `morning|evening|general`. `timerSeconds` is an integer from 10 to 10800. `durationMode` ∈ `fixed|variable`.
 - `stars` ∈ 0/1/2. `order` is a number (existing activities use 0–16). Optional: `enabled: false`, `minAppVersion: "x.y.z"`.
+- Optional `tags`: up to 12 `[a-z0-9_]` category keys. Optional `routine`: `{ "morning"?: { "position": n, "levels": { "<fromAge>": 0|1|2|3 } }, "evening"?: … }`. Without `routine` the activity is never auto-added to new routines, only picked manually. See docs/ADDING_ACTIVITIES.md for the tag vocabulary and levels.
 
 The parser of record is `functions/src/catalogModel.ts`. Check it when a field is ambiguous.
 

@@ -79,7 +79,7 @@ Post-setup core flow:
 7. `hasDebugHomeAccess()` short-circuits the paywall during the current session (set by questionnaire save).
 
 ### Onboarding (`app/onboarding/`)
-- **`welcome.tsx`**: Downloads and plays the locally cached `welcome.mp4` via `expo-video`. A Continue button appears only after `playToEnd` fires (or after an 8 s start timeout / 30 s global safety net). Tapping Continue navigates to `/onboarding/questionnaire`.
+- **`welcome.tsx`**: Downloads and plays the locally cached `welcome.mp4` via `expo-video`. A Continue button appears only after `playToEnd` fires, after the top-right **Skip** button is tapped, or after an 8 s start timeout / 30 s safety net (the safety net is cancelled once the video is ready). Leaving the app pauses the video; tapping the video pauses/resumes it, and a ▶ overlay shows while paused (replays from the start after it ended). Tapping Continue navigates to `/onboarding/questionnaire`.
 - **`questionnaire.tsx`**: Multi-step parental setup form — child name, age, gender, voice, tone, activity selection, per-step scheduled times. On save:
   1. Calls `ensureAuth()` to get `userId`.
   2. Writes `Routine` to Firestore via `saveRoutine()`.
@@ -88,7 +88,7 @@ Post-setup core flow:
   5. Persists `ChildProfile` to AsyncStorage via `saveChildProfile()`.
   6. Calls `grantDebugHomeAccess()` so the session can reach home.
   7. Navigates to `/loading?mode=generating_experience` (paid) or `/paywall`. Purchase/restore are behind the strict (math) parental gate; the parent picks a lock method later, on first entry to Settings/Profile.
-  Age templates only include activities the catalog marks selectable.
+  Routines are composed by `composeRoutine()` (`utils/routineComposer.ts`) from each activity's catalog `tags` + `routine` levels (1 survival · 2 recommended · 3 independence) and the answers: stuck points (multi-select) pull tagged activities in, mastered activities (multi-select) leave optional ones out. Only selectable activities are used.
 - **Parent lock**: no onboarding step. `ParentLockFirstRun` (mounted in Settings and Profile) shows `ParentLockSetup` full-screen on the first visit after onboarding, when `getParentalLockSetupState()` is `unset` (cloud-confirmed; skipped offline): 4-digit PIN or math question (default). Biometrics and "no lock" were removed; a saved `biometric`/`none` reads as unset, so the parent picks again.
 - **Parental gate**: `requestParentalGate()` has no grace window — every call challenges. "Forgot PIN?" (parent-tapped; wrong tries only lock entry) runs a 30 s wait → 2 harder questions in a row (`newRecoveryChallenge`, `utils/parentalChallenge.ts`) → mandatory new PIN, so recovery is never weaker than the math gate.
 

@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
+  Pressable,
   View,
   Image,
   StyleSheet,
@@ -15,6 +17,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { downloadWelcomeAssets, getWelcomeAssetPaths } from '../../services/assetCacheService';
 import { getOrExtractMobilePoster } from '../../services/mobileVideoCache';
 import { colors, fs, ms, s, vs } from '../../theme';
@@ -24,14 +27,27 @@ type WelcomeVideoPlayerProps = {
   videoPath: string;
   posterUri?: string;
   height: number;
+  topInset: number;
+  showSkip: boolean;
+  onReady: () => void;
   onEnded: () => void;
 };
 
 // If the video hasn't started rendering within this many ms, skip it.
 const VIDEO_START_TIMEOUT_MS = 8_000;
 
-function WelcomeVideoPlayer({ videoPath, posterUri, height, onEnded }: WelcomeVideoPlayerProps) {
+function WelcomeVideoPlayer({
+  videoPath,
+  posterUri,
+  height,
+  topInset,
+  showSkip,
+  onReady,
+  onEnded,
+}: WelcomeVideoPlayerProps) {
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const endedRef = useRef(false);
 
   const videoPlayer = useVideoPlayer(videoPath, (player) => {
     player.loop = false;
@@ -52,6 +68,8 @@ function WelcomeVideoPlayer({ videoPath, posterUri, height, onEnded }: WelcomeVi
 
       videoSub = videoPlayer.addListener('playToEnd', () => {
         clearTimeout(startTimer);
+        endedRef.current = true;
+        setPaused(true);
         onEnded();
       });
 
@@ -61,6 +79,7 @@ function WelcomeVideoPlayer({ videoPath, posterUri, height, onEnded }: WelcomeVi
         if (s?.status === 'readyToPlay') {
           setIsVideoReady(true);
           clearTimeout(startTimer);
+          onReady();
         } else if (s?.error || s?.status === 'error') {
           console.warn('[Welcome] video player error — skipping', status);
           clearTimeout(startTimer);
@@ -89,6 +108,41 @@ function WelcomeVideoPlayer({ videoPath, posterUri, height, onEnded }: WelcomeVi
         // no-op
       }
     };
+  }, [onEnded, onReady, videoPlayer]);
+
+  // Leaving the app pauses the video; it stays paused until the user taps play.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') return;
+      try {
+        if (videoPlayer.playing) videoPlayer.pause();
+      } catch {
+        // player already released
+      }
+      setPaused(true);
+    });
+    return () => sub.remove();
+  }, [videoPlayer]);
+
+  const togglePlayback = useCallback(() => {
+    if (!paused) {
+      videoPlayer.pause();
+      setPaused(true);
+      return;
+    }
+    if (endedRef.current) {
+      endedRef.current = false;
+      videoPlayer.replay();
+    } else {
+      videoPlayer.play();
+    }
+    setPaused(false);
+  }, [paused, videoPlayer]);
+
+  const skip = useCallback(() => {
+    videoPlayer.pause();
+    setPaused(true);
+    onEnded();
   }, [onEnded, videoPlayer]);
 
   return (
@@ -108,6 +162,29 @@ function WelcomeVideoPlayer({ videoPath, posterUri, height, onEnded }: WelcomeVi
           resizeMode="contain"
         />
       ) : null}
+      <Pressable
+        style={styles.tapLayer}
+        onPress={togglePlayback}
+        accessibilityRole="button"
+        accessibilityLabel={paused ? 'Play welcome video' : 'Pause welcome video'}
+      >
+        {paused ? (
+          <View style={styles.playButton}>
+            <MaterialCommunityIcons name="play" size={ms(44)} color="#FFF" />
+          </View>
+        ) : null}
+      </Pressable>
+      {showSkip ? (
+        <TouchableOpacity
+          style={[styles.skipButton, { top: topInset + vs(12) }]}
+          onPress={skip}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Skip welcome video"
+        >
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
@@ -125,6 +202,12 @@ export default function WelcomeScreen() {
   const [assetsReady, setAssetsReady] = useState(false);
   const [posterUri, setPosterUri] = useState<string | undefined>(undefined);
   const forceShowContinue = useCallback(() => setVideoDone(true), []);
+  const maxWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Once the video plays, the safety net is no longer needed (and would skip a paused video).
+  const handleVideoReady = useCallback(() => {
+    if (maxWaitTimerRef.current) clearTimeout(maxWaitTimerRef.current);
+    maxWaitTimerRef.current = null;
+  }, []);
 
   const { videoPath } = useMemo(() => getWelcomeAssetPaths(), []);
 
@@ -134,6 +217,7 @@ export default function WelcomeScreen() {
     const maxWaitTimer = setTimeout(() => {
       if (mounted) forceShowContinue();
     }, MAX_VIDEO_WAIT_MS);
+    maxWaitTimerRef.current = maxWaitTimer;
 
     async function prepareAssets() {
       setIsPreparing(true);
@@ -213,6 +297,9 @@ export default function WelcomeScreen() {
           videoPath={videoPath}
           posterUri={posterUri}
           height={screenHeight}
+          topInset={insets.top}
+          showSkip={!videoDone}
+          onReady={handleVideoReady}
           onEnded={forceShowContinue}
         />
       ) : (
@@ -269,6 +356,35 @@ const styles = StyleSheet.create({
   posterOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 10,
+  },
+  tapLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playButton: {
+    width: s(84),
+    height: s(84),
+    borderRadius: s(42),
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: s(4),
+  },
+  skipButton: {
+    position: 'absolute',
+    right: s(16),
+    zIndex: 30,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: ms(20),
+    paddingHorizontal: s(16),
+    paddingVertical: vs(8),
+  },
+  skipText: {
+    color: '#FFF',
+    fontSize: fs(15),
+    fontWeight: '700',
   },
   fallback: {
     width: '100%',

@@ -2,6 +2,21 @@ import { ActivityKey, ActivityMeta, DurationMode, ToneOption } from '../types';
 import { colors } from '../theme';
 
 export type ActivityTimeOfDay = 'morning' | 'evening' | 'general';
+export type RoutineSegment = 'morning' | 'evening';
+
+/**
+ * Routine template levels: 1 = survival (always included), 2 = recommended, 3 = independence,
+ * 0 = never auto-included (parents can still add it manually).
+ */
+export type RoutineLevel = 0 | 1 | 2 | 3;
+
+/** Where an activity lands when a routine is auto-composed for one segment. */
+export interface RoutinePlacement {
+  /** Sort key inside the composed routine (lower runs first). */
+  position: number;
+  /** `{ fromAge: level }`. The entry with the highest age ≤ the child's age applies; none → 0. */
+  levels: Record<string, RoutineLevel>;
+}
 
 /**
  * Everything the app knows about one activity. Bundled defaults below are the offline fallback;
@@ -27,11 +42,15 @@ export interface ActivityDefinition {
   promptText: string;
   /** Parents may add it to a routine (complete media, enabled, supported by this app build). */
   selectable: boolean;
+  /** Category keys (`[a-z0-9_]+`) the routine composer matches questionnaire answers against. */
+  tags: string[];
+  /** Auto-composition rules per segment; a segment without one is only added manually. */
+  routine: Partial<Record<RoutineSegment, RoutinePlacement>>;
 }
 
 const FALLBACK_TIMER_SECONDS = 120;
 
-type BundledActivity = Omit<ActivityDefinition, 'key' | 'order' | 'part1Version'>;
+type BundledActivity = Omit<ActivityDefinition, 'key' | 'order' | 'part1Version' | 'tags' | 'routine'>;
 
 // Activities without uploaded videos stay known (so existing routines still render) but are not
 // selectable until the cloud catalog reports complete media for them.
@@ -141,7 +160,15 @@ const BUNDLED: Record<string, BundledActivity> = {
 };
 
 export const BUNDLED_ACTIVITY_DEFINITIONS: ActivityDefinition[] = Object.entries(BUNDLED).map(
-  ([key, value], order) => ({ ...value, key, order, part1Version: 1 })
+  ([key, value], order) => ({
+    ...value,
+    key,
+    order,
+    part1Version: 1,
+    // Routine composition data lives only in the cloud catalog (`tags` / `routine`).
+    tags: [],
+    routine: {},
+  })
 );
 
 function fillName(template: string, name: string): string {
@@ -181,6 +208,8 @@ function placeholderDefinition(key: ActivityKey): ActivityDefinition {
     part1Version: 1,
     promptText: `${label} time, {name}!`,
     selectable: false,
+    tags: [],
+    routine: {},
   };
 }
 
@@ -244,6 +273,11 @@ export function isKnownActivity(key: ActivityKey): boolean {
 
 export function isActivitySelectable(key: ActivityKey): boolean {
   return DEFINITIONS[key]?.selectable === true;
+}
+
+/** Selectable activities in catalog order (input for `composeRoutine`). */
+export function getSelectableActivityDefinitions(): ActivityDefinition[] {
+  return ACTIVITY_KEYS.map((key) => DEFINITIONS[key]).filter((def) => def?.selectable);
 }
 
 export function resolveDurationMode(

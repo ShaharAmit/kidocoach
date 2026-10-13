@@ -53,8 +53,32 @@ Upload the files below to Firebase Storage. The app picks the activity up the ne
 | `durationMode` | `fixed` (wait the full timer) · `variable` (can finish early) |
 | `stars` | `0` · `1` · `2` |
 | `order` | Position in the picker (existing activities use 0–16) |
+| `tags` | Category keys (`[a-z0-9_]`, max 12) matched against questionnaire answers — see below |
+| `routine` | When the activity is auto-added to a new family's routine — see below |
 | `enabled` | `false` hides it from the picker |
 | `minAppVersion` | e.g. `"1.2.0"`: hidden from older app builds |
+
+### Auto-adding to routines (`tags` + `routine`)
+
+New families get a routine composed from these fields (`utils/routineComposer.ts`). They live **only** in the catalog: the app bundles no routine data, so an activity without `routine` is never auto-added.
+
+```json
+"tags": ["pets", "chores"],
+"routine": { "morning": { "position": 85, "levels": { "5": 2, "10": 1 } } }
+```
+
+- `levels` maps *from age* → level. The entry with the highest age ≤ the child's age applies; no entry → `0`.
+  `1` survival (always added) · `2` recommended · `3` independence · `0` never auto-added.
+- The questionnaire picks the template: survival, recommended (default) or independence. The evening always uses recommended.
+- `position` orders the composed routine (wake up 10 … breakfast 90; evening homework 10 … sleep 70).
+- Tags the questionnaire understands. **Stuck points** add any age-appropriate activity with the tag, whatever its level. **Mastered activities** leave out level 2–3 activities with the tag (parents can still add them manually):
+
+| Answer | Tag |
+|---|---|
+| Stuck: getting out of bed · getting dressed · brushing & washing · screens | `wake_up` · `dressing` · `hygiene` · `screens` |
+| Mastered: breakfast · choosing clothes · putting toys away | `food` · `clothes` · `toys` |
+
+Other tags in use: `chores`, `bed`, `hydration`, `grooming`, `shoes`, `school`, `reading`, `bedtime`. Without `routine`, the activity is picker-only.
 
 ## 3. Upload
 
