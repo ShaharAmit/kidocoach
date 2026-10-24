@@ -339,9 +339,11 @@ export default function CreateRoutineScreen() {
   }, [activeSegment]);
 
   const openAddTime = useCallback((activityKey: ActivityKey) => {
+    const current = drafts[activeSegment];
+    // Each activity appears at most once per routine (morning and evening are separate routines).
+    if (current.entries.some((entry) => entry.key === activityKey)) return;
     // Start downloading as soon as the parent picks it, ahead of the background catalog prefetch.
     prioritizeActivityAssets([activityKey]);
-    const current = drafts[activeSegment];
     const suggested =
       current.entries.length > 0
         ? addMinutes(current.entries[current.entries.length - 1].time, 15)
@@ -416,6 +418,7 @@ export default function CreateRoutineScreen() {
       }
 
       if (timePicker.mode === 'add' && timePicker.activityKey) {
+        if (current.entries.some((entry) => entry.key === timePicker.activityKey)) return prev;
         const entries = [
           ...current.entries,
           {
@@ -764,6 +767,8 @@ export default function CreateRoutineScreen() {
                             isEvening && styles.catalogChipEvening,
                           ]}
                           onPress={() => openAddTime(key)}
+                          disabled={selectedCount > 0}
+                          accessibilityState={{ disabled: selectedCount > 0 }}
                           activeOpacity={0.85}
                         >
                           <Text style={styles.catalogEmoji}>{activity.emoji}</Text>
@@ -783,7 +788,7 @@ export default function CreateRoutineScreen() {
                               isEvening && styles.catalogStateEvening,
                             ]}
                           >
-                            {selectedCount > 0 ? `Added ×${selectedCount}` : `Add · ${defaultDurationMode(key)}`}
+                            {selectedCount > 0 ? 'Added ✓' : `Add · ${defaultDurationMode(key)}`}
                           </Text>
                         </TouchableOpacity>
                       );

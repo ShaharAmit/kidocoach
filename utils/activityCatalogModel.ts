@@ -114,6 +114,7 @@ export function parseActivityCatalog(
     const media = entryAssets[avatarId];
     const stars = entry.stars;
     const timer = entry.timerSeconds;
+    const slot = entry.scheduleMinutes;
 
     if (!label) continue;
 
@@ -128,6 +129,9 @@ export function parseActivityCatalog(
       timerSeconds: typeof timer === 'number' && Number.isInteger(timer) && timer >= 10 && timer <= 3 * 60 * 60
         ? timer
         : 120,
+      ...(typeof slot === 'number' && Number.isInteger(slot) && slot >= 1 && slot <= 240
+        ? { scheduleMinutes: slot }
+        : {}),
       durationMode: MODES.includes(entry.durationMode as DurationMode)
         ? (entry.durationMode as DurationMode)
         : 'variable',

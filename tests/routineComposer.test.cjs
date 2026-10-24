@@ -13,6 +13,7 @@ function createLoader() {
     const module = { exports: {} };
     cache.set(absolute, module);
     const localRequire = (id) => {
+      if (id === '@/theme/colors') return { colors: {} };
       if (!id.startsWith('.')) throw new Error(`Unexpected dependency: ${id}`);
       const base = path.resolve(path.dirname(absolute), id);
       if (base === path.join(root, 'theme')) return { colors: { primary: '#000' } };
@@ -212,4 +213,27 @@ test('slow and dreamy caps the morning at the recommended template', () => {
   assert.equal(composer.pickMorningTier(8, { helpLevel: 'independent', morningSpeed: 'slow_dreamy' }), 2);
   // Never raised: survival stays survival.
   assert.equal(composer.pickMorningTier(5, { stuckPoints: ['everything_negotiation'], morningSpeed: 'slow_dreamy' }), 1);
+});
+
+test('schedule: shared 30-min window, own slots for long activities', () => {
+  const load = createLoader();
+  const { scheduleFromStart, scheduleToEnd } = load('utils/routineSchedule.ts');
+  const slots = { eat_dinner: 60 };
+  const slot = (key) => slots[key];
+
+  // Morning: 3 ordinary tasks split 30 min evenly from wake-up.
+  assert.deepEqual(scheduleFromStart('07:00', ['a', 'b', 'c'], slot), ['07:00', '07:10', '07:20']);
+
+  // Evening: dinner (60) + 4 ordinary tasks (7.5 each) end at bedtime 20:00 → starts 18:30.
+  assert.deepEqual(
+    scheduleToEnd('20:00', ['eat_dinner', 'bath', 'pajamas', 'brush', 'story'], slot),
+    ['18:30', '19:30', '19:38', '19:45', '19:53']
+  );
+
+  // Never starts before the evening segment (16:00), so steps stay on the evening panel.
+  assert.equal(scheduleToEnd('17:00', ['eat_dinner', 'x'], slot)[0], '16:00');
+
+  // Seed gives dinner its own 1-hour slot through the real parser.
+  const dinner = seedDefinitions(load).find((def) => def.key === 'eat_dinner');
+  assert.equal(dinner.scheduleMinutes, 60);
 });

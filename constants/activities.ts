@@ -30,6 +30,8 @@ export interface ActivityDefinition {
   subtitle: string;
   timeOfDay: ActivityTimeOfDay;
   timerSeconds: number;
+  /** Own slot (minutes) on generated schedules, e.g. dinner = 60. Unset = shares the 30-min window. */
+  scheduleMinutes?: number;
   durationMode: DurationMode;
   stars: 0 | 1 | 2;
   order: number;

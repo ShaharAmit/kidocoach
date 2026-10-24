@@ -95,6 +95,7 @@ export function normalizeChildProfile(value: unknown, userId?: string): ChildPro
   const scheduledTime = value.scheduledTime ?? '08:00';
   if (!isTime(scheduledTime)) return null;
   const stepTimes = value.stepTimes;
+  const bedtime = isTime(value.bedtime) ? value.bedtime : undefined;
   if (stepTimes !== undefined && (!Array.isArray(stepTimes) || !stepTimes.every(isTime))) return null;
 
   let answers: QuestionnaireAnswers | undefined;
@@ -114,6 +115,7 @@ export function normalizeChildProfile(value: unknown, userId?: string): ChildPro
     voice: value.voice,
     tone: value.tone,
     scheduledTime,
+    ...(bedtime ? { bedtime } : {}),
     activityStack,
     stepTimes: normalizeStepTimes(stepTimes, activityStack, scheduledTime),
     answers,

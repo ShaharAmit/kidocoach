@@ -111,3 +111,13 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 - Tests build their definitions from `functions/scripts/activity-catalog.seed.json` through the real parser.
 - Card artwork is cloud-only too (`catalog/activities/{key}.png`, about 640 px). `warmSegmentAssets` fetches the current segment's artwork. Without artwork a card shows the sun fallback. Originals are archived in `kidocoach-assets/artwork/`.
 - The server hardcodes no activities either. Part 1 greetings come only from `catalog/activities` (`PART1_TEMPLATES` was removed), and an unreadable catalog returns `unavailable`.
+
+## ADR-014: Generated schedules are anchored on wake-up time and bedtime (2026-10)
+
+**Decision.** The questionnaire's last step asks for the child's wake-up time and bedtime (preset chips). The profile stores them as `scheduledTime` (wake-up) and `bedtime`. `utils/routineSchedule.ts` turns them into step times:
+
+- Ordinary activities share one **30-min window**, split evenly. An activity with catalog `scheduleMinutes` (1–240, e.g. `eat_dinner: 60`) gets its own slot on top of the window.
+- Morning runs forward from wake-up. Evening is planned backwards so the last step ends at bedtime, and it never starts before 16:00 (`EVENING_START_MINUTES`), so every step stays on the evening panel.
+- Each routine's reminder fires at its first step. Like ADR-003, answering the questionnaire again doesn't re-time existing routines.
+- `scheduleMinutes` is catalog data (ADR-002): deploy the Storage triggers before uploading details JSONs that use it. Older builds ignore it.
+

@@ -80,7 +80,7 @@ Post-setup core flow:
 
 ### Onboarding (`app/onboarding/`)
 - **`welcome.tsx`**: Downloads and plays the locally cached `welcome.mp4` via `expo-video`. A Continue button appears only after `playToEnd` fires, after the top-right **Skip** button is tapped, or after an 8 s start timeout / 30 s safety net (the safety net is cancelled once the video is ready). Leaving the app pauses the video; tapping the video pauses/resumes it, and a ▶ overlay shows while paused (replays from the start after it ended). Tapping Continue navigates to `/onboarding/questionnaire`.
-- **`questionnaire.tsx`**: Multi-step parental setup form — child name, age, gender, voice, tone, activity selection, per-step scheduled times. On save:
+- **`questionnaire.tsx`**: Multi-step parental setup form — child name, age, gender, behaviour questions, then wake-up time and bedtime (preset chips, default 07:00 / 20:00; stored as profile `scheduledTime` / `bedtime`). Step times come from `utils/routineSchedule.ts` (see ADR-014). On save:
   1. Calls `ensureAuth()` to get `userId`.
   2. Writes `Routine` to Firestore via `saveRoutine()`.
   3. Schedules a daily local notification via `scheduleRoutineNotification()`.
@@ -125,7 +125,7 @@ Post-setup core flow:
 
 ### Add Routine (`app/parent/create.tsx`)
 - Pre-populates child name, age, avatar, voice, tone, and scheduled time from the stored `ChildProfile`.
-- Allows selecting a different activity set and a single scheduled time.
+- Allows selecting a different activity set and a single scheduled time. Each activity can be added once per routine (morning and evening are separate, so a `general` activity like `brush_teeth` can be in both). The picker shows activities whose catalog `timeOfDay` matches the segment or is `general`.
 - On save: writes to Firestore, schedules notification, syncs assets, triggers TTS generation.
 
 ---

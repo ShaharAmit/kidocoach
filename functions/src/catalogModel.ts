@@ -35,6 +35,8 @@ export interface CatalogEntry {
   subtitle?: string;
   timeOfDay?: 'morning' | 'evening' | 'general';
   timerSeconds?: number;
+  /** Own slot (minutes) on the app's generated schedule; unset = shares the 30-min window. */
+  scheduleMinutes?: number;
   durationMode?: 'fixed' | 'variable';
   stars?: 0 | 1 | 2;
   order?: number;
@@ -161,6 +163,11 @@ export function validateCatalogMetadata(raw: unknown): { ok: true; value: Catalo
     const t = raw.timerSeconds;
     if (typeof t === 'number' && Number.isInteger(t) && t >= 10 && t <= 3 * 60 * 60) value.timerSeconds = t;
     else errors.push('timerSeconds must be an integer between 10 and 10800');
+  }
+  if (raw.scheduleMinutes !== undefined) {
+    const m = raw.scheduleMinutes;
+    if (typeof m === 'number' && Number.isInteger(m) && m >= 1 && m <= 240) value.scheduleMinutes = m;
+    else errors.push('scheduleMinutes must be an integer between 1 and 240');
   }
   if (raw.stars !== undefined) {
     if (raw.stars === 0 || raw.stars === 1 || raw.stars === 2) value.stars = raw.stars;

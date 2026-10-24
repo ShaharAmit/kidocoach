@@ -41,7 +41,7 @@ for f in KEY_p1.mp4 KEY.mp4; do ffprobe -v error -show_entries stream=codec_name
 Validate before upload:
 - `label` is required. `part1.text` is required and contains `{name}`.
 - `part1.tone` ∈ `encouraging|cheerful|calm`.
-- `timeOfDay` ∈ `morning|evening|general`. `timerSeconds` is an integer from 10 to 10800. `durationMode` ∈ `fixed|variable`.
+- `timeOfDay` ∈ `morning|evening|general`. `timerSeconds` is an integer from 10 to 10800. `durationMode` ∈ `fixed|variable`. Optional `scheduleMinutes`: integer 1–240 (own slot on generated schedules, e.g. dinner 60).
 - `stars` ∈ 0/1/2. `order` is a number (existing activities use 0–16). Optional: `enabled: false`, `minAppVersion: "x.y.z"`.
 - Optional `tags`: up to 12 `[a-z0-9_]` category keys. Optional `routine`: `{ "morning"?: { "position": n, "levels": { "<fromAge>": 0|1|2|3 } }, "evening"?: … }`. Without `routine` the activity is never auto-added to new routines, only picked manually. See docs/ADDING_ACTIVITIES.md for the tag vocabulary and levels.
 

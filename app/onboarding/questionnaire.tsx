@@ -15,7 +15,7 @@ import {
 import { router } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import PageBackground from '../../components/PageBackground';
-import { getSelectableActivityDefinitions } from '../../constants/activities';
+import { getActivityDefinition, getSelectableActivityDefinitions } from '../../constants/activities';
 import { composeRoutine } from '../../utils/routineComposer';
 import { refreshActivityCatalog } from '../../services/activityCatalog';
 import { InPageHeader } from '../../components/ScreenHeader';
@@ -41,30 +41,20 @@ import { colors, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
 import { GRASS_IMAGE as GRASS } from '../../constants/images';
 import { isValidChildName, MAX_CHILD_NAME_LENGTH } from '../../utils/nameToken';
+import { isMorningTime } from '../../utils/timeOfDay';
+import { scheduleFromStart, scheduleToEnd } from '../../utils/routineSchedule';
 
 
 const DEFAULT_AVATAR_ID = 'becky';
 const DEFAULT_VOICE = 'woman' as const;
-const DEFAULT_SCHEDULED_TIME = '08:00';
-const DEFAULT_EVENING_TIME = '19:00';
+const DEFAULT_WAKE_TIME = '07:00';
+const DEFAULT_BEDTIME = '20:00';
+
+const WAKE_TIME_OPTIONS = ['05:30', '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00'];
+const BEDTIME_OPTIONS = ['18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'];
 
 const MIN_AGE = 2;
 const MAX_AGE = 12;
-
-function buildStepTimes(startTime: string, count: number, intervalMinutes = 10): string[] {
-  const [hoursRaw, minutesRaw] = startTime.split(':');
-  const hours = Number(hoursRaw);
-  const minutes = Number(minutesRaw);
-  const startMinutes =
-    Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 8 * 60;
-
-  return Array.from({ length: count }, (_, index) => {
-    const total = (startMinutes + index * intervalMinutes) % (24 * 60);
-    const hh = String(Math.floor(total / 60)).padStart(2, '0');
-    const mm = String(total % 60).padStart(2, '0');
-    return `${hh}:${mm}`;
-  });
-}
 
 type Option<T extends string> = { key: T; label: string };
 
@@ -129,8 +119,21 @@ function toneFromMotivation(style: MotivationStyle | undefined): ToneOption {
   }
 }
 
-// Step 0 = name + gender + age, steps 1..5 = questions (1 and 3 are multi-select). Final = trust screen.
-const QUESTION_STEP_COUNT = 6;
+function formatTime12h(time: string): string {
+  const [hour, minute] = time.split(':').map(Number);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+/** Preset chips plus the saved time when it isn't one of them (edited later in Add Routine). */
+function withCurrentTime(options: string[], current: string): string[] {
+  return options.includes(current) ? options : [...options, current].sort();
+}
+
+// Step 0 = name + gender + age, steps 1..5 = questions (1 and 3 are multi-select),
+// step 6 = morning/evening start times. Final = trust screen.
+const QUESTION_STEP_COUNT = 7;
 
 export default function QuestionnaireScreen() {
   const grassSource = useLocalImage(GRASS);
@@ -145,6 +148,8 @@ export default function QuestionnaireScreen() {
   const age = useMemo(() => calculateAgeFromISO(birthDate), [birthDate]);
 
   const [answers, setAnswers] = useState<QuestionnaireAnswers>({});
+  const [wakeTime, setWakeTime] = useState(DEFAULT_WAKE_TIME);
+  const [bedtime, setBedtime] = useState(DEFAULT_BEDTIME);
 
   useEffect(() => {
     let mounted = true;
@@ -155,6 +160,8 @@ export default function QuestionnaireScreen() {
         setGender(profile.gender);
         setBirthDate(profile.birthDate ?? isoDateYearsAgo(profile.age));
         if (profile.answers) setAnswers(profile.answers);
+        if (isMorningTime(profile.scheduledTime)) setWakeTime(profile.scheduledTime);
+        if (profile.bedtime && !isMorningTime(profile.bedtime)) setBedtime(profile.bedtime);
       })
       .catch((err) => console.warn('[Questionnaire] failed to load profile defaults:', err));
     return () => {
@@ -190,10 +197,12 @@ export default function QuestionnaireScreen() {
         return !!answers.helpLevel;
       case 5:
         return !!answers.morningSpeed;
+      case 6:
+        return isMorningTime(wakeTime) && !isMorningTime(bedtime);
       default:
         return false;
     }
-  }, [stepIndex, childName, gender, age, answers]);
+  }, [stepIndex, childName, gender, age, answers, wakeTime, bedtime]);
 
   const handleContinue = useCallback(() => {
     if (!canContinue) return;
@@ -225,8 +234,10 @@ export default function QuestionnaireScreen() {
         setSaving(false);
         return;
       }
-      const morningStepTimes = buildStepTimes(DEFAULT_SCHEDULED_TIME, morningActivityStack.length);
-      const eveningStepTimes = buildStepTimes(DEFAULT_EVENING_TIME, eveningActivityStack.length);
+      // Ordinary tasks share a 30-min window; long ones (e.g. dinner) use their catalog slot.
+      const slotMinutes = (key: string) => getActivityDefinition(key).scheduleMinutes;
+      const morningStepTimes = scheduleFromStart(wakeTime, morningActivityStack.map(([key]) => key), slotMinutes);
+      const eveningStepTimes = scheduleToEnd(bedtime, eveningActivityStack.map(([key]) => key), slotMinutes);
 
       const profile: ChildProfile = {
         userId,
@@ -237,7 +248,8 @@ export default function QuestionnaireScreen() {
         avatarId: DEFAULT_AVATAR_ID,
         voice: DEFAULT_VOICE,
         tone,
-        scheduledTime: DEFAULT_SCHEDULED_TIME,
+        scheduledTime: wakeTime,
+        bedtime,
         activityStack: morningActivityStack,
         stepTimes: morningStepTimes,
         answers,
@@ -251,7 +263,7 @@ export default function QuestionnaireScreen() {
         childName: profile.childName,
         childAge: age,
         avatarId: DEFAULT_AVATAR_ID,
-        scheduledTime: DEFAULT_SCHEDULED_TIME,
+        scheduledTime: morningStepTimes[0],
         activityStack: morningActivityStack,
         stepTimes: morningStepTimes,
         tone,
@@ -263,7 +275,7 @@ export default function QuestionnaireScreen() {
         childName: profile.childName,
         childAge: age,
         avatarId: DEFAULT_AVATAR_ID,
-        scheduledTime: DEFAULT_EVENING_TIME,
+        scheduledTime: eveningStepTimes[0],
         activityStack: eveningActivityStack,
         stepTimes: eveningStepTimes,
         tone,
@@ -295,7 +307,7 @@ export default function QuestionnaireScreen() {
       Alert.alert('Save failed', 'Could not save setup. Please try again.');
       setSaving(false);
     }
-  }, [age, birthDate, answers, childName, gender, saving]);
+  }, [age, birthDate, answers, childName, gender, saving, wakeTime, bedtime]);
 
   return (
     <PageBackground variant="clouds">
@@ -410,6 +422,16 @@ export default function QuestionnaireScreen() {
                       options={SPEED_OPTIONS}
                       selected={answers.morningSpeed ? [answers.morningSpeed] : []}
                       onSelect={(key) => setAnswers((a) => ({ ...a, morningSpeed: key }))}
+                    />
+                  )}
+
+                  {stepIndex === 6 && (
+                    <ScheduleStep
+                      name={displayName}
+                      wakeTime={wakeTime}
+                      onChangeWake={setWakeTime}
+                      bedtime={bedtime}
+                      onChangeBedtime={setBedtime}
                     />
                   )}
                 </ScrollView>
@@ -638,6 +660,84 @@ function SelectStep<T extends string>({
             </TouchableOpacity>
           );
         })}
+      </View>
+    </View>
+  );
+}
+
+function TimeChips({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: string[];
+  selected: string;
+  onSelect: (time: string) => void;
+}) {
+  return (
+    <View style={styles.timeChips} accessibilityRole="radiogroup">
+      {options.map((time) => {
+        const active = time === selected;
+        return (
+          <TouchableOpacity
+            key={time}
+            style={[styles.timeChip, active && styles.optionSelected]}
+            onPress={() => onSelect(time)}
+            activeOpacity={0.85}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: active }}
+          >
+            <Text style={[styles.timeChipLabel, active && styles.optionLabelSelected]}>
+              {formatTime12h(time)}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function ScheduleStep({
+  name,
+  wakeTime,
+  onChangeWake,
+  bedtime,
+  onChangeBedtime,
+}: {
+  name: string;
+  wakeTime: string;
+  onChangeWake: (time: string) => void;
+  bedtime: string;
+  onChangeBedtime: (time: string) => void;
+}) {
+  return (
+    <View>
+      <Text style={[styles.cardTitle, styles.cardTitleWithHint]}>
+        What does {name}&apos;s day look like?
+      </Text>
+      <Text style={styles.selectHint}>
+        Mornings start when {name} wakes up, and evenings wrap up by bedtime
+      </Text>
+
+      <Text style={styles.fieldLabel}>☀️ Wakes up at</Text>
+      <TimeChips
+        options={withCurrentTime(WAKE_TIME_OPTIONS, wakeTime)}
+        selected={wakeTime}
+        onSelect={onChangeWake}
+      />
+
+      <Text style={[styles.fieldLabel, { marginTop: vs(22) }]}>🌙 Bedtime</Text>
+      <TimeChips
+        options={withCurrentTime(BEDTIME_OPTIONS, bedtime)}
+        selected={bedtime}
+        onSelect={onChangeBedtime}
+      />
+
+      <View style={styles.helperRow}>
+        <Text style={styles.heartIconSmall}>💙</Text>
+        <Text style={styles.helperText}>
+          You can fine-tune each activity&apos;s time later from Add Routine
+        </Text>
       </View>
     </View>
   );
@@ -928,6 +1028,26 @@ const styles = StyleSheet.create({
     fontSize: fs(14),
     fontWeight: '800',
     lineHeight: fs(16),
+  },
+  timeChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: s(10),
+  },
+  timeChip: {
+    width: '22%',
+    flexGrow: 1,
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: ms(14),
+    borderWidth: 1.5,
+    borderColor: '#D6ECEC',
+    paddingVertical: vs(12),
+  },
+  timeChipLabel: {
+    fontSize: fs(15),
+    color: '#3C5654',
+    fontWeight: '600',
   },
   optionLabel: {
     flex: 1,

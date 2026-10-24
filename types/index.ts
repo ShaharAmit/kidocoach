@@ -106,7 +106,10 @@ export interface ChildProfile {
   avatarId: string;
   voice: VoiceOption;
   tone: ToneOption;
+  /** Wake-up time ("HH:MM"); the morning routine starts here. */
   scheduledTime: string;
+  /** Bedtime ("HH:MM"); the evening routine is planned to finish here. */
+  bedtime?: string;
   activityStack: ActivityStep[];
   stepTimes?: string[];
   answers?: QuestionnaireAnswers;

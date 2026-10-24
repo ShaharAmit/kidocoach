@@ -50,6 +50,7 @@ Upload the files below to Firebase Storage. The app picks the activity up the ne
 | `emoji`, `subtitle` | Shown on cards and in the picker |
 | `timeOfDay` | `morning` · `evening` · `general` (both, default) |
 | `timerSeconds` | Step length, 10–10800 |
+| `scheduleMinutes` | Own slot (1–240 min) on generated schedules, e.g. dinner `60`. Unset = shares the 30-min window |
 | `durationMode` | `fixed` (wait the full timer) · `variable` (can finish early) |
 | `stars` | `0` · `1` · `2` |
 | `order` | Position in the picker (existing activities use 0–16) |
