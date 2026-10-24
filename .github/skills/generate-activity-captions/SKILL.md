@@ -32,7 +32,7 @@ This produces `{key}_captions.json` in the app's timeline contract. Timings come
    gcloud storage cp $B/avatars/becky/{KEY}_captions.json $W/ 2>/dev/null || true   # old captions (if any)
    ```
    Always caption the exact files that are (or will be) published. A re-encode changes the Part 1 duration.
-3. **Get the greeting template**: use `part1.text` from Firestore `catalog/activities` (`activities.{KEY}.part1.text`) or from the activity's details JSON. Legacy activities fall back to `PART1_TEMPLATES` in `functions/src/index.ts`. Firestore REST read:
+3. **Get the greeting template**: use `part1.text` from Firestore `catalog/activities` (`activities.{KEY}.part1.text`) or from the activity's details JSON. Firestore REST read:
    ```bash
    curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
      "https://firestore.googleapis.com/v1/projects/kids-routine-coach-app/databases/(default)/documents/catalog/activities" > /tmp/catalog.json

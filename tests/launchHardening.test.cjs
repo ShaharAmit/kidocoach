@@ -37,6 +37,15 @@ function loadModule(filename, mocks = {}) {
   return load(path.resolve(root, filename));
 }
 
+/** constants/activities with the catalog seed applied (the app bundles no activities). */
+function seededActivities() {
+  const seed = JSON.parse(fs.readFileSync(path.join(root, 'functions/scripts/activity-catalog.seed.json'), 'utf8'));
+  const { parseActivityCatalog } = loadModule('utils/activityCatalogModel.ts');
+  const activities = loadModule('constants/activities.ts');
+  activities.applyActivityDefinitions(parseActivityCatalog({ activities: seed }, { appVersion: '1.0.0' }).definitions);
+  return activities;
+}
+
 /** Evaluates the server's normalizeNameToken straight from functions/src/index.ts. */
 function serverNormalizeNameToken() {
   const source = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
@@ -86,6 +95,7 @@ test('activity reminders fire 2 minutes before every step, wrapping midnight', a
     'expo-notifications': notifications,
     'expo-device': { isDevice: true },
     'react-native': { Platform: { OS: 'ios' } },
+    '../constants/activities': seededActivities(),
   });
 
   const firstId = await scheduleRoutineNotification({
@@ -138,8 +148,10 @@ test('client and server Part 1 audio cache keys are identical', () => {
     './firebase': {},
     './assetSync': { localAudioPath: (key) => key },
     '../types': {},
+    '../constants/activities': seededActivities(),
   });
-  const server = serverDeclarations(['normalizeNameToken', 'PART1_TEMPLATES', 'buildPart1AudioKey']);
+  const server = serverDeclarations(['normalizeNameToken', 'buildPart1AudioKey']);
+  const seed = JSON.parse(fs.readFileSync(path.join(root, 'functions/scripts/activity-catalog.seed.json'), 'utf8'));
   const cases = [
     ['wake_up', 'Liam', undefined, undefined],
     ['eat_dinner', 'נועה', undefined, 'man'],
@@ -149,11 +161,11 @@ test('client and server Part 1 audio cache keys are identical', () => {
 
   for (const args of cases) {
     const [activityKey, childName, tone, voice] = args;
-    // The server resolves defaults from its template before keying; version 1 = pre-catalog key.
+    // The server resolves defaults from the catalog greeting before keying; version 1 = pre-catalog key.
     const serverKey = server.buildPart1AudioKey(
       activityKey,
       childName,
-      tone ?? server.PART1_TEMPLATES[activityKey].prompt,
+      tone ?? seed[activityKey].part1.tone,
       voice ?? 'woman',
       1
     );

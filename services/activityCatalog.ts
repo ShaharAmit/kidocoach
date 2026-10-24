@@ -6,7 +6,6 @@ import { db } from './firebase';
 import {
   ACTIVITY_KEYS,
   applyActivityDefinitions,
-  BUNDLED_ACTIVITY_DEFINITIONS,
   isActivitySelectable,
 } from '../constants/activities';
 import { ActivityKey } from '../types';
@@ -20,18 +19,18 @@ import {
 
 /**
  * Runtime activity catalog: Firestore `catalog/activities` (one document, one read) mirrored to
- * AsyncStorage for offline launches. Applying it updates the shared registry in
- * constants/activities.ts, so pickers, the player, and asset sync all see new or changed
- * activities without an app release.
+ * AsyncStorage for offline launches. It is the app's only source of activities (none are
+ * bundled): applying it updates the shared registry in constants/activities.ts, so pickers, the
+ * player, and asset sync all see new or changed activities without an app release.
  */
 
 const STORAGE_KEY = 'activity_catalog_v1';
 const DEFAULT_REFRESH_TIMEOUT_MS = 5000;
 
-type CatalogSource = 'bundled' | 'device' | 'server';
+type CatalogSource = 'none' | 'device' | 'server';
 
 let parsed: ParsedCatalog | null = null;
-let source: CatalogSource = 'bundled';
+let source: CatalogSource = 'none';
 let signature = '';
 let revision = 0;
 let cacheLoad: Promise<void> | null = null;
@@ -56,7 +55,7 @@ function applyRaw(raw: unknown, nextSource: CatalogSource): boolean {
     return false;
   }
 
-  const next = parseActivityCatalog({ activities }, BUNDLED_ACTIVITY_DEFINITIONS, {
+  const next = parseActivityCatalog({ activities }, {
     appVersion: appVersion(),
     avatarId: DEFAULT_CATALOG_AVATAR_ID,
   });
@@ -125,6 +124,11 @@ export function startActivityCatalogListener(): () => void {
     },
     (err) => console.warn('[ActivityCatalog] Listener error:', err)
   );
+}
+
+/** Whether any catalog (server or on-device copy) is loaded. Without one the app has no activities. */
+export function hasActivityCatalog(): boolean {
+  return parsed !== null;
 }
 
 export function hasServerCatalog(): boolean {

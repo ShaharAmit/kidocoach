@@ -12,7 +12,7 @@ Upload the files below to Firebase Storage. The app picks the activity up the ne
 | `avatars/becky/feed_dog.mp4` | ✅ | Part 2: the activity, narration included |
 | `avatars/becky/feed_dog_captions.json` | | Subtitles |
 | `catalog/activities/feed_dog.json` | ✅ | Activity details |
-| `catalog/activities/feed_dog.png` | | Artwork for cards (`.jpg` / `.webp` also accepted) |
+| `catalog/activities/feed_dog.png` | ✅ | Card artwork, ~640 px (`.jpg` / `.webp` also accepted). The app bundles no artwork. |
 
 **Videos:** MP4, H.264, 720×1280 portrait, 25 fps, AAC 48 kHz (same as the existing clips).
 

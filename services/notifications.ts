@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { Routine } from '../types';
-import { ACTIVITIES } from '../constants/activities';
+import { getActivityMeta } from '../constants/activities';
 
 // Configure how notifications appear when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -79,7 +79,8 @@ export async function scheduleRoutineNotification(routine: Routine): Promise<str
     const step = routine.activityStack[stepIndex] ?? [];
     const stepTime = routine.stepTimes?.[stepIndex] ?? (stepIndex === 0 ? routine.scheduledTime : undefined);
     const triggerTime = reminderTriggerTime(stepTime);
-    const activities = step.map((key) => ACTIVITIES[key]).filter(Boolean);
+    // Unknown keys (catalog not loaded yet) still get a reminder, with a placeholder label.
+    const activities = step.map((key) => getActivityMeta(key));
     if (!triggerTime || activities.length === 0) continue;
 
     const label = activities.map((activity) => activity.label).join(' + ');

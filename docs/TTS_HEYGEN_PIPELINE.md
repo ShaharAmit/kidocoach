@@ -30,8 +30,7 @@ and baked into the render. Send only the spoken line as the text part and put
 the delivery in `speechMetadata.style` (see `synthesizeWithGeminiTts`).
 
 - **Part 1:** use the activity's greeting template (`part1.text` in the catalog
-  details file, or `PART1_TEMPLATES` in
-  [`functions/src/index.ts`](../functions/src/index.ts) for older activities) with
+  details file / `catalog/activities`) with
   a sample name, and the template's tone (`encouraging`, `cheerful` or `calm`). Example:
   > text: `Good morning, Jonathan!` · style: `energetic, cheerful and motivating morning tone`
 - **Part 2:** the activity instructions, with no name. Example:

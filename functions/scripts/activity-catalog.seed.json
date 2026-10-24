@@ -418,6 +418,10 @@
     "stars": 1,
     "order": 15,
     "promptText": "Let us wash your face, {name}, and feel fresh and clean.",
+    "part1": {
+      "text": "Face washing time, {name}!",
+      "tone": "encouraging"
+    },
     "tags": [
       "hygiene"
     ],

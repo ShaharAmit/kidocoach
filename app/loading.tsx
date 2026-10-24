@@ -9,7 +9,7 @@ import {
   scheduleBackgroundPrefetch,
   warmSegmentAssets,
 } from '../services/assetCacheService';
-import { refreshActivityCatalog } from '../services/activityCatalog';
+import { hasActivityCatalog, refreshActivityCatalog } from '../services/activityCatalog';
 import { getCurrentSegment } from '../utils/timeOfDay';
 import { getPaidStatus, refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { getChildProfile } from '../services/profile';
@@ -97,6 +97,16 @@ export default function LoadingScreen() {
         const isPaid = isWarmStart ? await getPaidStatus() : await refreshPaidStatusWithinBootBudget();
         const route = getAccessRoute(isPaid, onboardingDone);
 
+        // Activities exist only in the cloud catalog. With no device copy and no connection
+        // there is nothing to show, so ask for a connection instead of routing into empty screens.
+        await catalogRefresh;
+        if (!hasActivityCatalog()) {
+          if (!isCancelled) {
+            setError('Connect to the internet to load your activities, then try again.');
+          }
+          return;
+        }
+
         if (!isWarmStart && route === '/onboarding/welcome') {
           setStage('Preparing your coach...');
           setProgress(35);
@@ -131,7 +141,6 @@ export default function LoadingScreen() {
           }
 
           if (routines.length > 0) {
-            await catalogRefresh;
             // Only the segment on screen blocks the app (post-questionnaire also waits for its
             // merges, since that screen is the "generating experience" moment). Everything else
             // downloads in the background while the family uses the app.

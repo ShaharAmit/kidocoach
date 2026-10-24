@@ -22,7 +22,7 @@ Use `gcloud storage` (`gsutil -m` hangs on macOS). **Always confirm with the use
 | `avatars/becky/KEY.mp4` | ✅ | Part 2 with narration, no name |
 | `avatars/becky/KEY_captions.json` | | `[{start,end,text}]` on the p1+p2 timeline. `cues[0]` = `[0, p1 duration]` with `{{name}}`. Build with **generate-activity-captions**. |
 | `catalog/activities/KEY.json` | ✅ | Details (below) |
-| `catalog/activities/KEY.png` | | Card artwork (`.jpg`/`.webp` OK) |
+| `catalog/activities/KEY.png` | ✅ | Card artwork, ~640 px (`sips -Z 640`; `.jpg`/`.webp` OK). The app bundles none; without it the card shows the sun fallback. |
 
 `KEY` is `[a-z0-9_]+` and is **never renamed** once live. Videos must be MP4 H.264, 720×1280, 25 fps, AAC 48 kHz. Pre-flight check:
 

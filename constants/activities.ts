@@ -19,9 +19,9 @@ export interface RoutinePlacement {
 }
 
 /**
- * Everything the app knows about one activity. Bundled defaults below are the offline fallback;
- * `services/activityCatalog.ts` overlays the Firestore `catalog/activities` document on top of
- * them at runtime, so activities uploaded to the cloud appear without an app release.
+ * Everything the app knows about one activity. The app bundles no activities: the registry below
+ * is filled only from the Firestore `catalog/activities` document (or its on-device copy) by
+ * `services/activityCatalog.ts`, so activities uploaded to the cloud appear without an app release.
  */
 export interface ActivityDefinition {
   key: ActivityKey;
@@ -49,127 +49,6 @@ export interface ActivityDefinition {
 }
 
 const FALLBACK_TIMER_SECONDS = 120;
-
-type BundledActivity = Omit<ActivityDefinition, 'key' | 'order' | 'part1Version' | 'tags' | 'routine'>;
-
-// Activities without uploaded videos stay known (so existing routines still render) but are not
-// selectable until the cloud catalog reports complete media for them.
-const BUNDLED: Record<string, BundledActivity> = {
-  wake_up: {
-    label: 'Wake Up', emoji: '☀️', subtitle: 'Good morning, rise and shine!', timeOfDay: 'morning',
-    timerSeconds: 60, durationMode: 'variable', stars: 0, selectable: true,
-    part1Text: 'Good morning, {name}!', part1Tone: 'encouraging',
-    promptText: 'Good morning, {name}! Time to wake up and start a wonderful day.',
-  },
-  make_bed: {
-    label: 'Make Bed', emoji: '🛏️', subtitle: "Let's make the bed nice and neat", timeOfDay: 'general',
-    timerSeconds: 180, durationMode: 'variable', stars: 2, selectable: true,
-    part1Text: 'Good morning, {name}!', part1Tone: 'encouraging',
-    promptText: 'Nice work, {name}! Let us make the bed nice and tidy.',
-  },
-  brush_teeth: {
-    label: 'Brush Teeth', emoji: '🦷', subtitle: "Let's make those teeth sparkle!", timeOfDay: 'general',
-    timerSeconds: 60, durationMode: 'fixed', stars: 2, selectable: true,
-    part1Text: 'Toothbrush time, {name}!', part1Tone: 'encouraging',
-    promptText: 'It is time to brush your teeth, {name}, for a bright, sparkly smile.',
-  },
-  eat_breakfast: {
-    label: 'Eat Breakfast', emoji: '🥞', subtitle: 'Time to fuel up for the day!', timeOfDay: 'morning',
-    timerSeconds: 600, durationMode: 'variable', stars: 1, selectable: true,
-    part1Text: 'Breakfast time, {name}!', part1Tone: 'encouraging',
-    promptText: 'Superstar {name}, it is breakfast time. Let us eat and fill up with energy for the day.',
-  },
-  get_dressed: {
-    label: 'Get Dressed', emoji: '👕', subtitle: 'Time to put on comfy clothes', timeOfDay: 'general',
-    timerSeconds: 180, durationMode: 'variable', stars: 2, selectable: true,
-    part1Text: "Let's get dressed, {name}!", part1Tone: 'encouraging',
-    promptText: 'Great job, {name}. Now let us get dressed and ready for an amazing day.',
-  },
-  put_shoes_on: {
-    label: 'Put Shoes On', emoji: '👟', subtitle: "Let's get those shoes on!", timeOfDay: 'general',
-    timerSeconds: 90, durationMode: 'variable', stars: 1, selectable: true,
-    part1Text: 'All right, {name}!', part1Tone: 'encouraging',
-    promptText: 'Almost ready, {name}. Put your shoes on, and we are good to go.',
-  },
-  comb_hair: {
-    label: 'Comb Hair', emoji: '💇', subtitle: "Let's look neat and tidy!", timeOfDay: 'general',
-    timerSeconds: 120, durationMode: 'variable', stars: 1, selectable: true,
-    part1Text: "Let's take care of your hair, {name}!", part1Tone: 'encouraging',
-    promptText: 'Looking good, {name}. Time to comb your hair so you can look your best.',
-  },
-  drink_water: {
-    label: 'Drink Water', emoji: '💧', subtitle: 'A little sip for sweet dreams', timeOfDay: 'general',
-    timerSeconds: 30, durationMode: 'fixed', stars: 0, selectable: true,
-    part1Text: 'Water time, {name}!', part1Tone: 'encouraging',
-    promptText: 'Stay healthy, {name}. Let us drink a big glass of water.',
-  },
-  homework: {
-    label: 'Homework', emoji: '📝', subtitle: 'Time to focus and learn!', timeOfDay: 'general',
-    timerSeconds: 900, durationMode: 'variable', stars: 2, selectable: true,
-    part1Text: 'All right, {name}!', part1Tone: 'encouraging',
-    promptText: 'Great focus, {name}! Let us sit down and finish our homework.',
-  },
-  eat_dinner: {
-    label: 'Eat Dinner', emoji: '🍽️', subtitle: 'Yummy food to end the day!', timeOfDay: 'evening',
-    timerSeconds: 900, durationMode: 'variable', stars: 1, selectable: true,
-    part1Text: 'Dinner time, {name}!', part1Tone: 'calm',
-    promptText: 'Dinner time, {name}! Let us sit down and enjoy a healthy meal.',
-  },
-  tidy_room: {
-    label: 'Tidy Room', emoji: '🧸', subtitle: "Let's clean up our space!", timeOfDay: 'general',
-    timerSeconds: 300, durationMode: 'variable', stars: 2, selectable: true,
-    part1Text: 'What a busy day of playing, {name}!', part1Tone: 'encouraging',
-    promptText: 'Great job {name}! Now, let us tidy up our room.',
-  },
-  put_on_pajamas: {
-    label: 'Put on Pajamas', emoji: '👕', subtitle: 'Time to get cozy for bed', timeOfDay: 'evening',
-    timerSeconds: 180, durationMode: 'variable', stars: 1, selectable: true,
-    part1Text: 'Time to transform for the night, {name}!', part1Tone: 'calm',
-    promptText: 'Time to get cozy, {name}. Let us put on our pajamas!',
-  },
-  bedtime_story: {
-    label: 'Bedtime Story', emoji: '📖', subtitle: "Let's read a cozy story", timeOfDay: 'evening',
-    timerSeconds: 600, durationMode: 'variable', stars: 0, selectable: true,
-    part1Text: 'Story time, {name}.', part1Tone: 'calm',
-    promptText: 'Cuddle up, {name}. Let us read a lovely bedtime story together.',
-  },
-  go_to_sleep: {
-    label: 'Go to Sleep', emoji: '😴', subtitle: 'Sweet dreams, sleep tight!', timeOfDay: 'evening',
-    timerSeconds: 300, durationMode: 'variable', stars: 0, selectable: true,
-    part1Text: 'You did it, {name}.', part1Tone: 'calm',
-    promptText: 'Sweet dreams, {name}. It is time to close your eyes and go to sleep.',
-  },
-  pack_backpack: {
-    label: 'Pack Backpack', emoji: '🎒', subtitle: "Let's get ready for school!", timeOfDay: 'general',
-    timerSeconds: 180, durationMode: 'variable', stars: 2, selectable: false,
-    part1Text: 'Backpack time, {name}!', part1Tone: 'encouraging',
-    promptText: 'You are doing great, {name}. Let us pack your backpack so you are ready for school.',
-  },
-  wash_face: {
-    label: 'Wash Face', emoji: '🚿', subtitle: 'A splash of water to wake up!', timeOfDay: 'general',
-    timerSeconds: 90, durationMode: 'fixed', stars: 1, selectable: false,
-    part1Text: 'Face washing time, {name}!', part1Tone: 'encouraging',
-    promptText: 'Let us wash your face, {name}, and feel fresh and clean.',
-  },
-  read_book: {
-    label: 'Read a Book', emoji: '📚', subtitle: "Let's go on an adventure!", timeOfDay: 'general',
-    timerSeconds: 600, durationMode: 'variable', stars: 1, selectable: false,
-    part1Text: 'Reading time, {name}!', part1Tone: 'encouraging',
-    promptText: 'Let us read a fun book together, {name}.',
-  },
-};
-
-export const BUNDLED_ACTIVITY_DEFINITIONS: ActivityDefinition[] = Object.entries(BUNDLED).map(
-  ([key, value], order) => ({
-    ...value,
-    key,
-    order,
-    part1Version: 1,
-    // Routine composition data lives only in the cloud catalog (`tags` / `routine`).
-    tags: [],
-    routine: {},
-  })
-);
 
 function fillName(template: string, name: string): string {
   return template.replace(/\{\{\s*name\s*\}\}/gi, name).replace(/\{name\}/gi, name);
@@ -256,8 +135,6 @@ export function applyActivityDefinitions(definitions: ActivityDefinition[]): voi
     ACTIVITY_KEYS.push(def.key);
   }
 }
-
-applyActivityDefinitions(BUNDLED_ACTIVITY_DEFINITIONS);
 
 export function getActivityDefinition(key: ActivityKey): ActivityDefinition {
   return DEFINITIONS[key] ?? placeholderDefinition(key);

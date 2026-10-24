@@ -20,7 +20,6 @@ import CloudsBackground from '../components/CloudsBackground';
 import { getActivityMeta, starsForStep } from '../constants/activities';
 import {
   ACTIVITY_FALLBACK_IMAGE,
-  ACTIVITY_IMAGES,
   ALL_BUNDLED_IMAGES,
 } from '../constants/images';
 import { useActivityCatalogRevision } from '../services/activityCatalog';
@@ -492,7 +491,6 @@ function HomeScreen() {
                   const stepId = primaryRoutine.stepIds?.[index] ?? `step_${index}`;
                   const done = completedStepIds.has(stepId);
                   const primaryActivityKey = step[0] ?? '';
-                  const activityImage = ACTIVITY_IMAGES[primaryActivityKey] ?? ACTIVITY_FALLBACK_IMAGE;
                   const cloudImageUri = getCloudImageUri(primaryActivityKey);
                   const activitySubtitle = getActivityMeta(primaryActivityKey).subtitle;
 
@@ -509,11 +507,11 @@ function HomeScreen() {
                       <View style={styles.activityImageWrap}>
                         <Image
                           key={`${stepId}-${activityImagesRevision}-${localImagesRevision}`}
-                          source={cloudImageUri ? { uri: cloudImageUri } : localImageSource(activityImage)}
+                          source={cloudImageUri ? { uri: cloudImageUri } : localImageSource(ACTIVITY_FALLBACK_IMAGE)}
                           style={styles.activityImage}
                           resizeMode="contain"
                           onError={() => {
-                            if (!cloudImageUri) retryLocalImage(activityImage);
+                            if (!cloudImageUri) retryLocalImage(ACTIVITY_FALLBACK_IMAGE);
                           }}
                         />
                       </View>

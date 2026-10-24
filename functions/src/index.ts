@@ -66,14 +66,7 @@ const appleClientId = defineString('APPLE_CLIENT_ID', { default: 'com.kidocoach.
 const APPLE_AUTH_BASE_URL = 'https://appleid.apple.com/auth';
 const MAX_APPLE_AUTHORIZATION_CODE_LENGTH = 2048;
 
-interface GeneratePart1AudioRequest {
-  childName: string;
-  activityKey: string;
-  tone?: Tone;
-  voice?: Voice;
-}
-
-interface GeneratePart1AudioResponse {
+interface Part1AudioResult {
   storagePath: string | null;
   cacheKey: string;
   status: AudioStatus;
@@ -418,24 +411,6 @@ async function claimAudioGeneration(
   });
 }
 
-/** Pre-catalog greetings; the Firestore catalog (`catalog/activities`) takes precedence. */
-const PART1_TEMPLATES: Record<string, { prompt: Tone; textTemplate: string }> = {
-  wake_up: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
-  make_bed: { prompt: 'encouraging', textTemplate: 'Good morning, {name}!' },
-  brush_teeth: { prompt: 'encouraging', textTemplate: 'Toothbrush time, {name}!' },
-  eat_breakfast: { prompt: 'encouraging', textTemplate: 'Breakfast time, {name}!' },
-  get_dressed: { prompt: 'encouraging', textTemplate: "Let's get dressed, {name}!" },
-  put_shoes_on: { prompt: 'encouraging', textTemplate: 'All right, {name}!' },
-  comb_hair: { prompt: 'encouraging', textTemplate: "Let's take care of your hair, {name}!" },
-  drink_water: { prompt: 'encouraging', textTemplate: 'Water time, {name}!' },
-  homework: { prompt: 'encouraging', textTemplate: 'All right, {name}!' },
-  eat_dinner: { prompt: 'calm', textTemplate: 'Dinner time, {name}!' },
-  tidy_room: { prompt: 'encouraging', textTemplate: 'What a busy day of playing, {name}!' },
-  put_on_pajamas: { prompt: 'calm', textTemplate: 'Time to transform for the night, {name}!' },
-  bedtime_story: { prompt: 'calm', textTemplate: 'Story time, {name}.' },
-  go_to_sleep: { prompt: 'calm', textTemplate: 'You did it, {name}.' },
-};
-
 const CATALOG_DOC_PATH = 'catalog/activities';
 // Short on purpose: each callable runs on its own instances, which a catalog write cannot
 // invalidate; clients additionally reject clips whose key does not match their own.
@@ -452,20 +427,18 @@ async function loadCatalogActivities(): Promise<CatalogActivities> {
     catalogCache = { activities: activities ?? {}, fetchedAt: Date.now() };
   } catch (err) {
     console.warn('[catalog] Failed to read catalog, using last known copy:', err);
-    if (!catalogCache) return {};
+    if (!catalogCache) throw new HttpsError('unavailable', 'Activity catalog is unavailable. Try again.');
   }
   return catalogCache.activities;
 }
 
 type Part1Template = { text: string; tone: Tone; version: number };
 
+/** Greetings come only from the Firestore catalog; no activity is hardcoded on the server. */
 async function resolvePart1Template(activityKey: string): Promise<Part1Template | null> {
   const entry = (await loadCatalogActivities())[activityKey];
-  if (entry?.part1?.text) {
-    return { text: entry.part1.text, tone: entry.part1.tone, version: entry.part1.version ?? 1 };
-  }
-  const legacy = PART1_TEMPLATES[activityKey];
-  return legacy ? { text: legacy.textTemplate, tone: legacy.prompt, version: 1 } : null;
+  if (!entry?.part1?.text) return null;
+  return { text: entry.part1.text, tone: entry.part1.tone, version: entry.part1.version ?? 1 };
 }
 
 function buildPart1AudioKey(
@@ -554,7 +527,7 @@ async function generatePart1AudioInternal(
   activityKey: string,
   tone?: Tone,
   voice?: Voice
-): Promise<GeneratePart1AudioResponse> {
+): Promise<Part1AudioResult> {
   const template = await resolvePart1Template(activityKey);
   if (!template) {
     throw new HttpsError('invalid-argument', `Unknown activityKey: ${activityKey}`);
@@ -619,11 +592,11 @@ async function generatePart1AudioInternal(
       { merge: true }
     );
 
-    console.info(`[generatePart1Audio] Generated: ${cacheKey}`);
+    console.info(`[part1Audio] Generated: ${cacheKey}`);
     return { storagePath, cacheKey, status: 'ready' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[generatePart1Audio] Error for ${cacheKey}:`, message);
+    console.error(`[part1Audio] Error for ${cacheKey}:`, message);
 
     // Release the claim so a later attempt can retry.
     await cacheRef.set(
@@ -636,36 +609,9 @@ async function generatePart1AudioInternal(
 }
 
 /**
- * Firebase Cloud Function: generatePart1Audio
- *
- * Synthesizes and caches Part 1 greeting audio for an activity step and child name.
- */
-export const generatePart1Audio = onCall(
-  { timeoutSeconds: 120, memory: '512MiB', maxInstances: 5 },
-  async (
-    request: CallableRequest<GeneratePart1AudioRequest>
-  ): Promise<GeneratePart1AudioResponse> => {
-    const uid = requireUid(request);
-    const childName = validateChildName(request.data?.childName);
-    const activityKey = typeof request.data?.activityKey === 'string' ? request.data.activityKey.trim() : '';
-    if (!activityKey) {
-      throw new HttpsError('invalid-argument', 'Missing required field: activityKey');
-    }
-
-    return generatePart1AudioInternal(
-      uid,
-      childName,
-      activityKey,
-      parseTone(request.data?.tone),
-      parseVoice(request.data?.voice)
-    );
-  }
-);
-
-/**
  * Firebase Cloud Function: generateRoutinePart1Audio
  *
- * Batch synthesizes and caches Part 1 greeting audio for all activities in a routine.
+ * The only Part 1 greeting callable: synthesizes (or returns cached) greetings for 1–20 activities.
  */
 export const generateRoutinePart1Audio = onCall(
   { timeoutSeconds: 120, memory: '512MiB', maxInstances: 5 },

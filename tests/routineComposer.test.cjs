@@ -31,19 +31,21 @@ function createLoader() {
 
 const seed = JSON.parse(fs.readFileSync(path.join(root, 'functions/scripts/activity-catalog.seed.json'), 'utf8'));
 
-/** Bundled activities with the catalog seed's tags/routine (the data live in Firestore). */
-function withSeedComposition(definitions) {
-  return definitions.map((def) => ({ ...def, tags: seed[def.key]?.tags ?? [], routine: seed[def.key]?.routine ?? {} }));
+/** The catalog seed parsed like the live catalog; entries with a greeting get Becky media. */
+function seedDefinitions(load) {
+  const { parseActivityCatalog } = load('utils/activityCatalogModel.ts');
+  const assets = { becky: { p1: { path: 'p1', generation: '1' }, p2: { path: 'p2', generation: '2' } } };
+  const activities = Object.fromEntries(Object.entries(seed).map(([key, entry]) => [key, { ...entry, assets }]));
+  return parseActivityCatalog({ activities }, { appVersion: '1.0.0' }).definitions;
 }
 
 /** Every catalog activity, as if all of them had complete media. */
 function setup() {
   const load = createLoader();
-  const { BUNDLED_ACTIVITY_DEFINITIONS } = load('constants/activities.ts');
   const composer = load('utils/routineComposer.ts');
-  const all = withSeedComposition(BUNDLED_ACTIVITY_DEFINITIONS).map((def) => ({ ...def, selectable: true }));
+  const all = seedDefinitions(load).map((def) => ({ ...def, selectable: true }));
   const compose = (segment, age, answers = {}) => composer.composeRoutine(all, segment, age, answers);
-  return { composer, compose, all, BUNDLED_ACTIVITY_DEFINITIONS };
+  return { composer, compose, all };
 }
 
 const set = (list) => [...list].sort();
@@ -87,18 +89,18 @@ test('morning bundles reproduce the POC smart-bundles table', () => {
   assert.deepEqual(set(compose('morning', 12)), set(table[6][2]));
 });
 
-test('evening keeps the previous age templates (read_book is not in the catalog yet)', () => {
+test('evening keeps the previous age templates (bedtime_story is the only reading activity)', () => {
   const { compose } = setup();
   assert.deepEqual(compose('evening', 3), ['tidy_room', 'eat_dinner', 'put_on_pajamas', 'bedtime_story', 'go_to_sleep']);
   assert.deepEqual(compose('evening', 8), ['homework', 'tidy_room', 'eat_dinner', 'put_on_pajamas', 'bedtime_story', 'go_to_sleep']);
 });
 
-test('the app bundles no composition data: without the catalog nothing is auto-composed', () => {
+test('the app bundles no activities: without the catalog nothing is auto-composed', () => {
   const load = createLoader();
-  const { BUNDLED_ACTIVITY_DEFINITIONS } = load('constants/activities.ts');
+  const { getSelectableActivityDefinitions } = load('constants/activities.ts');
   const { composeRoutine } = load('utils/routineComposer.ts');
-  for (const def of BUNDLED_ACTIVITY_DEFINITIONS) assert.deepEqual([def.tags, def.routine], [[], {}], def.key);
-  assert.deepEqual(composeRoutine(BUNDLED_ACTIVITY_DEFINITIONS, 'morning', 6, {}), []);
+  assert.deepEqual(getSelectableActivityDefinitions(), []);
+  assert.deepEqual(composeRoutine(getSelectableActivityDefinitions(), 'morning', 6, {}), []);
 });
 
 test('stuck points pull activities in; mastered tasks leave optional ones out', () => {
@@ -127,32 +129,31 @@ test('stuck points pull activities in; mastered tasks leave optional ones out', 
 test('only selectable activities with a placement are composed, ordered by position', () => {
   const load = createLoader();
   const { composeRoutine, routineLevelAt } = load('utils/routineComposer.ts');
-  const { BUNDLED_ACTIVITY_DEFINITIONS } = load('constants/activities.ts');
+  const definitions = seedDefinitions(load);
   const feedDog = {
-    ...BUNDLED_ACTIVITY_DEFINITIONS[0],
+    ...definitions[0],
     key: 'feed_dog',
     tags: ['pets'],
     routine: { morning: { position: 85, levels: { 5: 2 } } },
   };
-  const defs = [...withSeedComposition(BUNDLED_ACTIVITY_DEFINITIONS).filter((d) => d.selectable), feedDog];
+  const defs = [...definitions.filter((d) => d.selectable && d.key !== 'wash_face'), feedDog];
   const routine = composeRoutine(defs, 'morning', 7, {});
   assert.deepEqual(routine.slice(-2), ['feed_dog', 'eat_breakfast']);
-  assert.ok(!routine.includes('wash_face'), 'not selectable in the bundled registry');
+  assert.ok(!routine.includes('wash_face'), 'not selectable');
   assert.ok(!composeRoutine(defs, 'morning', 4, {}).includes('feed_dog'), 'below its first age');
   assert.equal(routineLevelAt({ position: 0, levels: { 2: 2, 4: 0 } }, 3), 2);
   assert.equal(routineLevelAt({ position: 0, levels: { 2: 2, 4: 0 } }, 9), 0);
   assert.equal(routineLevelAt({ position: 0, levels: { 6: 1 } }, 5), 0);
 });
 
-test('catalog tags/routine are validated on client and server and override bundled values', () => {
+test('catalog tags/routine are validated on client and server', () => {
   const load = createLoader();
-  const { BUNDLED_ACTIVITY_DEFINITIONS } = load('constants/activities.ts');
   const { parseActivityCatalog } = load('utils/activityCatalogModel.ts');
   const model = load('functions/src/catalogModel.ts');
   const assets = { becky: { p1: { path: 'a', generation: '1' }, p2: { path: 'b', generation: '2' } } };
   const parse = (entry) =>
-    parseActivityCatalog({ activities: { wake_up: { part1: { text: 'Hi {name}!' }, assets, ...entry } } },
-      BUNDLED_ACTIVITY_DEFINITIONS, { appVersion: '1.0.0' }).definitions[0];
+    parseActivityCatalog({ activities: { wake_up: { label: 'Wake Up', part1: { text: 'Hi {name}!' }, assets, ...entry } } },
+      { appVersion: '1.0.0' }).definitions[0];
 
   assert.deepEqual([parse({}).tags, parse({}).routine], [[], {}]);
   const routine = { evening: { position: 5, levels: { '03': 2 } } };

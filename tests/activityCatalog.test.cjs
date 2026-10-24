@@ -38,6 +38,16 @@ function createLoader(mocks = {}) {
   return (file) => load(path.resolve(root, file));
 }
 
+const seed = JSON.parse(fs.readFileSync(path.join(root, 'functions/scripts/activity-catalog.seed.json'), 'utf8'));
+
+/** The catalog seed parsed like the live catalog, with Becky media for every entry. */
+function seedDefinitions(load) {
+  const { parseActivityCatalog } = load('utils/activityCatalogModel.ts');
+  const assets = { becky: { p1: { path: 'p1', generation: '1' }, p2: { path: 'p2', generation: '2' } } };
+  const activities = Object.fromEntries(Object.entries(seed).map(([key, entry]) => [key, { ...entry, assets }]));
+  return parseActivityCatalog({ activities }, { appVersion: '1.0.0' }).definitions;
+}
+
 const serverSource = fs.readFileSync(path.join(root, 'functions/src/index.ts'), 'utf8');
 
 function extract(regex, label) {
@@ -54,12 +64,6 @@ function serverBuildPart1AudioKey() {
   return new Function(`${transpile(fns)}; return buildPart1AudioKey;`)();
 }
 
-function serverLegacyTemplates() {
-  const match = /const PART1_TEMPLATES[^=]*= (\{[\s\S]*?\n\});/.exec(serverSource);
-  assert.ok(match, 'PART1_TEMPLATES not found in functions/src/index.ts');
-  return new Function(`return ${match[1]};`)();
-}
-
 const part1Mocks = {
   'expo-file-system/legacy': { documentDirectory: 'file:///docs/' },
   'firebase/functions': { httpsCallable: () => async () => ({ data: {} }) },
@@ -68,13 +72,15 @@ const part1Mocks = {
   './assetSync': { localAudioPath: (key) => `file:///docs/audio/${key}.wav` },
 };
 
-test('Part 1 audio keys match the server for bundled and versioned greetings', () => {
+test('Part 1 audio keys match the server for catalog and versioned greetings', () => {
   const load = createLoader(part1Mocks);
   const { buildPart1AudioKey } = load('services/part1Audio.ts');
   const activities = load('constants/activities.ts');
   const server = serverBuildPart1AudioKey();
+  const definitions = seedDefinitions(load);
+  activities.applyActivityDefinitions(definitions);
 
-  for (const def of activities.BUNDLED_ACTIVITY_DEFINITIONS) {
+  for (const def of definitions) {
     for (const [tone, voice] of [[undefined, undefined], ['calm', 'man']]) {
       assert.equal(
         buildPart1AudioKey(def.key, 'Liam', tone, voice),
@@ -87,39 +93,37 @@ test('Part 1 audio keys match the server for bundled and versioned greetings', (
   assert.equal(buildPart1AudioKey('wake_up', 'Liam'), 'p1_wake_up_liam_encouraging_woman');
 
   activities.applyActivityDefinitions([
-    ...activities.BUNDLED_ACTIVITY_DEFINITIONS,
-    { ...activities.BUNDLED_ACTIVITY_DEFINITIONS[0], key: 'feed_dog', part1Tone: 'calm', part1Version: 3 },
+    ...definitions,
+    { ...definitions[0], key: 'feed_dog', part1Tone: 'calm', part1Version: 3 },
   ]);
   assert.equal(buildPart1AudioKey('feed_dog', 'Liam'), server('feed_dog', 'Liam', 'calm', 'woman', 3));
   assert.equal(buildPart1AudioKey('feed_dog', 'Liam'), 'p1_feed_dog_liam_calm_woman_v3');
 });
 
-test('bundled greetings and the catalog seed match the server legacy templates', () => {
+test('the app bundles no activities', () => {
   const activities = createLoader()('constants/activities.ts');
-  const legacy = serverLegacyTemplates();
-  const seed = JSON.parse(fs.readFileSync(path.join(root, 'functions/scripts/activity-catalog.seed.json'), 'utf8'));
+  assert.equal(activities.BUNDLED_ACTIVITY_DEFINITIONS, undefined);
+  assert.deepEqual(activities.ACTIVITY_KEYS, []);
+  assert.equal(activities.getActivityMeta('wake_up').label, 'Wake Up', 'unknown keys render as a placeholder');
+  assert.equal(activities.isActivitySelectable('wake_up'), false);
+});
 
-  for (const def of activities.BUNDLED_ACTIVITY_DEFINITIONS.filter((d) => d.selectable)) {
-    assert.deepEqual(
-      { text: def.part1Text, tone: def.part1Tone },
-      { text: legacy[def.key].textTemplate, tone: legacy[def.key].prompt },
-      def.key
-    );
-    assert.deepEqual(seed[def.key].part1, { text: def.part1Text, tone: def.part1Tone }, def.key);
-  }
+test('the server hardcodes no activities and the seed matches the recording manifest', () => {
+  const definitions = seedDefinitions(createLoader());
+  assert.ok(!/PART1_TEMPLATES/.test(serverSource), 'greetings come only from catalog/activities');
   // Activities without uploaded videos carry no greeting, so the catalog keeps them hidden.
-  for (const key of ['pack_backpack', 'wash_face']) assert.equal(seed[key].part1, undefined, key);
+  for (const key of ['pack_backpack']) assert.equal(seed[key].part1, undefined, key);
   assert.equal(seed.read_book, undefined);
 
   // The recording manifest renders greetings with a sample name; the clips' Part 1 audio must say the same thing.
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'docs/routines_manifest.json'), 'utf8'));
   const manifestTone = { Encouraging: 'encouraging', Cheerful: 'cheerful', Relaxing: 'calm' };
   const manifestIds = new Set(manifest.map((e) => e.id));
-  for (const def of activities.BUNDLED_ACTIVITY_DEFINITIONS.filter((d) => d.selectable)) {
+  for (const def of definitions.filter((d) => d.selectable)) {
     assert.ok(manifestIds.has(def.key), `${def.key} missing from routines_manifest.json`);
   }
   for (const entry of manifest) {
-    const def = activities.BUNDLED_ACTIVITY_DEFINITIONS.find((d) => d.key === entry.id);
+    const def = definitions.find((d) => d.key === entry.id && d.selectable);
     if (!def) {
       // Cloud-only activity (published via catalog/activities): its greeting lives in the details JSON.
       assert.match(entry.id, /^[a-z0-9_]+$/, entry.id);
@@ -153,10 +157,9 @@ function catalogEntry(overrides = {}) {
 
 test('catalog parsing only exposes complete, enabled, supported activities', () => {
   const load = createLoader();
-  const { BUNDLED_ACTIVITY_DEFINITIONS } = load('constants/activities.ts');
   const { parseActivityCatalog } = load('utils/activityCatalogModel.ts');
   const parse = (activities, appVersion = '1.0.0') =>
-    parseActivityCatalog({ activities }, BUNDLED_ACTIVITY_DEFINITIONS, { appVersion });
+    parseActivityCatalog({ activities }, { appVersion });
 
   const parsed = parse({ feed_dog: catalogEntry(), 'Bad Key!': catalogEntry() });
   assert.equal(parsed.definitions.length, 1);
@@ -171,20 +174,18 @@ test('catalog parsing only exposes complete, enabled, supported activities', () 
   assert.equal(selectable(catalogEntry({ minAppVersion: '1.2.0' }), '1.1.9'), false);
   assert.equal(selectable(catalogEntry({ minAppVersion: '1.2' }), '1.2.0'), true);
   assert.equal(selectable(catalogEntry({ assets: { becky: { p2: catalogEntry().assets.becky.p2 } } })), false);
-  // Without its own greeting text the server cannot speak Part 1, so it stays hidden.
-  assert.equal(parse({ feed_dog: catalogEntry({ part1: undefined }) }).definitions.length, 0);
-
-  // Bundled activities inherit bundled copy for fields the catalog omits.
-  const wake = parse({ wake_up: { part1: { text: 'Hi {name}!' }, assets: catalogEntry().assets } }).definitions[0];
-  assert.equal(wake.label, 'Wake Up');
-  assert.equal(wake.part1Text, 'Hi {name}!');
-  assert.equal(wake.selectable, true);
-  const noGreeting = parse({ wake_up: { assets: catalogEntry().assets } }).definitions[0];
-  assert.equal(noGreeting.selectable, false);
+  // Without its own greeting text the server cannot speak Part 1, so it stays hidden (but renders).
+  assert.equal(selectable(catalogEntry({ part1: undefined })), false);
+  // Nothing is bundled: an entry needs its own label, and omitted fields use generic defaults.
+  assert.equal(parse({ wake_up: { part1: { text: 'Hi {name}!' }, assets: catalogEntry().assets } }).definitions.length, 0);
+  const minimal = parse({ wake_up: { label: 'Wake Up', part1: { text: 'Hi {name}!' }, assets: catalogEntry().assets } }).definitions[0];
+  assert.deepEqual([minimal.emoji, minimal.timerSeconds, minimal.stars, minimal.selectable], ['⭐', 120, 1, true]);
 });
 
 test('registry keeps retired activities renderable and filters pickers by selectability', () => {
-  const activities = createLoader()('constants/activities.ts');
+  const load = createLoader();
+  const activities = load('constants/activities.ts');
+  activities.applyActivityDefinitions(seedDefinitions(load).map((def) => ({ ...def, selectable: Boolean(seed[def.key].part1) })));
   assert.equal(activities.isActivitySelectable('brush_teeth'), true);
   assert.equal(activities.isActivitySelectable('pack_backpack'), false);
   assert.ok(!activities.activityKeysForSegment('morning').includes('pack_backpack'));

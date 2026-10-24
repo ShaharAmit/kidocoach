@@ -208,5 +208,19 @@
         "text": "Ready for today's mission? Let's pack our backpack for an awesome day ahead! First step: Unzip! Zip-zap-zoom! Look at that, your bag is ready for your special things. Step one: Grab your water bottle! Slide it right into the side pocket. Boom! Hydration power unlocked! Step two: In goes your yummy lunchbox! And if you're heading to big-kid school, pencil case and folder go right inside. Look at you packing like a pro! Quick look inside... Did we miss anything? Nope, all set! Zip it all the way closed. Snap, shut, and ready to roll! You did that all by yourself! Look at how independent you are! Give me a high-five on the screen! You are totally ready to shine today!"
       }
     }
+  },
+  {
+    "id": "wash_face",
+    "title": "Wash Face",
+    "opt_a": {
+      "p1": {
+        "prompt": "Encouraging",
+        "text": "Face washing time, Jonathan!"
+      },
+      "p2": {
+        "prompt": "Encouraging",
+        "text": "Time to wake up that bright, beautiful face of yours! Let's do our super splash! Step one: Turn on the tap! Make the water nice and comfy. Cup your hands together like a little bowl! Eyes softly closed... and SPLASH! One, two, gentle splash! Ooh, feels so fresh. Now gently rub your cheeks, your forehead, and your nose! Rub-a-dub wake-up magic! All the sleepiness is washed away! Look at that glowing superstar smile! You are officially awake and ready to rock today! Woohoo!"
+      }
+    }
   }
 ]

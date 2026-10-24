@@ -20,13 +20,12 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 
 ## ADR-002: Firebase is the single source of routine composition data (2026-10)
 
-**Decision.** `tags` and `routine` live **only** in Firestore `catalog/activities`, which is written by the Storage triggers from `catalog/activities/{key}.json` or by the seed script. The app bundles none: `BUNDLED_ACTIVITY_DEFINITIONS` have `tags: []` and `routine: {}`.
+**Decision.** `tags` and `routine` live **only** in Firestore `catalog/activities`, which is written by the Storage triggers from `catalog/activities/{key}.json` or by the seed script. The app bundles none (see ADR-013).
 
 - The questionnaire calls `refreshActivityCatalog()` before composing. It falls back to the AsyncStorage copy. If there's still nothing to compose, it shows a "No connection" alert and doesn't save an empty routine.
 - The server validator (`functions/src/catalogModel.ts` `validateCatalogMetadata`) and the client parser (`parseRoutineRules` / `parseActivityTags`) must accept the same shape. The seed JSON (`functions/scripts/activity-catalog.seed.json`) carries the values for re-seeding.
 - **Changing the catalog shape:** deploy `onCatalogAssetFinalized` / `onCatalogAssetDeleted` *before* uploading details JSONs that use new fields. The old validator silently drops unknown fields, and `applyMetadata` replaces the entry's metadata.
 - To edit live values without re-uploading, use field-level Firestore updates (`activities.{key}.tags` / `.routine`). Never overwrite other metadata.
-- Bundled labels, emoji and greetings still exist as an offline fallback for display. That fallback is pre-existing and separate from this decision.
 
 ## ADR-003: Multi-select questionnaire answers use new field names (2026-10)
 
@@ -44,7 +43,7 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 - Keys dropped from the catalog stay renderable in existing routines, using a placeholder. Never substitute another activity.
 - Catalog writes come only from the triggers or `functions/scripts/seed-activity-catalog.js`, never from the app. The triggers are transactional and ignore out-of-order generations.
 - Updates use the same filename. Devices compare the catalog `generation`/`md5`, so they download only what changed.
-- Bundled definitions remain only as an offline display fallback for the first launch.
+- The app bundles no activity definitions (ADR-013).
 
 ## ADR-005: Pre-rendered two-part avatar videos; personalization is greeting audio only (2026-10)
 
@@ -102,3 +101,13 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 ## ADR-012: Stack baseline (2026-10)
 
 **Decision.** Expo SDK 57 (managed), React Native 0.86, React 19.2, Firebase JS SDK 12; Cloud Functions on Node 22 with `firebase-functions` 7 (v2 APIs). Media uses `expo-video` / `expo-audio` (no `expo-av`). Upgrades must keep every native package on the SDK-compatible version (`npx expo install --check`). Read the matching versioned Expo docs before writing code.
+
+## ADR-013: The app bundles no activities; the catalog is the only source (2026-10)
+
+**Decision.** `constants/activities.ts` holds no activity data. The registry starts empty and is filled only from Firestore `catalog/activities` or its AsyncStorage copy (`activity_catalog_v1`). `parseActivityCatalog()` merges nothing from the app, so every entry needs its own `label`. Omitted fields use generic defaults, and an entry with no `part1.text` renders but can't be selected.
+
+- **No catalog on the device and no connection:** `app/loading.tsx` stops with "Connect to the internet" and a Try again button. With a cached copy, the app launches offline as before.
+- Routine keys that aren't in the registry render with the placeholder from `getActivityMeta()`. Reminders are still scheduled for them, with a placeholder label.
+- Tests build their definitions from `functions/scripts/activity-catalog.seed.json` through the real parser.
+- Card artwork is cloud-only too (`catalog/activities/{key}.png`, about 640 px). `warmSegmentAssets` fetches the current segment's artwork. Without artwork a card shows the sun fallback. Originals are archived in `kidocoach-assets/artwork/`.
+- The server hardcodes no activities either. Part 1 greetings come only from `catalog/activities` (`PART1_TEMPLATES` was removed), and an unreadable catalog returns `unavailable`.

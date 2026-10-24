@@ -65,19 +65,20 @@ export function compareAppVersions(a: string, b: string): number {
   return 0;
 }
 
+/** Greeting shown for an entry that has no `part1` yet (it can't be selected anyway). */
+const FALLBACK_PART1_TEXT = 'All right, {name}!';
+
 /**
- * Overlays the remote catalog on the bundled definitions. An activity is selectable only when it
- * is enabled, supported by this app build, and has Part 1 + Part 2 videos for `avatarId` — so a
- * half-finished upload never shows up as a broken option.
+ * Builds the activity definitions from the remote catalog alone (the app bundles none). An
+ * activity is selectable only when it is enabled, supported by this app build, and has Part 1 +
+ * Part 2 videos for `avatarId` — so a half-finished upload never shows up as a broken option.
  */
 export function parseActivityCatalog(
   raw: unknown,
-  bundled: ActivityDefinition[],
   options: { appVersion: string; avatarId?: string }
 ): ParsedCatalog | null {
   if (!isRecord(raw) || !isRecord(raw.activities)) return null;
   const avatarId = options.avatarId ?? DEFAULT_CATALOG_AVATAR_ID;
-  const bundledByKey = new Map(bundled.map((def) => [def.key, def]));
 
   const definitions: ActivityDefinition[] = [];
   const assets: ParsedCatalog['assets'] = {};
@@ -85,7 +86,6 @@ export function parseActivityCatalog(
 
   for (const [key, entry] of Object.entries(raw.activities)) {
     if (!ACTIVITY_KEY_PATTERN.test(key) || !isRecord(entry)) continue;
-    const base = bundledByKey.get(key);
     const part1 = isRecord(entry.part1) ? entry.part1 : {};
 
     const entryAssets: ParsedCatalog['assets'][string] = {};
@@ -104,44 +104,44 @@ export function parseActivityCatalog(
     const image = parseAssetRef(entry.image);
     if (image) images[key] = image;
 
-    const label = str(entry.label, 60) ?? base?.label;
+    const label = str(entry.label, 60);
     // The server only speaks greetings it finds in the catalog, so selectability requires the
-    // remote entry's own text; the bundled text is just a display/key fallback.
+    // entry's own greeting text.
     const remotePart1Text = str(part1.text);
-    const part1Text = remotePart1Text ?? base?.part1Text;
+    const part1Text = remotePart1Text ?? FALLBACK_PART1_TEXT;
     const minAppVersion = str(entry.minAppVersion, 20);
     const supported = !minAppVersion || compareAppVersions(options.appVersion, minAppVersion) >= 0;
     const media = entryAssets[avatarId];
     const stars = entry.stars;
     const timer = entry.timerSeconds;
 
-    if (!label || !part1Text) continue;
+    if (!label) continue;
 
     definitions.push({
       key,
       label,
-      emoji: str(entry.emoji, 16) ?? base?.emoji ?? '⭐',
-      subtitle: str(entry.subtitle) ?? base?.subtitle ?? "Let's do it together!",
+      emoji: str(entry.emoji, 16) ?? '⭐',
+      subtitle: str(entry.subtitle) ?? "Let's do it together!",
       timeOfDay: TIMES.includes(entry.timeOfDay as ActivityTimeOfDay)
         ? (entry.timeOfDay as ActivityTimeOfDay)
-        : base?.timeOfDay ?? 'general',
+        : 'general',
       timerSeconds: typeof timer === 'number' && Number.isInteger(timer) && timer >= 10 && timer <= 3 * 60 * 60
         ? timer
-        : base?.timerSeconds ?? 120,
+        : 120,
       durationMode: MODES.includes(entry.durationMode as DurationMode)
         ? (entry.durationMode as DurationMode)
-        : base?.durationMode ?? 'variable',
-      stars: stars === 0 || stars === 1 || stars === 2 ? stars : base?.stars ?? 1,
-      order: typeof entry.order === 'number' && Number.isFinite(entry.order) ? entry.order : base?.order ?? 1000,
+        : 'variable',
+      stars: stars === 0 || stars === 1 || stars === 2 ? stars : 1,
+      order: typeof entry.order === 'number' && Number.isFinite(entry.order) ? entry.order : 1000,
       part1Text,
-      part1Tone: TONES.includes(part1.tone as ToneOption) ? (part1.tone as ToneOption) : base?.part1Tone ?? 'encouraging',
+      part1Tone: TONES.includes(part1.tone as ToneOption) ? (part1.tone as ToneOption) : 'encouraging',
       part1Version: typeof part1.version === 'number' && Number.isInteger(part1.version) && part1.version >= 1
         ? part1.version
         : 1,
-      promptText: str(entry.promptText, 300) ?? base?.promptText ?? part1Text,
+      promptText: str(entry.promptText, 300) ?? part1Text,
       selectable: entry.enabled !== false && supported && Boolean(remotePart1Text && media?.p1 && media?.p2),
-      tags: parseActivityTags(entry.tags) ?? base?.tags ?? [],
-      routine: parseRoutineRules(entry.routine) ?? base?.routine ?? {},
+      tags: parseActivityTags(entry.tags) ?? [],
+      routine: parseRoutineRules(entry.routine) ?? {},
     });
   }
 

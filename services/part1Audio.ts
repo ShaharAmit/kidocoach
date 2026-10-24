@@ -7,19 +7,6 @@ import { ActivityKey, Routine, ToneOption, VoiceOption } from '../types';
 import { getActivityDefinition } from '../constants/activities';
 import { normalizeNameToken } from '../utils/nameToken';
 
-interface GeneratePart1AudioRequest {
-  childName: string;
-  activityKey: string;
-  tone?: ToneOption;
-  voice?: VoiceOption;
-}
-
-interface GeneratePart1AudioResponse {
-  storagePath: string | null;
-  cacheKey: string;
-  status: 'ready' | 'generating';
-}
-
 interface GenerateRoutinePart1AudioRequest {
   childName: string;
   activityKeys: string[];
@@ -137,6 +124,22 @@ async function downloadPart1Audio(localPath: string, storagePath: string): Promi
   return ok;
 }
 
+/** Single entry point for greeting generation: `generateRoutinePart1Audio` with 1–20 keys. */
+async function requestPart1Audio(
+  activityKeys: string[],
+  childName: string,
+  tone?: ToneOption,
+  voice?: VoiceOption
+): Promise<GenerateRoutinePart1AudioResponse['results']> {
+  await ensureAuth();
+  const generateRoutinePart1Audio = httpsCallable<
+    GenerateRoutinePart1AudioRequest,
+    GenerateRoutinePart1AudioResponse
+  >(functions, 'generateRoutinePart1Audio');
+  const result = await generateRoutinePart1Audio({ childName, activityKeys, tone, voice });
+  return result.data.results;
+}
+
 /**
  * Ensure Part 1 greeting audio for an activity is downloaded and cached locally.
  */
@@ -158,26 +161,13 @@ export async function ensurePart1AudioReady(
       return localPath;
     }
 
-    await ensureAuth();
-
     // The callable is the only cache lookup: it returns existing clips without regenerating
     // and refreshes their server-side retention (audio_cache is not client-readable).
-    const generatePart1Audio = httpsCallable<GeneratePart1AudioRequest, GeneratePart1AudioResponse>(
-      functions,
-      'generatePart1Audio'
-    );
-    const result = await generatePart1Audio({
-      childName: name,
-      activityKey: actKey,
-      tone,
-      voice,
-    });
-    const { storagePath, status } = result.data;
-
+    const [item] = await requestPart1Audio([actKey], name, tone, voice);
     // A server whose catalog is a version behind would hand back the previous greeting; storing it
     // under the new key would pin the old audio forever, so only accept an exact key match.
-    if (status === 'ready' && storagePath && result.data.cacheKey === cacheKey) {
-      const ok = await downloadPart1Audio(localPath, storagePath);
+    if (item?.status === 'ready' && item.storagePath && item.cacheKey === cacheKey) {
+      const ok = await downloadPart1Audio(localPath, item.storagePath);
       return ok ? localPath : null;
     }
 
@@ -210,23 +200,12 @@ export async function ensurePart1AudioForActivities(
   if (missingKeys.length === 0) return;
 
   try {
-    await ensureAuth();
-    const generateRoutinePart1Audio = httpsCallable<
-      GenerateRoutinePart1AudioRequest,
-      GenerateRoutinePart1AudioResponse
-    >(functions, 'generateRoutinePart1Audio');
-
     for (let i = 0; i < missingKeys.length; i += MAX_KEYS_PER_BATCH) {
-      const result = await generateRoutinePart1Audio({
-        childName: name,
-        activityKeys: missingKeys.slice(i, i + MAX_KEYS_PER_BATCH),
-        tone,
-        voice,
-      });
+      const results = await requestPart1Audio(missingKeys.slice(i, i + MAX_KEYS_PER_BATCH), name, tone, voice);
       // Only keep clips whose server key matches ours: if either side's catalog is a greeting
       // version behind, the clip is skipped and re-requested on a later pass.
       await Promise.allSettled(
-        result.data.results.map(async (item) => {
+        results.map(async (item) => {
           if (item.status !== 'ready' || !item.storagePath) return;
           if (item.cacheKey !== buildPart1AudioKey(item.activityKey, name, tone, voice)) return;
           await downloadPart1Audio(localAudioPath(item.cacheKey), item.storagePath);

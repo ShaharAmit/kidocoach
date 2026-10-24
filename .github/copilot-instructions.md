@@ -180,7 +180,7 @@ Post-setup core flow:
 
 **`prefetchQueue.ts`** — Pure priority queue (dedupe by id, priority bumps, one re-run for jobs re-enqueued mid-flight).
 
-**`part1Audio.ts`** — Personalized Part 1 greetings. Cache key `p1_{activity}_{name}_{tone}_{voice}[_v{part1Version}]` (the suffix is omitted for version 1, so pre-catalog clips stay valid; MUST match `buildPart1AudioKey` in `functions/src/index.ts`). `ensurePart1AudioForActivities()` batches via `generateRoutinePart1Audio`; `prunePart1Audio()` removes stale clips.
+**`part1Audio.ts`** — Personalized Part 1 greetings. Cache key `p1_{activity}_{name}_{tone}_{voice}[_v{part1Version}]` (the suffix is omitted for version 1, so pre-catalog clips stay valid; MUST match `buildPart1AudioKey` in `functions/src/index.ts`). `ensurePart1AudioReady()` / `ensurePart1AudioForActivities()` both call `generateRoutinePart1Audio`; `prunePart1Audio()` removes stale clips.
 
 **`tts.ts`** — Client-side TTS orchestration. `ensureAudioForRoutine(routine)` iterates `activityStack`, checks Firestore `audio_cache/{cacheKey}` for `status === 'ready'`, and calls the `generateRoutineAudio` Cloud Function for any missing entries. `getAudioCacheForRoutine(routine)` fetches all cache entries for display/debugging.
 
@@ -202,14 +202,14 @@ Post-setup core flow:
 
 ### `constants/`
 
-**`activities.ts`** — Activity registry. Bundled `ActivityDefinition`s (label, emoji, subtitle, time of day, timer, duration mode, stars, Part 1 text/tone/version, `selectable`) are the offline fallback; `applyActivityDefinitions()` overlays the cloud catalog **in place**, so `ACTIVITIES`, `ACTIVITY_KEYS`, `ACTIVITY_TIMER_SECONDS`, etc. stay valid references. Keys dropped from the catalog stay renderable but not selectable. Use `getActivityMeta()`/`getActivityDefinition()` (placeholder for unknown keys — never substitute another activity), `isActivitySelectable()`, `activityKeysForSegment()` (selectable only).
+**`activities.ts`** — Activity registry. No activities are bundled: the registry starts empty and `applyActivityDefinitions()` fills it from the cloud catalog (or its on-device copy) **in place**, so `ACTIVITIES`, `ACTIVITY_KEYS`, `ACTIVITY_TIMER_SECONDS`, etc. stay valid references. Keys dropped from the catalog stay renderable but not selectable. Use `getActivityMeta()`/`getActivityDefinition()` (placeholder for unknown keys — never substitute another activity), `isActivitySelectable()`, `activityKeysForSegment()` (selectable only).
 
 ### `functions/src/`
 
 **`index.ts`** — Two Firebase Cloud Functions (v2):
 
 - **`generateRoutineAudio`** (callable, 120 s timeout, 512 MiB): Validates the request, synthesizes WAV audio via Gemini 3.8 Flash TTS (retries up to 3×, selects voice `Aoede` for woman / `Kore` for man, passes tone as `speechMetadata.style`), normalizes the model's WAV (or raw PCM16) output to a canonical 44-byte-header WAV, uploads to `audio/{cacheKey}.wav` in Cloud Storage, makes the file public, and writes `status: ready` + the public URL to `audio_cache/{cacheKey}` in Firestore.
-- **`generatePart1Audio` / `generateRoutinePart1Audio`**: Part 1 greeting text/tone/version come from `catalog/activities` (60 s in-memory cache), falling back to the legacy `PART1_TEMPLATES`.
+- **`generateRoutinePart1Audio`** (1–20 activity keys; the only greeting callable): Part 1 greeting text/tone/version come only from `catalog/activities` (5 s in-memory cache); nothing is hardcoded. An unreadable catalog returns `unavailable` (retryable).
 - **`onCatalogAssetFinalized` / `onCatalogAssetDeleted`** (Storage triggers): keep `catalog/activities` in sync with uploads using `catalogModel.ts` (transactional; ignore out-of-order generations, `_p2` aliases when `{key}.mp4` exists, and the delete event an overwrite emits). `functions/scripts/seed-activity-catalog.js` rebuilds refs from a bucket listing.
 - **`submitEarlyAccessLead`** (callable, CORS enabled): Normalizes and validates an email address, hashes it with SHA-256, writes to `early_access/{hash}` in a transaction that also migrates any legacy plain-email document.
 

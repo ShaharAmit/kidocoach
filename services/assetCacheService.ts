@@ -304,7 +304,7 @@ function setStage(stage: CacheProgressStage, total = status.total, ready = statu
 
 /**
  * Blocks until every activity of `segment` in `routines` can play from disk (videos, captions,
- * personalized greeting) or the retry budget runs out (offline). This is the only media the
+ * personalized greeting, card artwork) or the retry budget runs out (offline). This is the only media the
  * loading screen waits for; everything else is prefetched in the background afterwards.
  */
 export async function warmSegmentAssets(
@@ -322,6 +322,10 @@ export async function warmSegmentAssets(
   }
 
   setStage('warming-assets', work.length, 0);
+  // Card artwork is cloud-only, so fetch the segment's artwork now (a stat when up to date).
+  const artwork = Promise.all(
+    [...new Set(work.map((item) => item.activityKey))].map((key) => syncActivityImage(key).catch(() => undefined))
+  );
   const report = async (label: string, floor: number, span: number) => {
     const ready = await Promise.all(work.map((item) => isActivityPlayable(item.activityKey, item.child)));
     const readyCount = ready.filter(Boolean).length;
@@ -358,6 +362,7 @@ export async function warmSegmentAssets(
     }
   }
 
+  await artwork;
   routines.forEach((routine) => markRoutineWarmed(segmentWarmKey(routine.id, segment), allReady));
   setStage('done', work.length, allReady ? work.length : status.ready);
   if (!allReady) console.warn('[AssetCache] Segment assets incomplete after retries (offline?).');

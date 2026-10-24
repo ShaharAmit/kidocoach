@@ -27,7 +27,7 @@ python3 $M add --id feed_dog --title "Feed the Dog" --prompt Encouraging \
 - `--prompt`: `Encouraging` (default), `Cheerful`, or `Relaxing` (evening/bedtime). These map to the catalog tone `encouraging`/`cheerful`/`calm`.
 - Alternative script → `--option b` (stored as `opt_b`, archived as `option_b/`). Rewriting an existing option → `--replace`.
 - `python3 $M show --id KEY` prints the exact TTS texts and the derived catalog `part1` `{text, tone}`. Use them **verbatim** in every later step.
-- Run `npm test`. `tests/activityCatalog.test.cjs` validates the manifest. Bundled activities must also match `constants/activities.ts`.
+- Run `npm test`. `tests/activityCatalog.test.cjs` validates the manifest against the catalog seed (`functions/scripts/activity-catalog.seed.json`); the app bundles no activities.
 
 ## Step 1: TTS (Gemini)
 
