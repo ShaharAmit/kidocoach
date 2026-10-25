@@ -17,12 +17,14 @@ import { colors, fs, ms, s, vs } from '../theme';
 import { preloadLocalImages, retryLocalImage, useLocalImage } from '../utils/localImages';
 import { ALL_BUNDLED_IMAGES, MOON_IMAGE, SUN_IMAGE } from '../constants/images';
 import { ParentalGateHost, requestParentalGate } from '../components/ParentalGate';
+import { useIsOnline } from '../hooks/useIsOnline';
 
 /** Parent-only tabs open only after the parental gate (Kids Category guideline 1.3). */
-function gatedTabListener(href: '/profile' | '/settings') {
+function gatedTabListener(href: '/profile' | '/settings', enabled = true) {
   return {
     tabPress: (event: { preventDefault: () => void }) => {
       event.preventDefault();
+      if (!enabled) return;
       void requestParentalGate().then((passed) => {
         if (passed) router.navigate(href);
       });
@@ -84,6 +86,7 @@ export default function RootLayout() {
   const pathname = usePathname();
   const prevPathnameRef = useRef<string | null>(null);
   const [segment, setSegment] = useState<DaySegment>(getCurrentSegment);
+  const isOnline = useIsOnline();
   const [showDecorations, setShowDecorations] = useState(false);
   const [homeViewMode, setHomeViewModeLocal] = useState(getHomeViewMode);
   const [authUserId, setAuthUserId] = useState(auth.currentUser?.uid);
@@ -356,9 +359,12 @@ export default function RootLayout() {
           />
           <Tabs.Screen
             name="profile"
-            listeners={gatedTabListener('/profile')}
+            listeners={gatedTabListener('/profile', isOnline)}
             options={{
               title: 'Profile',
+              // Account linking, sign-in and deletion all need the server.
+              tabBarItemStyle: { flex: 1, paddingVertical: vs(6), justifyContent: 'center', opacity: isOnline ? 1 : 0.4 },
+              tabBarAccessibilityLabel: isOnline ? 'Profile' : 'Profile, unavailable offline',
               headerLeft: () => <NavigationBackButton />,
               headerStyle: { backgroundColor: colors.morningBg },
               headerTintColor: colors.textInk,

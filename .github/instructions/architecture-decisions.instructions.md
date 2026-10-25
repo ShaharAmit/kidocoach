@@ -121,3 +121,13 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 - Each routine's reminder fires at its first step. Like ADR-003, answering the questionnaire again doesn't re-time existing routines.
 - `scheduleMinutes` is catalog data (ADR-002): deploy the Storage triggers before uploading details JSONs that use it. Older builds ignore it.
 
+
+## ADR-015: Offline after first launch; stars sync later; editing activities needs a connection (2026-10)
+
+**Decision.** After one online launch, the app starts and plays routines from the device (ADR-006 fallbacks). `expo-network` is the only connectivity signal (`hooks/useIsOnline.ts`, optimistic until the first reading). There's no offline write queue except the one for stars.
+
+- **Stars:** completions queue in AsyncStorage (`pending_step_awards_{uid}`) and are flushed by `flushPendingStepStars` on Home mount, on foreground, after each completion and when the connection returns. Totals are shown as `getDisplayedTotalStars()`: the last known server total plus pending stars.
+- **Editing activities:** the Home "+" / "Create Routine" buttons, the Settings "Activity Manager" card and the Activity Manager Save button are disabled offline. New activities need a Firestore write and media downloads, so they never run offline.
+- **Profile (account):** the Profile tab and the "Parent sign in" links on Loading/Welcome are disabled offline. If the connection drops while Profile is open, its cards are grayed and untappable. Linking, sign-in, backup and deletion all need the server.
+- **Boot:** `warmSegmentAssets` skips download retries and doesn't wait for artwork when offline, so a partly cached segment launches immediately with what's on disk.
+- Known gap: the first online launch only blocks on the current segment. The other segment is ready offline only after the background prefetch finishes.

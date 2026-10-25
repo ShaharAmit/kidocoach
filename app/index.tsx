@@ -26,6 +26,7 @@ import { useActivityCatalogRevision } from '../services/activityCatalog';
 import { useActivityCloudImageUri } from '../utils/activityImages';
 import { useLocalDailyCompletion } from '../hooks/useLocalDailyCompletion';
 import { useUserRoutines } from '../hooks/useRoutine';
+import { useIsOnline } from '../hooks/useIsOnline';
 import {
   isSegmentWarmed,
   scheduleBackgroundPrefetch,
@@ -81,6 +82,13 @@ function HomeScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [userId, setUserId] = useState('');
+  const isOnline = useIsOnline();
+
+  // Stars earned offline are queued on device; send them as soon as the connection returns.
+  useEffect(() => {
+    if (!isOnline || !userId) return;
+    flushPendingStepStars(userId).catch((err) => console.warn('[Home] Star sync failed:', err));
+  }, [isOnline, userId]);
   const [cacheStage, setCacheStage] = useState('idle');
   const [segment, setSegment] = useState<'morning' | 'evening'>(getCurrentSegment());
   const [viewMode, setViewMode] = useState<'activities' | 'player'>('activities');
@@ -154,7 +162,6 @@ function HomeScreen() {
       const user = await ensureAuth();
       if (!mounted) return;
       setUserId(user.uid);
-      flushPendingStepStars(user.uid).catch((err) => console.warn('[Home] Star sync failed:', err));
     }
 
     initialize().catch((err) => {
@@ -431,7 +438,12 @@ function HomeScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>No routine found.</Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.push('/parent/create'); }); }}>
+        <TouchableOpacity
+          style={[styles.primaryButton, !isOnline && styles.offlineDisabled]}
+          disabled={!isOnline}
+          accessibilityState={{ disabled: !isOnline }}
+          onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.push('/parent/create'); }); }}
+        >
           <Text style={styles.primaryButtonText}>Create Routine</Text>
         </TouchableOpacity>
       </View>
@@ -537,14 +549,18 @@ function HomeScreen() {
                 {visibleStepIndexes.length === 0 ? (
                   <View style={styles.emptyState}>
                     <TouchableOpacity
-                      style={styles.emptyAddButton}
+                      style={[styles.emptyAddButton, !isOnline && styles.offlineDisabled]}
+                      disabled={!isOnline}
+                      accessibilityState={{ disabled: !isOnline }}
                       onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.push(`/parent/create?segment=${segment}` as never); }); }}
                       activeOpacity={0.85}
                     >
                       <Text style={styles.emptyAddIcon}>＋</Text>
                     </TouchableOpacity>
                     <Text style={styles.emptyTitle}>No activities yet</Text>
-                    <Text style={styles.emptySub}>Tap + to add activities for this routine.</Text>
+                    <Text style={styles.emptySub}>
+                      {isOnline ? 'Tap + to add activities for this routine.' : 'Connect to the internet to add activities.'}
+                    </Text>
                   </View>
                 ) : null}
               </ScrollView>
@@ -946,6 +962,9 @@ const styles = StyleSheet.create({
     borderRadius: ms(14),
     paddingVertical: vs(12),
     paddingHorizontal: s(18),
+  },
+  offlineDisabled: {
+    opacity: 0.45,
   },
   primaryButtonText: {
     fontSize: fs(16),

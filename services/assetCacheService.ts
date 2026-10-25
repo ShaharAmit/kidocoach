@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDownloadURL, getMetadata, ref } from 'firebase/storage';
+import { getNetworkStateAsync } from 'expo-network';
 import { storage } from './firebase';
 import {
   ensurePart1AudioForActivities,
@@ -335,8 +336,13 @@ export async function warmSegmentAssets(
   };
 
   let allReady = await report('Checking your routine...', 55, 40);
+  // Offline, retries can't help and each Storage call retries for up to 15 s: launch with what's on disk.
+  const online = allReady || (await getNetworkStateAsync().then(
+    (state) => state.isInternetReachable ?? state.isConnected ?? true,
+    () => true
+  ));
 
-  for (let attempt = 0; !allReady && attempt < CRITICAL_VERIFY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; online && !allReady && attempt < CRITICAL_VERIFY_ATTEMPTS; attempt += 1) {
     if (attempt > 0) await wait(CRITICAL_RETRY_DELAY_MS);
     onProgress?.(attempt === 0 ? 'Downloading your routine...' : 'Finishing your routine...', 60);
     await Promise.all([
@@ -362,7 +368,7 @@ export async function warmSegmentAssets(
     }
   }
 
-  await artwork;
+  if (online) await artwork;
   routines.forEach((routine) => markRoutineWarmed(segmentWarmKey(routine.id, segment), allReady));
   setStage('done', work.length, allReady ? work.length : status.ready);
   if (!allReady) console.warn('[AssetCache] Segment assets incomplete after retries (offline?).');

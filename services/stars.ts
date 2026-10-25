@@ -80,6 +80,21 @@ export function flushPendingStepStars(userId: string): Promise<void> {
   return pendingFlush;
 }
 
+/** Stars earned offline that the server hasn't counted yet. */
+export async function getPendingStarCount(userId: string): Promise<number> {
+  const pending = await getPendingAwards(userId);
+  return pending.reduce((sum, item) => sum + (item.stars ?? 1), 0);
+}
+
+/** Last known server total (live when reachable, else the cached profile) plus offline-earned stars. */
+export async function getDisplayedTotalStars(userId: string, cachedTotal: number): Promise<number> {
+  const [remote, pending] = await Promise.all([
+    getUserTotalStars(userId).catch(() => null),
+    getPendingStarCount(userId),
+  ]);
+  return Math.max(cachedTotal, remote ?? 0) + pending;
+}
+
 export async function getUserTotalStars(userId: string): Promise<number | null> {
   if (!userId) return null;
   const statsRef = doc(db, 'users', userId, 'stats', 'main');

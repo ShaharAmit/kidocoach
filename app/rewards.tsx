@@ -14,7 +14,7 @@ import { getNativeHeaderOptions } from '../components/ScreenHeader';
 import { getChildProfile } from '../services/profile';
 import { ensureAuth } from '../services/firebase';
 import { useUserRoutines } from '../hooks/useRoutine';
-import { getUserTotalStars } from '../services/stars';
+import { getDisplayedTotalStars } from '../services/stars';
 import { ChildProfile, DailyProgress, Routine } from '../types';
 import { colors, fs, ms, vs } from '../theme';
 import { completionStorageKey } from '../utils/dailyCompletion';
@@ -119,9 +119,8 @@ export default function RewardsScreen() {
 
     async function refreshRewardsData() {
       try {
-        const [profileResult, starsResult, progressResult] = await Promise.allSettled([
+        const [profileResult, progressResult] = await Promise.allSettled([
           getChildProfile(),
-          getUserTotalStars(userId),
           computeDailyProgress(routines),
         ]);
 
@@ -129,17 +128,14 @@ export default function RewardsScreen() {
 
         const latestProfile =
           profileResult.status === 'fulfilled' ? profileResult.value : null;
-        const serverStars =
-          starsResult.status === 'fulfilled' ? starsResult.value : null;
         const progress =
           progressResult.status === 'fulfilled'
             ? progressResult.value
             : { morningCompleted: 0, morningTotal: 0, eveningCompleted: 0, eveningTotal: 0 };
 
         if (latestProfile) {
-          const localStars = latestProfile.totalStarsEarned ?? 0;
-          const resolvedStars =
-            typeof serverStars === 'number' ? Math.max(localStars, serverStars) : localStars;
+          const resolvedStars = await getDisplayedTotalStars(userId, latestProfile.totalStarsEarned ?? 0);
+          if (!mounted) return;
           setProfile({
             ...latestProfile,
             totalStarsEarned: resolvedStars,

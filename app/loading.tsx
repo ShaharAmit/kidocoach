@@ -22,6 +22,7 @@ import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBo
 import { colors, fs, ms, s, vs } from '../theme';
 import { requestParentalGate } from '../components/ParentalGate';
 import DayNightTransition from '../components/DayNightTransition';
+import { useIsOnline } from '../hooks/useIsOnline';
 
 const PAID_STATUS_BOOT_BUDGET_MS = 5000;
 
@@ -53,6 +54,7 @@ export default function LoadingScreen() {
   );
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const isOnline = useIsOnline();
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -204,7 +206,12 @@ export default function LoadingScreen() {
               <TouchableOpacity onPress={() => { setError(''); setAttempt((value) => value + 1); }}>
                 <Text style={styles.percent}>Try again</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }}>
+              <TouchableOpacity
+                disabled={!isOnline}
+                accessibilityState={{ disabled: !isOnline }}
+                style={{ opacity: isOnline ? 1 : 0.45 }}
+                onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }}
+              >
                 <Text style={styles.percent}>Parent sign in</Text>
               </TouchableOpacity>
             </>

@@ -16,7 +16,8 @@ import { clearLocalFamilySession } from '../services/accountSession';
 import { clearAllLocalCachedAssets } from '../services/assetCacheService';
 import { colors, fs, ms, vs } from '../theme';
 import { ChildProfile } from '../types';
-import { getUserTotalStars } from '../services/stars';
+import { getDisplayedTotalStars } from '../services/stars';
+import { useIsOnline } from '../hooks/useIsOnline';
 import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { cancelRoutineNotification } from '../services/notifications';
@@ -31,6 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function SettingsScreen() {
   const [profile, setProfile] = useState<ChildProfile | null>(null);
   const [starsCount, setStarsCount] = useState(0);
+  const isOnline = useIsOnline();
   const [isResetting, setIsResetting] = useState(false);
   const [isSavingCaptions, setIsSavingCaptions] = useState(false);
   const [isClearingCache, setIsClearingCache] = useState(false);
@@ -61,9 +63,10 @@ export default function SettingsScreen() {
       }
 
       setProfile(loadedProfile);
-      const remoteStars = await getUserTotalStars(loadedProfile.userId);
+      setStarsCount(loadedProfile.totalStarsEarned ?? 0);
+      const stars = await getDisplayedTotalStars(loadedProfile.userId, loadedProfile.totalStarsEarned ?? 0);
       if (!mounted) return;
-      setStarsCount(typeof remoteStars === 'number' ? remoteStars : loadedProfile.totalStarsEarned ?? 0);
+      setStarsCount(stars);
     }
 
     getParentalLockMethod().then((method) => {
@@ -268,11 +271,18 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.card, styles.actionCard]} onPress={() => router.push('/parent/create' as never)}>
+        <TouchableOpacity
+          style={[styles.card, styles.actionCard, !isOnline && styles.actionCardDisabled]}
+          onPress={() => router.push('/parent/create' as never)}
+          disabled={!isOnline}
+          accessibilityState={{ disabled: !isOnline }}
+        >
           <View style={styles.rowBetween}>
             <View style={styles.actionTextWrap}>
               <Text style={styles.actionTitle}>Activity Manager</Text>
-              <Text style={styles.actionSubtitle}>Manage child activities and routines.</Text>
+              <Text style={styles.actionSubtitle}>
+                {isOnline ? 'Manage child activities and routines.' : 'Connect to the internet to change activities.'}
+              </Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </View>
@@ -408,6 +418,9 @@ const styles = StyleSheet.create({
   actionCard: {
     backgroundColor: '#F1F5F9',
     borderColor: '#E2E8F0',
+  },
+  actionCardDisabled: {
+    opacity: 0.45,
   },
   resetCard: {
     backgroundColor: '#FFF1F2',

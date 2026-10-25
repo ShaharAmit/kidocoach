@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { saveRoutine } from '../../hooks/useRoutine';
+import { useIsOnline } from '../../hooks/useIsOnline';
 import { cancelNotificationsForRoutine, scheduleRoutineNotification } from '../../services/notifications';
 import { prioritizeActivityAssets } from '../../services/assetCacheService';
 import { useActivityCatalogRevision } from '../../services/activityCatalog';
@@ -247,6 +248,7 @@ export default function CreateRoutineScreen() {
   });
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const isOnline = useIsOnline();
   // Re-render the activity picker when the cloud catalog adds, removes or edits activities.
   useActivityCatalogRevision();
   const [selectedCollapsed, setSelectedCollapsed] = useState(false);
@@ -606,12 +608,15 @@ export default function CreateRoutineScreen() {
               }
               right={
                 <TouchableOpacity
-                  style={[styles.headerSaveButton, saving && styles.headerSaveButtonDisabled]}
+                  style={[styles.headerSaveButton, (saving || !isOnline) && styles.headerSaveButtonDisabled]}
                   onPress={handleSave}
-                  disabled={saving}
+                  disabled={saving || !isOnline}
+                  accessibilityState={{ disabled: saving || !isOnline }}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.headerSaveButtonText}>{saving ? 'Saving…' : 'Save ✓'}</Text>
+                  <Text style={styles.headerSaveButtonText}>
+                    {saving ? 'Saving…' : isOnline ? 'Save ✓' : 'Offline'}
+                  </Text>
                 </TouchableOpacity>
               }
             />

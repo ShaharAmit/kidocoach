@@ -19,6 +19,7 @@ import { backUpCurrentFamily, clearLocalFamilySession, recoverSignedInFamily } f
 import { deleteFamilyAccount } from '../services/accountDeletion';
 import { requestParentalGate } from '../components/ParentalGate';
 import ParentLockFirstRun from '../components/ParentLockFirstRun';
+import { useIsOnline } from '../hooks/useIsOnline';
 import { getChildProfile } from '../services/profile';
 import { refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { ChildProfile } from '../types';
@@ -33,6 +34,7 @@ export default function ProfileScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const isOnline = useIsOnline();
   const operationInProgress = useRef(false);
   const isLinked = user !== null && !user.isAnonymous;
 
@@ -184,6 +186,10 @@ export default function ProfileScreen() {
     <PageBackground variant="clouds" edges={['bottom']}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {!isOnline ? (
+            <Text accessibilityRole="alert" style={styles.offline}>Connect to the internet to manage your account.</Text>
+          ) : null}
+          <View pointerEvents={isOnline ? 'auto' : 'none'} style={!isOnline && styles.offlineDisabled}>
           <View style={styles.card}>
             <MaterialCommunityIcons name="account-circle-outline" size={ms(64)} color={colors.primary} />
             <Text style={styles.title}>{profile? profile.childName + '\'s' : ''} Parent profile</Text>
@@ -274,6 +280,7 @@ export default function ProfileScreen() {
               <Text style={styles.buttonText}>Delete account</Text>
             </TouchableOpacity>
           </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
       <ParentLockFirstRun />
@@ -300,4 +307,6 @@ const styles = StyleSheet.create({
   dangerCard: { marginTop: vs(16) },
   dangerTitle: { color: '#B42318', fontSize: fs(20), fontWeight: '800' },
   dangerButton: { backgroundColor: '#B42318', padding: s(16), borderRadius: ms(14), alignItems: 'center' },
+  offline: { color: colors.textInk, fontSize: fs(15), fontWeight: '700', textAlign: 'center', marginBottom: vs(12) },
+  offlineDisabled: { opacity: 0.45 },
 });

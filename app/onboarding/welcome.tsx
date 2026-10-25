@@ -22,6 +22,7 @@ import { downloadWelcomeAssets, getWelcomeAssetPaths } from '../../services/asse
 import { getOrExtractMobilePoster } from '../../services/mobileVideoCache';
 import { colors, fs, ms, s, vs } from '../../theme';
 import { requestParentalGate } from '../../components/ParentalGate';
+import { useIsOnline } from '../../hooks/useIsOnline';
 
 type WelcomeVideoPlayerProps = {
   videoPath: string;
@@ -198,6 +199,7 @@ export default function WelcomeScreen() {
   const { height: screenHeight } = useWindowDimensions();
   const scrollRef = React.useRef<ScrollView>(null);
   const [videoDone, setVideoDone] = useState(false);
+  const isOnline = useIsOnline();
   const [isPreparing, setIsPreparing] = useState(true);
   const [assetsReady, setAssetsReady] = useState(false);
   const [posterUri, setPosterUri] = useState<string | undefined>(undefined);
@@ -320,7 +322,12 @@ export default function WelcomeScreen() {
           >
             <Text style={styles.buttonText}>Continue To Questionnaire</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }} style={{ paddingVertical: vs(18) }}>
+          <TouchableOpacity
+            disabled={!isOnline}
+            accessibilityState={{ disabled: !isOnline }}
+            onPress={() => { void requestParentalGate().then((passed) => { if (passed) router.replace('/profile'); }); }}
+            style={{ paddingVertical: vs(18), opacity: isOnline ? 1 : 0.45 }}
+          >
             <Text style={[styles.buttonText, { fontSize: fs(16) }]}>Already connected? Parent sign in</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.replace('/paywall')} style={{ paddingVertical: vs(12) }}>
