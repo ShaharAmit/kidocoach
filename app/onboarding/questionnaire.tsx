@@ -22,14 +22,8 @@ import { InPageHeader } from '../../components/ScreenHeader';
 import {
   ChildGender,
   ChildProfile,
-  HelpLevel,
-  MasteredTask,
-  MorningSpeed,
-  MorningStuckPoint,
-  MotivationStyle,
   QuestionnaireAnswers,
   Routine,
-  ToneOption,
 } from '../../types';
 import { ensureAuth } from '../../services/firebase';
 import { saveRoutine, saveRoutineIfMissing } from '../../hooks/useRoutine';
@@ -37,12 +31,16 @@ import { scheduleRoutineNotification } from '../../services/notifications';
 import { saveChildProfile, getChildProfile, saveUserProfileDoc } from '../../services/profile';
 import { getPaidStatus } from '../../services/subscription';
 import { calculateAgeFromISO, formatBirthDate, getTodayISO, isoDateYearsAgo } from '../../utils/date';
-import { colors, fs, ms, s, vs } from '../../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
 import { GRASS_IMAGE as GRASS } from '../../constants/images';
 import { isValidChildName, MAX_CHILD_NAME_LENGTH } from '../../utils/nameToken';
 import { isMorningTime } from '../../utils/timeOfDay';
 import { scheduleFromStart, scheduleToEnd } from '../../utils/routineSchedule';
+import {
+  BEDTIME_OPTIONS, HELP_OPTIONS, MASTERED_OPTIONS, MORNING_STUCK_OPTIONS, MOTIVATION_OPTIONS,
+  SPEED_OPTIONS, WAKE_TIME_OPTIONS, toggleMulti, toneFromMotivation,
+} from '../../utils/questionnaire';
 
 
 const DEFAULT_AVATAR_ID = 'becky';
@@ -50,74 +48,15 @@ const DEFAULT_VOICE = 'woman' as const;
 const DEFAULT_WAKE_TIME = '07:00';
 const DEFAULT_BEDTIME = '20:00';
 
-const WAKE_TIME_OPTIONS = ['05:30', '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00'];
-const BEDTIME_OPTIONS = ['18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00'];
-
 const MIN_AGE = 2;
 const MAX_AGE = 12;
 
 type Option<T extends string> = { key: T; label: string };
 
-const MORNING_STUCK_OPTIONS: Option<MorningStuckPoint>[] = [
-  { key: 'getting_out_of_bed', label: 'Getting out of bed' },
-  { key: 'getting_dressed', label: 'Getting dressed' },
-  { key: 'brushing_washing', label: 'Brushing teeth & washing up' },
-  { key: 'turning_off_screens', label: 'Putting screens away' },
-  { key: 'everything_negotiation', label: "Honestly? Everything's a negotiation" },
-];
-
-const MOTIVATION_OPTIONS: Option<MotivationStyle>[] = [
-  { key: 'race_game', label: 'Turning it into a race or game' },
-  { key: 'autonomy_choose', label: 'Letting them choose' },
-  { key: 'praise_encouragement', label: 'Lots of praise and encouragement' },
-  { key: 'hug_connection', label: 'A warm hug and some connection' },
-];
-
-const MASTERED_OPTIONS: Option<MasteredTask>[] = [
-  { key: 'eating_breakfast', label: 'Eating breakfast' },
-  { key: 'choosing_clothes', label: 'Choosing their clothes' },
-  { key: 'putting_toys_away', label: 'Putting toys away' },
-  { key: 'none_yet', label: "None yet, that's why we're here!" },
-];
-
-const HELP_OPTIONS: Option<HelpLevel>[] = [
-  { key: 'independent', label: '"I can do it myself!" (fully independent)' },
-  { key: 'little_push', label: 'Needs a little push to get started' },
-  { key: 'step_by_step', label: 'Needs me there step by step' },
-];
-
-const SPEED_OPTIONS: Option<MorningSpeed>[] = [
-  { key: 'fast_energetic', label: 'Fast and full of energy' },
-  { key: 'slow_dreamy', label: 'Slow and dreamy' },
-  { key: 'easily_distracted', label: 'Easily distracted' },
-];
-
 const GENDER_OPTIONS: { key: ChildGender; label: string; emoji: string }[] = [
   { key: 'boy', label: 'Boy', emoji: '👦' },
   { key: 'girl', label: 'Girl', emoji: '👧' },
 ];
-
-/** Multi-select toggle where `exclusive` clears every other choice (and vice versa). */
-function toggleMulti<T extends string>(current: T[] | undefined, key: T, exclusive: T): T[] {
-  const list = current ?? [];
-  if (list.includes(key)) return list.filter((item) => item !== key);
-  if (key === exclusive) return [key];
-  return [...list.filter((item) => item !== exclusive), key];
-}
-
-/** Map the motivation answer to the TTS tone used by the rest of the app. */
-function toneFromMotivation(style: MotivationStyle | undefined): ToneOption {
-  switch (style) {
-    case 'race_game':
-      return 'cheerful';
-    case 'hug_connection':
-      return 'calm';
-    case 'autonomy_choose':
-    case 'praise_encouragement':
-    default:
-      return 'encouraging';
-  }
-}
 
 function formatTime12h(time: string): string {
   const [hour, minute] = time.split(':').map(Number);
@@ -798,6 +737,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerPad: {
+    ...contentColumn,
     paddingHorizontal: s(18),
     paddingTop: vs(6),
   },
@@ -837,6 +777,7 @@ const styles = StyleSheet.create({
     color: TEAL_DARK,
   },
   cardWrap: {
+    ...contentColumn,
     flex: 1,
     paddingHorizontal: s(18),
     paddingTop: vs(12),

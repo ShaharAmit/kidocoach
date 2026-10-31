@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, fs, ms, s, vs } from '../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../theme';
 import PinPad from './PinPad';
 import { PIN_LENGTH, setParentalLock, type ParentalLockMethod } from '../services/parentalLock';
 
@@ -142,7 +142,7 @@ export default function ParentLockSetup({ initialMethod = 'math', doneLabel = 'C
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, gap: vs(12) },
+  root: { ...contentColumn, flex: 1, gap: vs(12) },
   list: { gap: vs(10), paddingBottom: vs(8) },
   pinRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: vs(14) },
   title: { color: colors.textInk, fontSize: fs(22), fontWeight: '800', textAlign: 'center' },

@@ -23,7 +23,7 @@ import { useIsOnline } from '../hooks/useIsOnline';
 import { getChildProfile } from '../services/profile';
 import { refreshPaidStatusFromRevenueCat } from '../services/subscription';
 import { ChildProfile } from '../types';
-import { colors, fs, ms, s, vs } from '../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../theme';
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<User | null>(auth.currentUser);
@@ -290,7 +290,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { padding: s(20), paddingBottom: vs(130) },
+  content: { ...contentColumn, padding: s(20), paddingBottom: vs(130) },
   card: { backgroundColor: '#FFF', borderRadius: ms(24), padding: s(24), gap: vs(14) },
   title: { color: colors.textInk, fontSize: fs(26), fontWeight: '800' },
   subtitle: { color: colors.textInk, fontSize: fs(17), fontWeight: '600' },

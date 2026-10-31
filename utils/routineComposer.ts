@@ -3,7 +3,7 @@ import type {
   RoutineLevel,
   RoutinePlacement,
   RoutineSegment,
-} from '../constants/activities';
+} from '../types/activityDefinition';
 import type { ActivityKey, MasteredTask, MorningStuckPoint, QuestionnaireAnswers } from '../types';
 
 /**

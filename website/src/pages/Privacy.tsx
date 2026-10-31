@@ -10,22 +10,30 @@ export default function PrivacyPage() {
         </Link>
 
         <h1>Privacy Policy</h1>
-        <p className="meta">Kidocoach | Last updated: 30/5/2026</p>
+        <p className="meta">Kidocoach | Last updated: 25/10/2026</p>
 
         <section>
           <h2>1. What Information We Collect</h2>
           <p>
-            Right now, we only collect one piece of information: your email address. We collect this when
-            you voluntarily submit it through our Early Access signup form.
+            We collect your email when you join the Early Access list or create a parent account.
+            Parent sign-in is handled by Firebase Authentication. For subscriptions, we also process
+            account identifiers, subscription status, and transaction records.
+            Payment details are handled by Paddle, our merchant of record, not stored by this website.
           </p>
         </section>
 
         <section>
           <h2>2. How We Use Your Information</h2>
           <p>
-            We use your email address for one specific purpose: to keep you informed about Kidocoach. This
-            includes notifying you when the app launches, sending occasional development updates, and
-            delivering your Founder&apos;s Pass early access details.
+            We use account and subscription information to provide access across your devices and
+            help manage purchases. If you join the Early Access list, we use your email for launch updates.
+            Coupon links may save a promotion code in your browser for up to 30 days. If you arrive
+            through a partner (affiliate) link, we save the partner code in your browser for up to
+            60 days and link it to your account when you sign in, so the partner can be credited if
+            you subscribe on the website. Partners see only counts, sale amounts, dates and commission
+            totals, never your name, email, or payment details. If you join the partner program, we keep
+            your partner name, account email, payout method and email, daily link click counts, and commission and
+            payout records to run the program and for accounting.
           </p>
         </section>
 
@@ -34,6 +42,8 @@ export default function PrivacyPage() {
           <p>
             We do not sell, rent, or trade your email address to anyone. Period. Your data is stored
             securely using industry-standard infrastructure (Google Firebase).
+            Paddle processes web payments as merchant of record, RevenueCat manages subscription access
+            across web, Apple, and Android.
           </p>
         </section>
 

@@ -1,4 +1,4 @@
-import type { ActivityDefinition, ActivityTimeOfDay } from '../constants/activities';
+import type { ActivityDefinition, ActivityTimeOfDay } from '../types/activityDefinition';
 import type { ActivityKey, DurationMode, ToneOption } from '../types';
 import { parseActivityTags, parseRoutineRules } from './routineComposer';
 

@@ -212,6 +212,12 @@ export default function HomePage() {
         </button>
 
         <nav className={`menu-sheet ${menuOpen ? 'visible' : ''}`}>
+          <Link to="/profile" onClick={() => setMenuOpen(false)}>
+            Profile
+          </Link>
+          <Link to="/partners" onClick={() => setMenuOpen(false)}>
+            Become a partner
+          </Link>
           <Link to="/terms" onClick={() => setMenuOpen(false)}>
             Terms and Conditions
           </Link>
@@ -230,6 +236,7 @@ export default function HomePage() {
             routines, and daily habits, helping parents raise independent children with a
             playful routine experience.
           </p>
+          <Link to="/profile">Get started / Profile</Link>
         </div>
 
         <section

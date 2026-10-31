@@ -223,4 +223,12 @@ Post-setup core flow:
 | `users/{userId}/awards` | `{date}_{routineId}_{segment}[_stepIndex]` | Idempotent star-award events |
 | `audio_cache` | `{name}_{activityKey}_{avatarId}_{tone}_{voice}` | TTS asset registry; `status` field gates downloads |
 | `early_access` | SHA-256 hash of email | Website lead capture; deduped by hash |
+| `billing_customers` | `{uid}` | Firebase UID → Paddle customer (server-only, ADR-018) |
+| `affiliates` | partner code (`[a-z0-9_-]`) | Partner program config; created by self-serve `createAffiliateAccount` (`/partners`) or `functions/scripts/affiliate-admin.js` (ADR-019/020) |
+| `affiliate_owners` | `{uid}` | One self-serve partner code per account (server-only) |
+| `affiliate_clicks` | `{code}_{YYYY-MM-DD}` | Daily partner link click counters (server-only) |
+| `affiliate_payouts` | `{code}_{currency}_{ms}` | Payout history written by `mark-paid`, shown on the partner dashboard (server-only) |
+| `affiliate_attributions` | `{uid}` | Immutable first-touch partner attribution (server-only) |
+| `affiliate_commissions` | Paddle `txn_` id | Commission ledger: `pending → approved → paid`, `void`; refunds tracked in `reversed` (server-only) |
+| `paddle_events` | Paddle `evt_` id | Webhook dedupe markers, 90-day TTL (server-only) |
 | `catalog` | `activities` | Activity catalog: `activities.{key}` = metadata, `part1 {text, tone, version}`, `image`, `assets.{avatarId}.{p1,p2,captions}` = `{path, generation, md5, size}`. Signed-in read; written only by Storage triggers / seed script |

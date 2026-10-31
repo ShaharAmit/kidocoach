@@ -14,7 +14,7 @@ import { router, Stack } from 'expo-router';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../services/profile';
 import { clearLocalFamilySession } from '../services/accountSession';
 import { clearAllLocalCachedAssets } from '../services/assetCacheService';
-import { colors, fs, ms, vs } from '../theme';
+import { colors, contentColumn, fs, ms, vs } from '../theme';
 import { ChildProfile } from '../types';
 import { getDisplayedTotalStars } from '../services/stars';
 import { useIsOnline } from '../hooks/useIsOnline';
@@ -349,6 +349,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    ...contentColumn,
     padding: ms(18),
     paddingBottom: vs(80),
     paddingTop: vs(8),

@@ -66,5 +66,37 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Firebase UID -> Paddle customer mapping, written only by the billing Cloud Functions.
+    // RevenueCat remains the entitlement authority for every store.
+    match /billing_customers/{uid} {
+      allow read, write: if false;
+    }
+
+    // In-house affiliate program (ADR-019): partners, first-touch attributions, commissions and
+    // processed Paddle webhook events. Written only by Cloud Functions and the admin script;
+    // partners join and read their own dashboard only through callables (createAffiliateAccount,
+    // getAffiliateSummary).
+    match /affiliates/{code} {
+      allow read, write: if false;
+    }
+    match /affiliate_attributions/{uid} {
+      allow read, write: if false;
+    }
+    match /affiliate_commissions/{transactionId} {
+      allow read, write: if false;
+    }
+    match /paddle_events/{eventId} {
+      allow read, write: if false;
+    }
+    match /affiliate_owners/{uid} {
+      allow read, write: if false;
+    }
+    match /affiliate_clicks/{codeDay} {
+      allow read, write: if false;
+    }
+    match /affiliate_payouts/{payoutId} {
+      allow read, write: if false;
+    }
+
   }
 }

@@ -1,54 +1,10 @@
-import { ActivityKey, ActivityMeta, DurationMode, ToneOption } from '../types';
+import { ActivityKey, ActivityMeta, DurationMode } from '../types';
 import { colors } from '../theme';
 
-export type ActivityTimeOfDay = 'morning' | 'evening' | 'general';
-export type RoutineSegment = 'morning' | 'evening';
-
-/**
- * Routine template levels: 1 = survival (always included), 2 = recommended, 3 = independence,
- * 0 = never auto-included (parents can still add it manually).
- */
-export type RoutineLevel = 0 | 1 | 2 | 3;
-
-/** Where an activity lands when a routine is auto-composed for one segment. */
-export interface RoutinePlacement {
-  /** Sort key inside the composed routine (lower runs first). */
-  position: number;
-  /** `{ fromAge: level }`. The entry with the highest age ≤ the child's age applies; none → 0. */
-  levels: Record<string, RoutineLevel>;
-}
-
-/**
- * Everything the app knows about one activity. The app bundles no activities: the registry below
- * is filled only from the Firestore `catalog/activities` document (or its on-device copy) by
- * `services/activityCatalog.ts`, so activities uploaded to the cloud appear without an app release.
- */
-export interface ActivityDefinition {
-  key: ActivityKey;
-  label: string;
-  emoji: string;
-  subtitle: string;
-  timeOfDay: ActivityTimeOfDay;
-  timerSeconds: number;
-  /** Own slot (minutes) on generated schedules, e.g. dinner = 60. Unset = shares the 30-min window. */
-  scheduleMinutes?: number;
-  durationMode: DurationMode;
-  stars: 0 | 1 | 2;
-  order: number;
-  /** Personalized Part 1 greeting; `{name}` is replaced with the child's name. */
-  part1Text: string;
-  part1Tone: ToneOption;
-  /** Bumped whenever `part1Text`/`part1Tone` change so cached greetings are regenerated. */
-  part1Version: number;
-  /** On-screen line under the player; `{name}` is replaced with the child's name. */
-  promptText: string;
-  /** Parents may add it to a routine (complete media, enabled, supported by this app build). */
-  selectable: boolean;
-  /** Category keys (`[a-z0-9_]+`) the routine composer matches questionnaire answers against. */
-  tags: string[];
-  /** Auto-composition rules per segment; a segment without one is only added manually. */
-  routine: Partial<Record<RoutineSegment, RoutinePlacement>>;
-}
+import type { ActivityDefinition, ActivityTimeOfDay } from '../types/activityDefinition';
+export type {
+  ActivityDefinition, ActivityTimeOfDay, RoutineLevel, RoutinePlacement, RoutineSegment,
+} from '../types/activityDefinition';
 
 const FALLBACK_TIMER_SECONDS = 120;
 

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@paddle/paddle-js": "^1.6.5",
     "firebase": "^12.19.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

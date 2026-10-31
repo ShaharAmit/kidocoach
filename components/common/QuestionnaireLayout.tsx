@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, fs, ms, s, vs } from '../../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../../theme';
 
 export interface QuestionnaireStep {
   id: string;
@@ -143,6 +143,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    ...contentColumn,
     padding: ms(20),
     paddingBottom: vs(40),
   },

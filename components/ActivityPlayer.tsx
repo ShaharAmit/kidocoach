@@ -4,7 +4,7 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Dimensions,
+  useWindowDimensions,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
@@ -18,7 +18,7 @@ import { defaultDurationMinutes, getActivityMeta, resolveDurationMode } from '..
 import { isValidCachedVideo, ensureActivityVideoReady } from '../services/assetSync';
 import { getOrBuildMergedCaptions, localPart2VideoPath } from '../services/twoPartVideoService';
 import { getReadyMergedVideoPath, ensureMergedActivityVideo } from '../services/videoMerge';
-import { colors, fs, ms, s, vs } from '../theme';
+import { colors, CONTENT_MAX_WIDTH, contentColumn, fitCoverBox, fs, ms, s, vs } from '../theme';
 
 type DaySegment = 'morning' | 'evening';
 
@@ -48,14 +48,12 @@ interface ActivityPlayerProps {
   onComplete: () => void;
 }
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CONTAINER_WIDTH = SCREEN_WIDTH * 0.8;
-const MAX_CONTAINER_HEIGHT = SCREEN_HEIGHT * 0.55;
 const DEFAULT_ASPECT_RATIO = 9 / 16;
 
-function clampContainerHeight(aspectRatio: number): number {
-  const idealHeight = CONTAINER_WIDTH / aspectRatio;
-  return Math.min(idealHeight, MAX_CONTAINER_HEIGHT);
+/** Video box for the live window: rotating or resizing an iPad re-fits it without cropping the avatar. */
+function useVideoBox(aspectRatio: number): { width: number; height: number } {
+  const { width, height } = useWindowDimensions();
+  return fitCoverBox(Math.min(width * 0.8, CONTENT_MAX_WIDTH), height * 0.55, aspectRatio);
 }
 
 function formatCountdown(seconds: number): string {
@@ -143,6 +141,7 @@ function VideoStage({
 }: VideoStageProps) {
   const [aspectRatio, setAspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [currentTime, setCurrentTime] = useState(0);
+  const videoBox = useVideoBox(aspectRatio);
 
   const onEndedRef = useRef(onEnded);
   useEffect(() => {
@@ -215,7 +214,7 @@ function VideoStage({
     <View
       style={[
         styles.videoContainer,
-        { width: CONTAINER_WIDTH, height: clampContainerHeight(aspectRatio) },
+        videoBox,
       ]}
     >
       <VideoView
@@ -273,6 +272,7 @@ export default function ActivityPlayer({
   onComplete,
 }: ActivityPlayerProps) {
   const insets = useSafeAreaInsets();
+  const placeholderBox = useVideoBox(DEFAULT_ASPECT_RATIO);
   const [activityIndex, setActivityIndex] = useState(0);
   const [videoEnded, setVideoEnded] = useState(false);
   const [timerSecondsRemaining, setTimerSecondsRemaining] = useState<number | null>(null);
@@ -494,7 +494,7 @@ export default function ActivityPlayer({
           style={[
             styles.videoContainer,
             styles.videoPlaceholder,
-            { width: CONTAINER_WIDTH, height: clampContainerHeight(DEFAULT_ASPECT_RATIO) },
+            placeholderBox,
           ]}
         >
           {resolved?.kind === 'unavailable' ? (
@@ -538,6 +538,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
+    ...contentColumn,
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',

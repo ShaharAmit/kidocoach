@@ -19,7 +19,7 @@ import { markBootComplete } from '../services/bootState';
 import { initPurchases } from '../services/purchases';
 import { Routine } from '../types';
 import { getHomeBootstrapSnapshot, primeHomeBootstrap } from '../services/homeBootstrap';
-import { colors, fs, ms, s, vs } from '../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../theme';
 import { requestParentalGate } from '../components/ParentalGate';
 import DayNightTransition from '../components/DayNightTransition';
 import { useIsOnline } from '../hooks/useIsOnline';
@@ -247,6 +247,7 @@ const styles = StyleSheet.create({
     paddingBottom: vs(80),
   },
   card: {
+    ...contentColumn,
     width: '100%',
     alignItems: 'center',
     paddingVertical: vs(24),

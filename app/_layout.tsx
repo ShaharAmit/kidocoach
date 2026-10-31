@@ -5,7 +5,7 @@ import * as Notifications from 'expo-notifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getHomeViewMode, subscribeHomeViewMode } from '../services/homeViewState';
-import { getPaidStatus, startPaidStatusSync } from '../services/subscription';
+import { getPaidStatus, refreshPaidStatusFromRevenueCat, startPaidStatusSync } from '../services/subscription';
 import { hasCompletedOnboarding } from '../services/profile';
 import { getAccessRoute } from '../utils/accessRoute';
 import { isBootComplete } from '../services/bootState';
@@ -13,7 +13,7 @@ import { onAppEnteredForeground, onAppLeftForeground } from '../services/assetCa
 import { auth, ensureAuth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getCurrentSegment, segmentToTitle, segmentToSubtitle, type DaySegment, segmentToTitleColor, segmentToSubtitleColor } from '../utils/timeOfDay';
-import { colors, fs, ms, s, vs } from '../theme';
+import { colors, CONTENT_MAX_WIDTH, fs, ms, s, vs } from '../theme';
 import { preloadLocalImages, retryLocalImage, useLocalImage } from '../utils/localImages';
 import { ALL_BUNDLED_IMAGES, MOON_IMAGE, SUN_IMAGE } from '../constants/images';
 import { ParentalGateHost, requestParentalGate } from '../components/ParentalGate';
@@ -92,7 +92,9 @@ export default function RootLayout() {
   const [authUserId, setAuthUserId] = useState(auth.currentUser?.uid);
   const sunSource = useLocalImage(SUN_IMAGE);
   const moonSource = useLocalImage(MOON_IMAGE);
-  const tabBarHorizontalInset = Math.round(screenWidth * 0.05);
+  // Keep the floating tab bar and the sun/moon over the centered content column on tablets.
+  const columnInset = Math.max(0, Math.round((screenWidth - CONTENT_MAX_WIDTH) / 2));
+  const tabBarHorizontalInset = Math.max(Math.round(screenWidth * 0.05), columnInset);
 
   useEffect(() => {
     return subscribeHomeViewMode(setHomeViewModeLocal);
@@ -218,6 +220,9 @@ export default function RootLayout() {
     const appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         checkAccess();
+        refreshPaidStatusFromRevenueCat()
+          .then(checkAccess)
+          .catch((err) => console.warn('[RootLayout] Failed to refresh family access:', err));
       }
     });
 
@@ -239,7 +244,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       {/* Moon/Sun decoration - positioned between header and content - only on routines tab's task list */}
       {pathname === '/' && showDecorations && homeViewMode === 'activities' && (
-        <View style={{ position: 'absolute', right: s(16), top: vs(80), zIndex: 50, pointerEvents: 'none' }}>
+        <View style={{ position: 'absolute', right: columnInset + s(16), top: vs(80), zIndex: 50, pointerEvents: 'none' }}>
           {segment === 'evening' ? (
             <Image
               source={moonSource}

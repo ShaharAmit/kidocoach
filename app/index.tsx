@@ -48,7 +48,7 @@ import {
   retryLocalImage,
   useLocalImagesRevision,
 } from '../utils/localImages';
-import { colors, fs, ms, ROUNDED_FONT, s, vs } from '../theme';
+import { colors, contentColumn, fs, ms, ROUNDED_FONT, s, vs } from '../theme';
 import { requestParentalGate } from '../components/ParentalGate';
 
 function routineHasActivitiesInSegment(routine: Routine, segment: 'morning' | 'evening'): boolean {
@@ -749,6 +749,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardWrap: {
+    ...contentColumn,
     flex: 1,
     maxHeight: '65%',
     marginVertical: 'auto',

@@ -16,7 +16,7 @@ import { ensureAuth } from '../services/firebase';
 import { useUserRoutines } from '../hooks/useRoutine';
 import { getDisplayedTotalStars } from '../services/stars';
 import { ChildProfile, DailyProgress, Routine } from '../types';
-import { colors, fs, ms, vs } from '../theme';
+import { colors, contentColumn, fs, ms, vs } from '../theme';
 import { completionStorageKey } from '../utils/dailyCompletion';
 import { getTodayISO } from '../utils/date';
 import { isMorningTime } from '../utils/timeOfDay';
@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   content: {
+    ...contentColumn,
     padding: ms(16),
     paddingBottom: vs(130),
   },

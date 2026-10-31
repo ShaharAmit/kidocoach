@@ -1,0 +1,153 @@
+.subscription-shell {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 36px 20px 64px;
+  line-height: 1.6;
+}
+
+.subscription-shell h1,
+.subscription-shell h2 {
+  font-family: 'Baloo 2', sans-serif;
+  line-height: 1.2;
+}
+
+.subscription-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  margin: 24px 0;
+}
+
+.subscription-card form,
+.subscription-card label {
+  display: grid;
+  gap: 8px;
+}
+
+.subscription-card input,
+.subscription-card select,
+.subscription-card button {
+  font: inherit;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  padding: 12px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.subscription-card button {
+  background: var(--ink-1);
+  color: white;
+  cursor: pointer;
+}
+
+.subscription-card button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.subscription-card .provider-sign-in {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 44px;
+  font-weight: 500;
+}
+
+.provider-sign-in svg {
+  flex-shrink: 0;
+}
+
+.subscription-card .provider-sign-in--google {
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #747775;
+  font-family: Arial, sans-serif;
+}
+
+.subscription-card .provider-sign-in--apple {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+.provider-sign-in:focus-visible {
+  outline: 3px solid #4285f4;
+  outline-offset: 3px;
+}
+
+.subscription-card fieldset {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 12px 0;
+  padding: 16px;
+}
+
+.subscription-card .questionnaire-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.subscription-card .questionnaire-choice input {
+  width: auto;
+  margin: 0;
+}
+
+.subscription-card .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subscription-card .checkbox-row input {
+  width: auto;
+  margin: 0;
+}
+
+.partner-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.partner-stats div {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.partner-stats dt {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.partner-stats dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.partner-dashboard table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+}
+
+.partner-dashboard th,
+.partner-dashboard td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.subscription-card .field-help {
+  margin: -4px 0 12px;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}

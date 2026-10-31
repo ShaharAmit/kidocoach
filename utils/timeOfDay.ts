@@ -1,4 +1,4 @@
-import { colors } from "@/theme/colors";
+import { colors } from '../theme/colors';
 
 // 04:00–14:59 → morning, 15:00–03:59 → evening
 export const MORNING_START_MINUTES = 4 * 60;

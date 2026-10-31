@@ -199,9 +199,8 @@ function logEntitlementDiagnostics(info: CustomerInfo): void {
  * fall back to the cached local status — required for offline-first behavior on iPads with
  * intermittent Wi-Fi.
  *
- * A negative result is only trusted after a server fetch: the SDK's cached CustomerInfo still
- * carries the pre-renewal expiration date, so right after a trial/period rolls over (minutes in
- * sandbox) it reports the entitlement as expired even though the store renewed it.
+ * Always request fresh CustomerInfo so purchases/refunds on web or another store are noticed
+ * on foreground, even when the native SDK still has a positive cached entitlement.
  */
 export async function refreshEntitlementFromRevenueCat(): Promise<boolean | null> {
   await initPurchases();
@@ -214,9 +213,6 @@ export async function refreshEntitlementFromRevenueCat(): Promise<boolean | null
       if (!isEntitled) logEntitlementDiagnostics(identifiedInfo);
       return isEntitled;
     }
-
-    const cachedInfo = await Purchases.getCustomerInfo();
-    if (hasPremiumEntitlement(cachedInfo)) return true;
 
     await Purchases.invalidateCustomerInfoCache();
     const freshInfo = await Purchases.getCustomerInfo();

@@ -26,7 +26,7 @@ import {
 import { refreshPaidStatusFromRevenueCat, setPaidStatus } from '../services/subscription';
 import { scheduleTrialEndingNotification, cancelTrialEndingNotification } from '../services/notifications';
 import { PAYWALL_IMAGES } from '../constants/paywallImages';
-import { colors, fs, ms, s, vs } from '../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../theme';
 import { requestParentalGate } from '../components/ParentalGate';
 
 const LEGAL_BASE_URL = 'https://kidocoach.app';
@@ -363,6 +363,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F8FC',
   },
   scrollContent: {
+    ...contentColumn,
     paddingHorizontal: s(20),
     paddingTop: vs(12),
     paddingBottom: vs(28),

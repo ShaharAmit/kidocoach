@@ -25,6 +25,14 @@ admin.initializeApp();
 // Hard ceiling on parallel instances so a flood of calls cannot scale Gemini spend unbounded.
 setGlobalOptions({ maxInstances: 10 });
 
+export { createPaddleCheckout, createPaddlePortal, getWebBilling, syncPaddlePurchases } from './billing';
+import { cancelPaddleBilling, paddleApiKey } from './billing';
+export {
+  approveAffiliateCommissions, checkAffiliateCode, claimAffiliateReferral, createAffiliateAccount,
+  getAffiliateSummary, paddleWebhook, trackAffiliateClick, updateAffiliateSettings,
+} from './affiliates';
+import { deleteAffiliateAttribution } from './affiliates';
+
 const db = admin.firestore();
 const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
 const geminiModel = 'gemini-3.8-flash-tts';
@@ -717,7 +725,7 @@ export const registerAppleAuthorization = onCall(
  * revokes via a fresh Apple authorization, then retries with `appleTokenRevoked: true`.
  */
 export const deleteAccount = onCall(
-  { timeoutSeconds: 120, memory: '256MiB', secrets: [appleSignInPrivateKey] },
+  { timeoutSeconds: 120, memory: '256MiB', secrets: [appleSignInPrivateKey, paddleApiKey] },
   async (request: CallableRequest<{ appleTokenRevoked?: unknown }>): Promise<{ deleted: true }> => {
     const uid = requireUid(request);
     const appleTokenRef = db.collection('apple_tokens').doc(uid);
@@ -732,6 +740,9 @@ export const deleteAccount = onCall(
       }
     }
 
+    // Before deleting data: a failed cancellation must not leave a deleted family still being charged.
+    await cancelPaddleBilling(uid);
+    await deleteAffiliateAttribution(uid);
     await db.recursiveDelete(db.collection('users').doc(uid));
     await appleTokenRef.delete();
 

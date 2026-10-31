@@ -131,3 +131,87 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 - **Profile (account):** the Profile tab and the "Parent sign in" links on Loading/Welcome are disabled offline. If the connection drops while Profile is open, its cards are grayed and untappable. Linking, sign-in, backup and deletion all need the server.
 - **Boot:** `warmSegmentAssets` skips download retries and doesn't wait for artwork when offline, so a partly cached segment launches immediately with what's on disk.
 - Known gap: the first online launch only blocks on the current segment. The other segment is ready offline only after the background prefetch finishes.
+
+## ADR-016: Web billing shares Firebase identity; affiliate evidence is server-owned (2026-10)
+
+> Checkout, affiliate and webhook parts superseded by ADR-018 (Paddle Billing) and ADR-019 (in-house affiliates).
+
+**Decision.** Website `/subscribe` uses RevenueCat Billing with the same Firebase Auth UID and
+RevenueCat project/full-access entitlement as iOS and Android. A parent must sign in before
+checkout; existing guest families link their account in mobile Profile first. Native store
+payments remain native; web checkout is not linked from the child-facing app.
+
+- Web discount codes are applied and validated by RevenueCat, never by local price arithmetic.
+- Affiliate URLs use `ref`; a server callable validates active partners, rejects self-referrals,
+  and records immutable first-account attribution. Production initial purchases within 30 days
+  of that claim are candidates only, never earned commissions.
+- An authenticated RevenueCat webhook stores deduplicated, environment-separated billing evidence
+  in server-only collections. SDK CustomerInfo remains the entitlement authority; cancellation
+  events alone never revoke access. Offline native cached access is preserved.
+- Commission calculation, refund reconciliation, affiliate portals and payouts require separate
+  business rules and are not automated by this integration. Setup lives in `website/README.md`.
+
+## ADR-017: Web Profile gates affiliate navigation and shares native customer setup (2026-10)
+
+> Affiliate membership/report parts superseded by ADR-018; the shared questionnaire setup still applies.
+
+**Decision.** Website navigation exposes Profile, never an affiliate report link. Profile uses
+Firebase sign-in; `getAccountMembership` derives affiliate access only from server-owned
+`affiliates/{code}.ownerUid`. Client-written user roles, purchases and referral codes cannot
+grant affiliate access. Reports remain counts-only and reject customers without assigned codes.
+
+- Customers without a child profile complete the native seven-step questionnaire before web
+  checkout. Native and web share `utils/questionnaire.ts`, catalog parsing, composition, schedule,
+  and profile normalization. Shared catalog types live in `types/activityDefinition.ts`.
+- Web saves a recoverable child profile and missing morning/evening routine/activity documents
+  transactionally, preserving existing routines and other user fields. Device notifications and
+  media preparation stay in the mobile app. Affiliate-only accounts need no child setup.
+- Affiliate membership and customer subscription are independent; one account may have both.
+  Referral counts are not earnings. Commission terms and payouts remain separately configured,
+  never inferred from a customer-paid RevenueCat entitlement.
+
+## ADR-017: One phone design, scaled per device and centered on tablets (2026-10)
+
+**Decision.** iPhone and iPad share one layout. `theme/responsive.ts` is the only place that decides phone vs tablet sizing:
+
+- **Size** (`s`/`vs`/`ms`/`fs`) is fixed per device from its portrait dimensions (shorter side → width scale, longer side → height scale, capped at 1.6×). Rotating, Split View and Stage Manager never change it. iPads measure the full screen, so a launch in a small window still gets tablet sizes.
+- **Layout width**: every screen's content goes in `contentColumn` (max `CONTENT_MAX_WIDTH`, centered). On phones the cap is wider than the screen, so it has no effect. On iPads, backgrounds stay full-bleed and content stops stretching edge to edge. New screens must spread `contentColumn` into their scroll content / card wrapper.
+- Anything sized from the window (e.g. the activity video) uses `useWindowDimensions` / `useContentWidth`, never module-level `Dimensions.get`, so it re-fits on rotation.
+- Portrait 9:16 videos shown with `cover` are fitted with `fitCoverBox` (at most 20% crop), so a wide window never crops the avatar to a face strip.
+- iPad keeps all four orientations (Expo default with `supportsTablet`). Tests: `tests/responsive.test.cjs`.
+
+## ADR-018: Web pays through Paddle Billing; RevenueCat is the one entitlement; Tolt owns affiliates (2026-10)
+
+> Affiliate part (Tolt) superseded by ADR-019 (in-house affiliates). Billing and entitlement parts still apply.
+
+**Decision.** The website sells subscriptions through **Paddle Billing** (merchant of record; Stripe doesn't accept Israeli businesses). Cloud Functions (`functions/src/billing.ts`, raw REST, `Paddle-Version: 1`) create the transaction; the site only opens Paddle's overlay (`@paddle/paddle-js`, client-side token). Each Paddle subscription is imported into **RevenueCat** (`POST /v1/receipts`, `X-Platform: paddle`) under the parent's Firebase UID, the App User ID the native apps use. One family = one UID = one entitlement on every platform.
+
+- `createPaddleCheckout` checks RevenueCat (secret key) and refuses checkout when the UID already has access from any store (App Store, Google Play or Paddle). It also imports the UID's existing live Paddle subscriptions first.
+- Transactions carry `custom_data.app_user_id`, which RevenueCat's Paddle notifications read, so purchases sync even if the page closes. `syncPaddlePurchases` verifies the transaction belongs to the caller's UID before importing.
+- `billing_customers/{uid}` (server-only) maps the UID to a Paddle customer, stored only after a paid server-created transaction. Portal sessions and `deleteAccount` cancellation act only on subscriptions whose `custom_data.app_user_id` is this UID (a Paddle customer is keyed by email and may be shared).
+- Coupons are Paddle discount codes resolved server-side (`?discount_code=` / `?coupon=`). Prices come from Paddle (`PADDLE_PRICE_IDS`), never hardcoded in the site.
+- **Affiliates:** Tolt (Rewardful supports only Paddle Classic). `window.tolt_referral` is sent as `custom_data.tolt_referral`; Tolt computes commissions and pays partners. The homegrown `affiliates` / `billing_attributions` / report / RevenueCat webhook were removed. Only web purchases are attributable.
+- No Paddle API key or RevenueCat secret is in the website; `@revenuecat/purchases-js` is not used on the web.
+
+## ADR-019: In-house affiliates on Paddle webhooks replace Tolt (2026-10)
+
+**Decision.** Partner tracking, commissions and payouts are our own server code (`functions/src/affiliates.ts`, pure rules in `affiliateModel.ts`). Tolt was dropped: ~$49+/month and it couldn't connect to the Paddle sandbox. Paddle (payments) and RevenueCat (entitlement) are unchanged (ADR-018).
+
+- **Data (server-only, rules deny all clients):** `affiliates/{code}` (name, email, status `active|disabled`, `commissionRateBps` default 1500, `recurringMonths` default 12, optional `ownerUid`, optional partner `discountCode`, `payoutEmail`); `affiliate_attributions/{uid}`; `affiliate_commissions/{transactionId}`; `paddle_events/{eventId}` (dedupe, 90-day TTL). Partners are created with `functions/scripts/affiliate-admin.js`, never by the app.
+- **Capture:** the website saves `?ref={code}` in localStorage for 60 days (first touch) and calls `claimAffiliateReferral` after sign-in. The attribution is **first-touch and immutable**. Self-referrals (partner UID or email), disabled/unknown codes and families that already bought on the web (`billing_customers/{uid}`) are refused. A checkout with a partner's coupon attributes an unattributed family too.
+- **Checkout:** `createPaddleCheckout` stamps `custom_data.affiliate_code` **from the server attribution only** (the client's `referral` is just a claim hint), and only within 60 days of the claim. Affiliate errors never block a purchase. Paddle copies custom_data to the subscription and its renewals.
+- **Commissions:** the `paddleWebhook` (HMAC `Paddle-Signature`, 5-min replay window, secret `PADDLE_WEBHOOK_SECRET`) handles `transaction.completed` → `rate × (total − tax)`, i.e. pre-tax after discounts. It requires the stamped code to match the attribution and the payment to be after the claim; renewals earn for `recurringMonths` after the first paid charge. $0 trials earn nothing. Approved `adjustment.*` refunds/chargebacks reverse commission proportionally (once per adjustment id); `chargeback_reverse` restores it. Each event commits atomically with its dedupe marker.
+- **Payouts:** commissions are held 30 days, then `approveAffiliateCommissions` (daily) approves them, conditional on the doc being unchanged. Monthly, `npm run affiliates -- report` lists what each partner is owed (refunds after a payout appear as negative clawbacks) and `mark-paid --amount` settles exactly that total after paying manually (PayPal/Wise), in one transaction that aborts if anything changed since the report. No automatic money movement.
+- Partners with `ownerUid` see counts and totals (no customer PII) on `/profile` via `getAffiliateSummary`.
+- Only web (Paddle) purchases are attributable; App Store / Google Play purchases are invisible to the program. Account deletion removes the attribution; commission records stay for accounting.
+
+## ADR-020: Partners sign up and track their own sales at /partners (2026-10)
+
+**Decision.** Like Rewardful / Tolt / Amazon Associates, anyone with a (non-anonymous) account joins the affiliate program themselves at `kidocoach.app/partners` and gets a dashboard there. Commission rules, attribution and payouts are unchanged (ADR-019).
+
+- **Join:** the partner picks their own link code (`checkAffiliateCode` live check; `selfServeCodeProblem` reserves brand/route words), name and payout email, and accepts the partner terms (`/terms#partners`). `createAffiliateAccount` creates an **active** partner on the default rate/months (auto-approval; payouts are still manual after the 30-day hold, so abuse is caught before money moves). One code per account (`affiliate_owners/{uid}` in the same transaction); codes are never renamed or reused.
+- **Payout method:** the partner picks `paypal` (default) or `wise` plus a payout email; both providers can pay an email address without a prior account (the recipient claims it). `report` lists `payout_method` and `payout_email`. No bank details are stored by us.
+- **Self-service limits:** partners may edit only name, payout method and payout email (`updateAffiliateSettings`). Rate, recurring months, coupon and status stay admin-only (`affiliate-admin.js`).
+- **Tracking:** `trackAffiliateClick` counts link visits per day (`affiliate_clicks/{code}_{day}`; the site sends at most one per browser, code and day; inactive codes aren't counted). `getAffiliateSummary` returns clicks, sign-ups, paying families, earnings, the last 50 sales (date, type, sale, commission, status, never a family identifier) and payouts (`affiliate_payouts`, written by `mark-paid`).
+- Account deletion pauses the partner's code and clears `ownerUid`; ledger records stay.
+

@@ -26,7 +26,7 @@ import { ChildProfile, Routine, ActivityKey, DurationMode } from '../../types';
 import { activityKeysForSegment, defaultDurationMinutes, defaultDurationMode, getActivityMeta, resolveDurationMode, starsForStep } from '../../constants/activities';
 import { db, ensureAuth } from '../../services/firebase';
 import { getChildProfile, saveChildProfile, saveUserProfileDoc } from '../../services/profile';
-import { colors, fs, ms, s, vs } from '../../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../../theme';
 import { retryLocalImage, useLocalImage } from '../../utils/localImages';
 import { completionStorageKey } from '../../utils/dailyCompletion';
 import { getTodayISO } from '../../utils/date';
@@ -935,6 +935,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    ...contentColumn,
     paddingHorizontal: s(16),
     paddingTop: vs(12),
   },
@@ -1234,6 +1235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: s(22),
   },
   modalCard: {
+    ...contentColumn,
     maxHeight: '85%',
     borderRadius: ms(18),
     backgroundColor: colors.white,

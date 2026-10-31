@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { downloadWelcomeAssets, getWelcomeAssetPaths } from '../../services/assetCacheService';
 import { getOrExtractMobilePoster } from '../../services/mobileVideoCache';
-import { colors, fs, ms, s, vs } from '../../theme';
+import { colors, contentColumn, fs, ms, s, vs } from '../../theme';
 import { requestParentalGate } from '../../components/ParentalGate';
 import { useIsOnline } from '../../hooks/useIsOnline';
 
@@ -414,6 +414,7 @@ const styles = StyleSheet.create({
     height: vs(56),
   },
   buttonWrap: {
+    ...contentColumn,
     width: '100%',
     paddingHorizontal: s(20),
   },

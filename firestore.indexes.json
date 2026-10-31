@@ -15,6 +15,14 @@
         { "fieldPath": "order", "order": "ASCENDING" },
         { "fieldPath": "time", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "affiliate_commissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "holdUntil", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -26,6 +34,12 @@
     },
     {
       "collectionGroup": "rate_limits",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "paddle_events",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []

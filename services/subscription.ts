@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { onAuthStateChanged } from 'firebase/auth';
+import { AppState } from 'react-native';
 import { auth } from './firebase';
 import { addPremiumEntitlementListener, initPurchases, refreshEntitlementFromRevenueCat } from './purchases';
 
@@ -61,7 +62,14 @@ export function startPaidStatusSync(): () => void {
   const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
     if (!user || user.uid === lastUid) return;
     lastUid = user.uid;
-    void refreshPaidStatusFromRevenueCat();
+    refreshPaidStatusFromRevenueCat()
+      .catch((err) => console.warn('[Subscription] Failed to refresh account access:', err));
+  });
+
+  const foregroundSubscription = AppState.addEventListener('change', (state) => {
+    if (state !== 'active') return;
+    refreshPaidStatusFromRevenueCat()
+      .catch((err) => console.warn('[Subscription] Failed to refresh foreground access:', err));
   });
 
   initPurchases()
@@ -77,6 +85,7 @@ export function startPaidStatusSync(): () => void {
   stopPaidStatusSync = () => {
     stopped = true;
     unsubscribeAuth();
+    foregroundSubscription.remove();
     removeEntitlementListener();
     stopPaidStatusSync = null;
   };
