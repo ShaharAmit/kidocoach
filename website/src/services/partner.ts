@@ -26,11 +26,11 @@ export interface PartnerPayout {
   commissions: number;
 }
 
-export type PayoutMethod = 'paypal' | 'wise';
+export type PayoutMethod = 'wise' | 'paypal';
 
 export const PAYOUT_METHOD_HELP: Record<PayoutMethod, string> = {
-  paypal: 'PayPal: we send to this email. No PayPal account yet? PayPal emails you to create one with this address and claim it within 30 days.',
-  wise: 'Wise: we send to this email and Wise asks you for your bank details (free Wise account with this address). Claim it within 7 days.',
+  wise: 'Recommended: lowest fees, usually free to receive. We send to this email and Wise asks for your bank details (free Wise account with this address). Claim it within 7 days.',
+  paypal: 'PayPal: we send to this email. No PayPal account yet? PayPal emails you to create one with this address and claim it within 30 days. PayPal charges you a receiving fee (often about 4-5% internationally).',
 };
 
 export interface PartnerSummary {
@@ -73,7 +73,7 @@ export const JOIN_MESSAGES: Record<Exclude<JoinStatus, 'created'>, string> = {
   reserved_code: 'That code is reserved. Try another one.',
   invalid_name: 'Use 2-60 characters for your name.',
   invalid_payout_email: 'Enter a valid payout email.',
-  invalid_payout_method: 'Choose PayPal or Wise.',
+  invalid_payout_method: 'Choose Wise or PayPal.',
   terms_required: 'Accept the partner terms to join.',
 };
 

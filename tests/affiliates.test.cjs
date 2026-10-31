@@ -449,7 +449,7 @@ test('partners see only their own clicks, sales, payouts and totals', async () =
   const { affiliate } = await h.server.getAffiliateSummary(h.request({}, 'jane_uid'));
   assert.deepEqual(affiliate, {
     code: 'jane', name: 'Jane', status: 'active', link: 'https://kidocoach.app/?ref=jane', discountCode: 'JANE10',
-    payoutEmail: 'jane@example.com', payoutMethod: 'paypal', commissionRateBps: 1500, recurringMonths: 12,
+    payoutEmail: 'jane@example.com', payoutMethod: 'wise', commissionRateBps: 1500, recurringMonths: 12,
     clicks: 7, clicksLast30Days: 2, signups: 2, payingFamilies: 1,
     earnings: [{ currency: 'USD', pending: 0, approved: 749, paid: 0 }],
     conversions: [{ billedAt: T0, kind: 'first', currency: 'USD', saleAmount: 4999, commission: 749, status: 'approved' }],
@@ -482,7 +482,7 @@ test('anyone signed in can pick their own partner code once, on the default term
     recurringMonths: 12, ownerUid: 'dan_uid', discountCode: null,
   });
   assert.equal(partner.payoutEmail, 'dan@example.com');
-  assert.equal(partner.payoutMethod, 'paypal', 'PayPal unless the partner picks Wise');
+  assert.equal(partner.payoutMethod, 'wise', 'Wise unless the partner picks PayPal');
   assert.equal(partner.source, 'self_serve');
   assert.deepEqual(await join({ ...ok, code: 'second' }), { status: 'already_partner' });
   assert.equal(h.fs.read('affiliates/second'), undefined);
@@ -492,10 +492,10 @@ test('anyone signed in can pick their own partner code once, on the default term
   assert.deepEqual(await h.server.claimAffiliateReferral(h.request({ code: 'danblog' }, 'dan_uid')), { status: 'self_referral' });
   assert.deepEqual(await h.server.claimAffiliateReferral(h.request({ code: 'danblog' }, 'fam')), { status: 'claimed' });
 
-  await h.server.updateAffiliateSettings(h.request({ payoutEmail: 'Bank@Dan.com', name: 'Dan', payoutMethod: 'Wise' }, 'dan_uid'));
+  await h.server.updateAffiliateSettings(h.request({ payoutEmail: 'Bank@Dan.com', name: 'Dan', payoutMethod: 'PayPal' }, 'dan_uid'));
   const updated = h.fs.read('affiliates/danblog');
-  assert.deepEqual([updated.payoutEmail, updated.name, updated.payoutMethod], ['bank@dan.com', 'Dan', 'wise']);
-  assert.equal((await h.server.getAffiliateSummary(h.request({}, 'dan_uid'))).affiliate.payoutMethod, 'wise');
+  assert.deepEqual([updated.payoutEmail, updated.name, updated.payoutMethod], ['bank@dan.com', 'Dan', 'paypal']);
+  assert.equal((await h.server.getAffiliateSummary(h.request({}, 'dan_uid'))).affiliate.payoutMethod, 'paypal');
   await assert.rejects(h.server.updateAffiliateSettings(h.request({ payoutMethod: 'cash' }, 'dan_uid')), { code: 'invalid-argument' });
   await assert.rejects(h.server.updateAffiliateSettings(h.request({ payoutEmail: 'x' }, 'dan_uid')), { code: 'invalid-argument' });
   await assert.rejects(h.server.updateAffiliateSettings(h.request({ commissionRateBps: 5000 }, 'dan_uid')), { code: 'invalid-argument' });

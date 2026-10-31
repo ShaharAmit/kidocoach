@@ -249,7 +249,7 @@ chargebacks reverse it proportionally. Commissions are held 30 days, then
    add the approval query index and the `paddle_events.expireAt` TTL).
 3. **Partners join themselves** at `https://kidocoach.app/partners` (`/affiliates` redirects): sign in,
    pick a code (live availability check via `checkAffiliateCode`; brand/route words are reserved),
-   name, payout method (`paypal` default | `wise`) + payout email and accept the partner terms (`/terms#partners`). `createAffiliateAccount`
+   name, payout method (`wise` default | `paypal`) + payout email and accept the partner terms (`/terms#partners`). `createAffiliateAccount`
    creates an **active** partner on the default terms (15%, 12 months) with `ownerUid`, one per
    account (`affiliate_owners/{uid}`). The same page is their dashboard: link, clicks
    (`trackAffiliateClick`, one per browser/code/day, `affiliate_clicks/{code}_{day}`), sign-ups,

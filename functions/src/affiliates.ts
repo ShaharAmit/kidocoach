@@ -235,7 +235,7 @@ export const updateAffiliateSettings = onCall({ cors: true, timeoutSeconds: 15 }
   }
   if (request.data?.payoutMethod !== undefined) {
     changes.payoutMethod = normalizePayoutMethod(request.data.payoutMethod);
-    if (!changes.payoutMethod) throw new HttpsError('invalid-argument', 'Choose PayPal or Wise.');
+    if (!changes.payoutMethod) throw new HttpsError('invalid-argument', 'Choose Wise or PayPal.');
   }
   if (!Object.keys(changes).length) throw new HttpsError('invalid-argument', 'Nothing to update.');
   const doc = await ownedAffiliate(uid);

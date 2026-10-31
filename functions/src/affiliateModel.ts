@@ -122,9 +122,9 @@ export function normalizePartnerName(value: unknown): string | null {
 }
 
 /** How a partner wants to be paid; both pay to `payoutEmail` (the recipient claims it with that email). */
-export const PAYOUT_METHODS = ['paypal', 'wise'] as const;
+export const PAYOUT_METHODS = ['wise', 'paypal'] as const;
 export type PayoutMethod = typeof PAYOUT_METHODS[number];
-export const DEFAULT_PAYOUT_METHOD: PayoutMethod = 'paypal';
+export const DEFAULT_PAYOUT_METHOD: PayoutMethod = 'wise';
 
 export function normalizePayoutMethod(value: unknown): PayoutMethod | null {
   return typeof value === 'string' && (PAYOUT_METHODS as readonly string[]).includes(value.trim().toLowerCase())

@@ -27,7 +27,7 @@ export default function PartnersPage() {
         <li>Pick your own link, e.g. <code>kidocoach.app/?ref=yourname</code>, and start sharing right away.</li>
         <li>Families are credited to you for 60 days after their first click (first link wins).</li>
         <li>Track clicks, sign-ups, sales and payouts live on your dashboard.</li>
-        <li>Commissions are approved after a 30-day refund window and paid monthly by PayPal or Wise (your choice). No account needed in advance: you claim the payment with the email you give us.</li>
+        <li>Commissions are approved after a 30-day refund window and paid monthly by Wise (lowest fees) or PayPal, your choice. No account needed in advance: you claim the payment with the email you give us.</li>
       </ul>
       <p>Only web subscriptions bought on kidocoach.app count; App Store and Google Play purchases can&apos;t be tracked.</p>
       {!authReady ? <p>Loading your account...</p> : !signedIn ? (

@@ -14,7 +14,7 @@ function formatDate(at: number): string {
   return new Date(at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-const METHOD_LABEL: Record<PayoutMethod, string> = { paypal: 'PayPal', wise: 'Wise (bank transfer)' };
+const METHOD_LABEL: Record<PayoutMethod, string> = { wise: 'Wise (to your bank, lowest fees)', paypal: 'PayPal' };
 
 function PayoutFields({ method, email, busy, onMethod, onEmail }: {
   method: PayoutMethod; email: string; busy: boolean;
@@ -42,7 +42,7 @@ function JoinForm({ defaultName, defaultEmail, onJoined }: {
   const [code, setCode] = useState(() => suggestCode(defaultName || defaultEmail));
   const [name, setName] = useState(defaultName);
   const [payoutEmail, setPayoutEmail] = useState(defaultEmail);
-  const [payoutMethod, setPayoutMethod] = useState<PayoutMethod>('paypal');
+  const [payoutMethod, setPayoutMethod] = useState<PayoutMethod>('wise');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [check, setCheck] = useState<CodeCheck | null>(null);
   const [busy, setBusy] = useState(false);

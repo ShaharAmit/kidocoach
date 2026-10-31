@@ -72,7 +72,7 @@ export default function TermsPage() {
           </p>
           <p>
             Commissions are held for 30 days, and refunds or chargebacks reverse them (including after payout,
-            deducted from the next payout). Approved commissions are paid monthly by the payout method (PayPal or Wise) and to the payout
+            deducted from the next payout). Approved commissions are paid monthly by the payout method (Wise or PayPal) and to the payout
             email chosen on the dashboard; the partner is responsible for claiming the payment, keeping these
             details current, and any fees or taxes on their side. Self-referrals, buying through your own link, spam, misleading claims, paid search ads on
             the Kidocoach name, and impersonating Kidocoach are not allowed. We may pause a partner account and

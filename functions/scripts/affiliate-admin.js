@@ -4,8 +4,8 @@
  * (`gcloud auth application-default login`) against the Firebase project.
  *
  *   npm run affiliates -- create <code> --name "Jane Blog" --email jane@example.com \
- *       [--rate-bps 1500] [--months 12] [--owner-uid <firebaseUid>] [--coupon JANE10] [--payout-email paypal@x.com] [--payout-method paypal|wise]
- *   npm run affiliates -- update <code> [--rate-bps 2000] [--months 6] [--coupon NEW10|none] [--owner-uid <uid>|none] [--payout-email ...] [--payout-method paypal|wise]
+ *       [--rate-bps 1500] [--months 12] [--owner-uid <firebaseUid>] [--coupon JANE10] [--payout-email jane@x.com] [--payout-method wise|paypal]
+ *   npm run affiliates -- update <code> [--rate-bps 2000] [--months 6] [--coupon NEW10|none] [--owner-uid <uid>|none] [--payout-email ...] [--payout-method wise|paypal]
  *   npm run affiliates -- set-status <code> active|disabled
  *   npm run affiliates -- list                           # partners also join themselves at /partners (source self_serve)
  *   npm run affiliates -- report [--csv payouts.csv]       # what each partner is owed now (approved, net of clawbacks) + how to pay them
@@ -71,7 +71,7 @@ async function create(rawCode, flags) {
     discountCode: coupon,
     payoutEmail: normalizeEmail(flags['payout-email']) || email,
     payoutMethod: flags['payout-method'] === undefined ? DEFAULT_PAYOUT_METHOD
-      : (normalizePayoutMethod(flags['payout-method']) || fail('--payout-method must be paypal or wise.')),
+      : (normalizePayoutMethod(flags['payout-method']) || fail('--payout-method must be wise or paypal.')),
     createdAt: admin.firestore.Timestamp.now(),
   };
   if (!parseAffiliate(code, doc)) fail('Invalid partner fields (rate-bps 1-5000, months 0-120).');
@@ -92,7 +92,7 @@ async function update(rawCode, flags) {
   if (flags.email !== undefined) changes.email = normalizeEmail(flags.email) || fail('Invalid --email.');
   if (flags['payout-email'] !== undefined) changes.payoutEmail = normalizeEmail(flags['payout-email']) || fail('Invalid --payout-email.');
   if (flags['payout-method'] !== undefined) {
-    changes.payoutMethod = normalizePayoutMethod(flags['payout-method']) || fail('--payout-method must be paypal or wise.');
+    changes.payoutMethod = normalizePayoutMethod(flags['payout-method']) || fail('--payout-method must be wise or paypal.');
   }
   if (flags['rate-bps'] !== undefined) changes.commissionRateBps = Number(flags['rate-bps']);
   if (flags.months !== undefined) changes.recurringMonths = Number(flags.months);
