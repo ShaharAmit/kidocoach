@@ -22,7 +22,7 @@ A short checklist of rules to remember before and after launch. The details live
 - [ ] Turn on Firestore backups (none exist yet). Keep them for no more than 35 days so deletions take effect.
 - [ ] Have a lawyer read the privacy policy and terms once.
 
-## Rules that never change
+## Rules that never change (ADR-024)
 
 1. **Collect only what a feature uses.** Child data is limited to first name, birth date/age, questionnaire answers, wake-up/bedtime, routines, stars and trophies. No gender, photos, voice, location or free text. A new child field requires updating the DPIA, the record of processing and the privacy policy **in the same change**.
 2. **No ads and no tracking of children.** The app has no analytics SDK. Website analytics is opt-in, only for parents, and sends no names, emails, birth dates or gender (age band only). User ID = Firebase UID.

@@ -248,3 +248,15 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 - **EU/UK representative (Art. 27):** not appointed while EU/UK use is occasional. Server location doesn't change this. Appoint a representative service once EU/UK families subscribe regularly, or stop selling there.
 - **Child data changes** (new fields, providers, in-app analytics, voice/camera, social features) require updating the DPIA, the record of processing and the privacy policy in the same change. The privacy policy covers both the app and the website and is linked from the paywall and Settings (behind the parental gate).
 - **Data minimisation:** the child's gender is not collected (it was only used for a Settings emoji). `normalizeChildProfile` ignores a legacy `gender` field, so profiles from older builds still load. Don't ask for a child field unless a feature uses it.
+
+## ADR-024: Privacy rules that never change (2026-11)
+
+**Decision.** These rules apply to every feature. Breaking one needs the user's agreement and updated DPIA, record of processing and privacy policy (`docs/LAUNCH_RULES.md`).
+
+1. **Collect only what a feature uses.** Child data is limited to first name, birth date/age, questionnaire answers, wake-up/bedtime, routines, stars and trophies. No gender, photos, voice, location or free text.
+2. **No ads or tracking of children.** The app has no analytics or ad SDK. Website analytics is opt-in, only for parents, and never receives names, emails, birth dates or gender (ADR-022).
+3. **No third-party requests before consent on the website** (ADR-023).
+4. **The parent is the user.** Purchases, sign-in, outside links and settings are always behind the parental gate (ADR-011).
+5. **AI runs on the server only.** Only the child's first name goes to Gemini TTS (ADR-007).
+6. **Retention matches the privacy policy** (ADR-023). A new collection or bucket needs a defined retention (TTL, expiry or "until account deletion").
+7. **Account deletion deletes everything** about the family (Firestore user data, Auth account, attribution) and cancels the Paddle subscription. Only commission and payment records stay, for accounting.
