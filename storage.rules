@@ -3,8 +3,17 @@ service firebase.storage {
   match /b/{bucket}/o {
     // Everything is private by default; only the paths below are readable.
 
-    // In-app welcome video — shown before the first sign-in completes, so it stays public.
+    // In-app welcome video + optional poster/captions — shown before sign-in completes, so it stays public.
     match /avatars/default/welcome.mp4 {
+      allow get: if true;
+    }
+    match /avatars/default/welcome.jpg {
+      allow get: if true;
+    }
+    match /avatars/default/welcome.srt {
+      allow get: if true;
+    }
+    match /avatars/default/welcome.vtt {
       allow get: if true;
     }
 
