@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
-import { createHash, sign as cryptoSign } from 'crypto';
+import { sign as cryptoSign } from 'crypto';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
 import { onObjectDeleted, onObjectFinalized, type StorageObjectData } from 'firebase-functions/v2/storage';
@@ -32,6 +32,7 @@ export {
   getAffiliateSummary, paddleWebhook, trackAffiliateClick, updateAffiliateSettings,
 } from './affiliates';
 import { deleteAffiliateAttribution } from './affiliates';
+export { submitEarlyAccessLead, updateEarlyAccessPreference } from './earlyAccess';
 
 const db = admin.firestore();
 const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
@@ -94,14 +95,6 @@ interface GenerateRoutinePart1AudioResponse {
     cacheKey: string;
     status: AudioStatus;
   }>;
-}
-
-interface SubmitEarlyAccessLeadRequest {
-  email: string;
-}
-
-interface SubmitEarlyAccessLeadResponse {
-  status: 'created' | 'exists';
 }
 
 interface AwardRoutineStepStarRequest {
@@ -476,18 +469,6 @@ function isValidWavBuffer(buffer: Buffer): boolean {
   return true;
 }
 
-function normalizeEmail(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function hashEmail(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
-}
-
 async function synthesizeWithGeminiTts(
   text: string,
   tone: Tone | undefined,
@@ -755,61 +736,6 @@ export const deleteAccount = onCall(
 
     console.info(`[deleteAccount] Deleted account ${uid}`);
     return { deleted: true };
-  }
-);
-
-export const submitEarlyAccessLead = onCall(
-  { cors: true },
-  async (
-    request: CallableRequest<SubmitEarlyAccessLeadRequest>
-  ): Promise<SubmitEarlyAccessLeadResponse> => {
-    const normalizedEmail = normalizeEmail(request.data?.email ?? '');
-
-    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-      throw new HttpsError('invalid-argument', 'A valid email is required.');
-    }
-
-    const leadHash = hashEmail(normalizedEmail);
-    const leadsCollection = db.collection('early_access');
-    const leadRef = leadsCollection.doc(leadHash);
-    const legacyLeadRef = leadsCollection.doc(normalizedEmail);
-
-    const result = await db.runTransaction(async (transaction) => {
-      const [leadDoc, legacyLeadDoc] = await Promise.all([
-        transaction.get(leadRef),
-        transaction.get(legacyLeadRef),
-      ]);
-
-      if (leadDoc.exists) {
-        return 'exists' as const;
-      }
-
-      if (legacyLeadDoc.exists) {
-        const legacyData = legacyLeadDoc.data() ?? {};
-        transaction.create(leadRef, {
-          ...legacyData,
-          email: normalizedEmail,
-          emailLower: normalizedEmail,
-          emailHash: leadHash,
-          source: 'website_welcome_video',
-          migratedAt: FieldValue.serverTimestamp(),
-        });
-        transaction.delete(legacyLeadRef);
-        return 'exists' as const;
-      }
-
-      transaction.create(leadRef, {
-        email: normalizedEmail,
-        emailLower: normalizedEmail,
-        emailHash: leadHash,
-        source: 'website_welcome_video',
-        createdAt: FieldValue.serverTimestamp(),
-      });
-
-      return 'created' as const;
-    });
-
-    return { status: result };
   }
 );
 

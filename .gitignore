@@ -55,3 +55,6 @@ storage.rules.bak
 # local build artifacts
 build/
 screenshots/
+
+# Admin exports with personal data (early-access-admin.js, affiliate-admin.js report)
+functions/*.csv
