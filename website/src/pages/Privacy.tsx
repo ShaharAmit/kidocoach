@@ -13,6 +13,12 @@ export default function PrivacyPage() {
         <h1>Privacy Policy</h1>
         <p className="meta">Kidocoach | Last updated: 11/11/2026</p>
 
+        <p>
+          This policy covers the Kidocoach app (iPhone, iPad and Android) and this website. Kidocoach,
+          based in Israel, is responsible for your information (the &quot;controller&quot;). You can
+          reach us at admin@kidocoach.app.
+        </p>
+
         <section>
           <h2>1. What Information We Collect</h2>
           <p>
@@ -89,8 +95,7 @@ export default function PrivacyPage() {
             cookies (names starting with _ga). Google processes this data for us as our service provider;
             we do not use it for advertising, we turn off Google signals and ad personalization, and we
             do not sell or share it for cross-context behavioral advertising. Analytics data is kept for
-            up to 14 months in Google Analytics and in our analytics database for as long as we need it
-            for reporting.
+            up to 14 months in Google Analytics and up to 26 months in our analytics database.
           </p>
           <p>
             The same choice lets us remember a partner link in your browser for up to 60 days (see
@@ -103,7 +108,43 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2>5. Your Rights</h2>
+          <h2>5. Why We&apos;re Allowed to Use It (Legal Bases)</h2>
+          <p>
+            Your account, your child&apos;s profile and routines, the spoken greeting, subscriptions and the
+            partner program are used to provide the service you asked for (performance of a contract).
+            Analytics, saving a partner link on your device and Early Access emails rely on your consent,
+            which you can withdraw at any time. We keep payment, commission and payout records because tax
+            and accounting laws require it (legal obligation), and we use limited technical logs to keep the
+            service secure and prevent abuse (legitimate interests). We don&apos;t make decisions about you
+            based solely on automated processing that have legal or similarly significant effects. The
+            routine suggestions built from your questionnaire answers are only a starting point you can change.
+          </p>
+        </section>
+
+        <section>
+          <h2>6. How Long We Keep It</h2>
+          <p>
+            Account, child profile, routine and parent lock information: until you delete your account.
+            Spoken greetings: deleted after a year without use. Early Access email: until you unsubscribe
+            (then only a one-way code of it). Analytics: up to 14 months in Google Analytics and up to 26
+            months in our analytics database. Coupon codes saved in your browser: up to 30 days; partner
+            codes saved in your browser: up to 60 days. Payment, commission and payout records: as long as
+            tax and accounting laws require. Security logs and payment-notification records: up to 90 days.
+          </p>
+        </section>
+
+        <section>
+          <h2>7. For Kids</h2>
+          <p>
+            Hi! Kidocoach helps you with your morning and bedtime routines. Your grown-up told us your first
+            name so the coach can say hello to you. We only use it for that. We don&apos;t show you ads, and
+            we never sell your name. If you have a question, ask your
+            grown-up to email us.
+          </p>
+        </section>
+
+        <section>
+          <h2>8. Your Rights</h2>
           <p>
             Depending on where you live (including the EU/EEA, UK, Canada, Australia and US states such as
             California), you can ask to access, correct, delete or receive a copy of your personal
@@ -116,7 +157,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2>6. Contact Us</h2>
+          <h2>9. Contact Us</h2>
           <p>
             If you have any questions about this policy, you can reach us at admin@kidocoach.app.
           </p>

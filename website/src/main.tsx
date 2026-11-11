@@ -4,6 +4,13 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { initAnalytics, subscribeConsent } from './services/analytics';
 import { setReferralStorageAllowed } from './services/referral';
+// Self-hosted fonts: loading them from Google would send visitors' IPs to Google before consent.
+import '@fontsource/baloo-2/500.css';
+import '@fontsource/baloo-2/700.css';
+import '@fontsource/baloo-2/800.css';
+import '@fontsource/nunito/500.css';
+import '@fontsource/nunito/700.css';
+import '@fontsource/nunito/800.css';
 import './styles/global.css';
 
 const rootElement = document.getElementById('root');
