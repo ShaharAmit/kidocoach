@@ -15,7 +15,7 @@ large-scale special-category processing or systematic monitoring as a core activ
 | 2 | Child profile and routines | Children (via parent) | First name, birth date/age, gender, questionnaire answers, wake-up/bedtime, routines, stars, trophies | Build and personalize routines; contract with the parent (6(1)(b)); parent consent for the child (Art. 8) | Firestore `users/{uid}` + subcollections, device AsyncStorage | Until account deletion |
 | 3 | Spoken greeting (TTS) | Children | First name only (not linked to an account) | Personalized greeting; contract (6(1)(b)) | Google Vertex AI (Gemini TTS) → Cloud Storage `audio/`, Firestore `audio_cache` (shared by name) | Cache TTL |
 | 4 | Subscriptions and payments | Parents | UID, Paddle customer/transaction ids, subscription status; card data held by Paddle only | Sell and unlock subscriptions; contract (6(1)(b)), legal obligation for tax records (6(1)(c)) | Paddle, RevenueCat, Firestore `billing_customers` | Account deletion (our copy); Paddle/RevenueCat per their terms |
-| 5 | Website analytics | Website visitors | Firebase UID (signed-in), GA cookie id, pages, entry source, funnel events, coarse geo/device | Measure the funnel; consent (6(1)(a)) via opt-in banner | GA4, BigQuery `analytics_539565663`, `web_reporting` views | GA 14 months; BigQuery until deleted |
+| 5 | Website analytics | Website visitors | Firebase UID (signed-in), GA cookie id, pages, entry source, funnel events, coarse geo/device | Measure the funnel; consent (6(1)(a)) via opt-in banner | GA4, BigQuery `analytics_539565663`, `web_reporting` views | GA 14 months; BigQuery tables expire after 26 months |
 | 6 | Early-access email list | Prospective customers | Email, consent record, unsubscribe token | Launch updates; consent (6(1)(a)) | Firestore `early_access` | Until unsubscribe (then only a hash for suppression) |
 | 7 | Partner (affiliate) program | Partners; referred families | Partner name, account email, payout method/email, clicks; family UID ↔ partner code; commission ledger | Run the program and pay commissions; contract (6(1)(b)), legal obligation for accounting (6(1)(c)) | Firestore `affiliates`, `affiliate_*` | Attribution: until account deletion; ledger/payouts: as required for accounting |
 | 8 | Parent lock | Parents | PIN as salted SHA-256, lock method | Keep children out of purchases/settings; contract (6(1)(b)) | Device SecureStore, Firestore `users/{uid}.parentalLock` | Until account deletion |
@@ -40,3 +40,16 @@ Firebase Auth on every callable; Firestore/Storage rules deny clients on server-
 (`billing_customers`, `affiliate_*`, `early_access`, `paddle_events`); no secrets in clients (Secret Manager);
 PIN stored only as a salted hash; analytics never receives names, emails or child birth date/gender;
 account deletion removes `users/{uid}` recursively, revokes Apple sign-in and cancels Paddle billing.
+Website: fonts and store badges are self-hosted, so no third party receives a visitor's IP before consent
+(Paddle.js loads only when a parent opens checkout). DPIA: `docs/DPIA.md`.
+
+## Personal data breach procedure (Art. 33/34)
+
+1. **Contain** (revoke keys in Secret Manager, tighten rules, disable the function) and note the time you became aware.
+2. **Assess** what data, whose (children?), how many, and the risk to them. Log every breach in a private
+   incident note, even ones that don't need reporting.
+3. **Notify the regulator within 72 hours** of awareness unless the risk is unlikely: an EU/UK lead
+   authority (or the representative, once appointed) for EU/UK users; the Israeli Privacy Protection
+   Authority as required by Israeli law.
+4. **Tell affected parents without undue delay** if the risk is high (e.g. child data exposed), in plain language.
+5. Processors (Google, RevenueCat, Paddle) must notify us without undue delay under their DPAs.

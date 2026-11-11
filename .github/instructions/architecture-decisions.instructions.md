@@ -238,3 +238,12 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 - **Email list:** early-access sign-ups store a versioned consent record. Every email carries `/email-preferences` confirm (double opt-in / re-confirmation) and unsubscribe links. Unsubscribing deletes the address and keeps only its hash for suppression. Admin: `npm run early-access` (functions).
 - **Source of truth:** GA covers consented visitors only, so it's for rates and funnels. Absolute counts and money come from Firestore (`users`, `affiliate_*`) and Paddle, joined to GA in BigQuery by UID.
 
+
+## ADR-023: EU/UK privacy baseline (2026-11)
+
+**Decision.** Kidocoach (Israel, no EU/UK establishment) serves EU/UK families under GDPR / UK GDPR and the UK Children's Code with these rules. Details: `docs/WEB_ANALYTICS.md` §5, `docs/RECORD_OF_PROCESSING.md`, `docs/DPIA.md`.
+
+- **No third-party requests before consent.** The website self-hosts fonts (`@fontsource`) and store badges. Google Fonts, CDN images and embeds send the visitor's IP to a third party (a German court fined Google Fonts in 2022), so self-host them or load them only after Accept. Firebase/Paddle calls needed for the service are processors and are fine.
+- **Retention is defined** and must match the privacy policy: account data until deletion, greetings 1 year without use (TTL), GA 14 months, BigQuery GA export tables 26 months (dataset default expiration), `paddle_events` 90 days.
+- **EU/UK representative (Art. 27):** not appointed while EU/UK use is occasional. Server location doesn't change this. Appoint a representative service once EU/UK families subscribe regularly, or stop selling there.
+- **Child data changes** (new fields, providers, in-app analytics, voice/camera, social features) require updating the DPIA, the record of processing and the privacy policy in the same change. The privacy policy covers both the app and the website and is linked from the paywall and Settings (behind the parental gate).

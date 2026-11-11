@@ -266,7 +266,10 @@ BigQuery, Paddle and RevenueCat are all US-based. Our safeguards:
     service (e.g. Prighter, EDPO, DataRep; no EU company needed) and add its contact to the privacy
     policy and GA4 Account settings, or stop selling to the EU/UK (storefronts + web checkout) and stop
     loading analytics there.
-- Record of processing (GDPR Art. 30): `docs/RECORD_OF_PROCESSING.md`.
+- Record of processing (GDPR Art. 30) and breach procedure: `docs/RECORD_OF_PROCESSING.md`. DPIA (Art. 35,
+  UK Children's Code): `docs/DPIA.md`.
+- No third-party requests before consent: fonts (`@fontsource`) and store badges (`website/public/badge-*.svg`)
+  are self-hosted. Don't add Google Fonts, CDN images or embeds; self-host them or load them only after consent.
 
 ---
 
@@ -411,6 +414,8 @@ of data, or a very large launch, to leave the free tier. Queries over a few GB a
 3. Always filter by date in queries (`WHERE _TABLE_SUFFIX BETWEEN '20261101' AND '20261130'`) and
    avoid `SELECT *` on `events_*`.
 4. Start with the **daily** export; turn on streaming only if dashboards must be same-day.
+5. ✅ Retention: dataset `analytics_539565663` default table expiration **26 months** (set 2026-11-11, and on
+   the existing tables), matching the privacy policy. Change both together.
 5. Pick the dataset region once; it can't be changed later. We chose **`us`** (BigQuery multi-region) to match
    Firestore (`us-central1`), because BigQuery can't join tables across locations. GA4 already processes EU data
    in the US, and the export holds no names or emails, so EU storage adds little (see §5 *International transfers*).
