@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,8 @@ import ParentLockSetup from '../components/ParentLockSetup';
 import ParentLockFirstRun from '../components/ParentLockFirstRun';
 import { getParentalLockMethod, parentalLockLabel, type ParentalLockMethod } from '../services/parentalLock';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const LEGAL_BASE_URL = 'https://kidocoach.app';
 
 export default function SettingsScreen() {
   const [profile, setProfile] = useState<ChildProfile | null>(null);
@@ -174,6 +177,11 @@ export default function SettingsScreen() {
     }
   };
 
+  const openLegalPage = async (path: 'privacy' | 'terms') => {
+    if (!(await requestParentalGate('This opens a web page outside the app.'))) return;
+    Linking.openURL(`${LEGAL_BASE_URL}/${path}`).catch(() => {});
+  };
+
   const confirmClearCache = () => {
     Alert.alert(
       'Clear cached media?',
@@ -307,6 +315,19 @@ export default function SettingsScreen() {
             )}
           </View>
         </TouchableOpacity>
+
+        <View style={[styles.card, styles.actionCard]}>
+          <Text style={styles.actionTitle}>Privacy & terms</Text>
+          <Text style={styles.actionSubtitle}>What we store about your family and how to delete it.</Text>
+          <View style={styles.legalRow}>
+            <TouchableOpacity onPress={() => { void openLegalPage('privacy'); }} accessibilityRole="link">
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { void openLegalPage('terms'); }} accessibilityRole="link">
+              <Text style={styles.legalLink}>Terms</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <TouchableOpacity
           style={[styles.card, styles.resetCard, isResetting && styles.disabledCard]}
@@ -446,6 +467,18 @@ const styles = StyleSheet.create({
     fontSize: fs(13),
     color: colors.textSlate,
     lineHeight: fs(18),
+  },
+  legalRow: {
+    flexDirection: 'row',
+    gap: ms(20),
+    marginTop: vs(10),
+  },
+  legalLink: {
+    fontSize: fs(14),
+    fontWeight: '700',
+    color: colors.textSlate,
+    textDecorationLine: 'underline',
+    paddingVertical: vs(4),
   },
   chevron: {
     fontSize: fs(24),
