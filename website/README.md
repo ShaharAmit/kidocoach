@@ -24,6 +24,13 @@ cp .env.example .env
 VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
+  This is the Firebase web app's `measurementId` (Firebase Analytics / GA4). It loads only after the
+  visitor accepts the consent banner. Every tracked event, the consent rules and the BigQuery setup are
+  in [`docs/WEB_ANALYTICS.md`](../docs/WEB_ANALYTICS.md).
+  The same consent covers saving partner links on the device. Early-access email admin
+  (`cd functions && npm run early-access -- stats|export|export-reconfirm|unsubscribe|purge-unconfirmed`)
+  and the pre-send checklist are in §6 of that doc.
+
 3. Install and run:
 
 ```bash
@@ -247,7 +254,22 @@ chargebacks reverse it proportionally. Commissions are held 30 days, then
    use `platform` so only real payments create commissions.
 2. **Deploy:** `firebase deploy --only functions,firestore:rules,firestore:indexes` (the indexes
    add the approval query index and the `paddle_events.expireAt` TTL).
-3. **Partners join themselves** at `https://kidocoach.app/partners` (`/affiliates` redirects): sign in,
+3. **Who can see the program** (ADR-021). It is **closed** until switched on. While closed, the
+   `/partners` page, the menu link and the partner terms are hidden from everyone except existing
+   partners (who keep their dashboard and keep earning) and invited emails. An invite is an
+   allowlist entry keyed by email only (`affiliate_invites/{email}`, server-only) and not tied to an
+   account. Whoever signs in with that **verified** email (Google/Apple, or email sign-in after the
+   verification link) can join. The server enforces this in `checkAffiliateCode` and
+   `createAffiliateAccount`, and `getAffiliateSummary` returns the visitor's `access`.
+
+   ```bash
+   cd functions
+   npm run affiliates -- program open|closed     # public_site/config.partnerProgram (missing = closed)
+   npm run affiliates -- invite dana@example.com
+   npm run affiliates -- uninvite dana@example.com   # stops new sign-ups; an existing partner keeps access
+   npm run affiliates -- invites
+   ```
+4. **Partners join themselves** at `https://kidocoach.app/partners` (`/affiliates` redirects): sign in,
    pick a code (live availability check via `checkAffiliateCode`; brand/route words are reserved),
    name, payout method (`wise` default | `paypal`) + payout email and accept the partner terms (`/terms#partners`). `createAffiliateAccount`
    creates an **active** partner on the default terms (15%, 12 months) with `ownerUid`, one per
@@ -269,7 +291,7 @@ chargebacks reverse it proportionally. Commissions are held 30 days, then
 
    `--owner-uid` lets an admin-created partner see the dashboard on `/partners` (and `/profile`)
    after signing in with that account. Pause abusive partners with `set-status <code> disabled`. `--coupon` must be an existing Paddle discount code.
-4. **Monthly payout:** `npm run affiliates -- report` (or `-- report --csv payouts.csv`) lists what each partner
+5. **Monthly payout:** `npm run affiliates -- report` (or `-- report --csv payouts.csv`) lists what each partner
    is owed per currency with their `payout_method` and `payout_email`. Send it from your PayPal or Wise business
    account to that email; the partner doesn't need an account beforehand (PayPal: claim within 30 days, Wise:
    within 7 days, or the money returns to you). Amounts are, net of refunds (a refund after a payout shows as a negative clawback).

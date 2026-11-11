@@ -226,6 +226,7 @@ Post-setup core flow:
 | `billing_customers` | `{uid}` | Firebase UID → Paddle customer (server-only, ADR-018) |
 | `affiliates` | partner code (`[a-z0-9_-]`) | Partner program config; created by self-serve `createAffiliateAccount` (`/partners`) or `functions/scripts/affiliate-admin.js` (ADR-019/020) |
 | `affiliate_owners` | `{uid}` | One self-serve partner code per account (server-only) |
+| `affiliate_invites` | lowercased email | Partner program allowlist while `public_site/config.partnerProgram` is off; not tied to an account (server-only, ADR-021) |
 | `affiliate_clicks` | `{code}_{YYYY-MM-DD}` | Daily partner link click counters (server-only) |
 | `affiliate_payouts` | `{code}_{currency}_{ms}` | Payout history written by `mark-paid`, shown on the partner dashboard (server-only) |
 | `affiliate_attributions` | `{uid}` | Immutable first-touch partner attribution (server-only) |

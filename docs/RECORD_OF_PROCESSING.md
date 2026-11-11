@@ -1,0 +1,42 @@
+# Record of processing activities (GDPR / UK GDPR Art. 30)
+
+Internal record, not published. Update it in the same change whenever a new provider, data field or
+purpose is added. Last reviewed: 2026-11-11. Not legal advice.
+
+**Controller:** Kidocoach (Israel), admin@kidocoach.app. No EU/UK establishment; EU/UK representative
+not yet appointed (see `docs/WEB_ANALYTICS.md` §5, *International transfers*). No DPO (not required: no
+large-scale special-category processing or systematic monitoring as a core activity).
+
+## Processing activities
+
+| # | Activity | Data subjects | Personal data | Purpose / legal basis (GDPR Art. 6) | Where stored | Retention |
+|---|---|---|---|---|---|---|
+| 1 | Parent account | Parents | Firebase UID, email, sign-in provider (Apple/Google/password) | Provide the service; contract (6(1)(b)) | Firebase Auth, Firestore `users/{uid}` | Until account deletion (`deleteAccount`) |
+| 2 | Child profile and routines | Children (via parent) | First name, birth date/age, gender, questionnaire answers, wake-up/bedtime, routines, stars, trophies | Build and personalize routines; contract with the parent (6(1)(b)); parent consent for the child (Art. 8) | Firestore `users/{uid}` + subcollections, device AsyncStorage | Until account deletion |
+| 3 | Spoken greeting (TTS) | Children | First name only (not linked to an account) | Personalized greeting; contract (6(1)(b)) | Google Vertex AI (Gemini TTS) → Cloud Storage `audio/`, Firestore `audio_cache` (shared by name) | Cache TTL |
+| 4 | Subscriptions and payments | Parents | UID, Paddle customer/transaction ids, subscription status; card data held by Paddle only | Sell and unlock subscriptions; contract (6(1)(b)), legal obligation for tax records (6(1)(c)) | Paddle, RevenueCat, Firestore `billing_customers` | Account deletion (our copy); Paddle/RevenueCat per their terms |
+| 5 | Website analytics | Website visitors | Firebase UID (signed-in), GA cookie id, pages, entry source, funnel events, coarse geo/device | Measure the funnel; consent (6(1)(a)) via opt-in banner | GA4, BigQuery `analytics_539565663`, `web_reporting` views | GA 14 months; BigQuery until deleted |
+| 6 | Early-access email list | Prospective customers | Email, consent record, unsubscribe token | Launch updates; consent (6(1)(a)) | Firestore `early_access` | Until unsubscribe (then only a hash for suppression) |
+| 7 | Partner (affiliate) program | Partners; referred families | Partner name, account email, payout method/email, clicks; family UID ↔ partner code; commission ledger | Run the program and pay commissions; contract (6(1)(b)), legal obligation for accounting (6(1)(c)) | Firestore `affiliates`, `affiliate_*` | Attribution: until account deletion; ledger/payouts: as required for accounting |
+| 8 | Parent lock | Parents | PIN as salted SHA-256, lock method | Keep children out of purchases/settings; contract (6(1)(b)) | Device SecureStore, Firestore `users/{uid}.parentalLock` | Until account deletion |
+| 9 | Security and abuse prevention | All users | Paddle webhook event ids, function logs | Legitimate interest (6(1)(f)) | Firestore `paddle_events`, Cloud Logging | `paddle_events` 90 days; logs per Cloud Logging retention |
+
+## Processors and independent controllers
+
+| Provider | Role | Data | Country | Transfer mechanism | Terms to accept/keep |
+|---|---|---|---|---|---|
+| Google (Firebase, Cloud Functions, Firestore, Storage, Vertex AI, BigQuery) | Processor | 1–9 | US | EU-U.S. DPF (+ UK/Swiss) and SCCs | Cloud Data Processing and Security Terms ⚠️ accept |
+| Google Analytics 4 | Processor | 5 | US | DPF and SCCs | GA Data Processing Terms ⚠️ accept |
+| RevenueCat | Processor | 4 (UID, entitlement, receipts) | US | SCCs in DPA (check DPF listing) | RevenueCat DPA ⚠️ download/keep |
+| Paddle | Merchant of record (independent controller for payments) | 4 | UK (adequate for the EU) | UK adequacy; SCCs/UK IDTA for onward transfers | Paddle terms + DPA ⚠️ download/keep |
+| Apple App Store, Google Play | Independent controllers | 4 (store purchases), sign-in | US | Their own terms | — |
+| Email provider (not chosen) | Processor | 6 | — | — | Add a row before the first email |
+
+HeyGen and the offline Gemini renders process only scripted narration (no personal data), so they aren't listed.
+
+## Security measures (summary)
+
+Firebase Auth on every callable; Firestore/Storage rules deny clients on server-only collections
+(`billing_customers`, `affiliate_*`, `early_access`, `paddle_events`); no secrets in clients (Secret Manager);
+PIN stored only as a salted hash; analytics never receives names, emails or child birth date/gender;
+account deletion removes `users/{uid}` recursively, revokes Apple sign-in and cancels Paddle billing.
