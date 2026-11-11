@@ -38,7 +38,7 @@ function loader(mocks = {}) {
 
 function family(userId = 'guest') {
   return {
-    userId, childName: 'Liam', age: 7, gender: 'boy', avatarId: 'becky',
+    userId, childName: 'Liam', age: 7, avatarId: 'becky',
     voice: 'woman', tone: 'calm', scheduledTime: '08:00',
     activityStack: [['brush_teeth'], ['get_dressed']], stepTimes: ['08:00', '08:05'],
     answers: { motivationStyle: 'autonomy_choose', helpLevel: 'little_push' },
@@ -143,11 +143,13 @@ test('complete profiles round-trip and reject invalid or foreign cloud data', ()
   assert.deepEqual(normalizeChildProfile({
     ...profile, activityStack: profile.activityStack.map((activities) => ({ activities })),
   }, 'guest'), profile);
+  // Gender is no longer collected; profiles saved by older builds still load without it.
+  assert.deepEqual(normalizeChildProfile({ ...profile, gender: 'girl' }, 'guest'), profile);
   for (const invalid of [
     { ...profile, userId: 'someone-else' }, { ...profile, age: NaN },
     { ...profile, scheduledTime: '25:00' }, { ...profile, stepTimes: ['bad'] },
     { ...profile, activityStack: [['Not A Key!']] }, { ...profile, activityStack: [] },
-    { ...profile, answers: { helpLevel: 'bad' } }, { ...profile, gender: undefined },
+    { ...profile, answers: { helpLevel: 'bad' } },
   ]) assert.equal(normalizeChildProfile(invalid, 'guest'), null);
 });
 

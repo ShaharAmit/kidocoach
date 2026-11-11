@@ -1,6 +1,6 @@
 import { doc, getDocFromServer, runTransaction } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import type { ChildGender, ChildProfile, QuestionnaireAnswers } from '../../../types';
+import type { ChildProfile, QuestionnaireAnswers } from '../../../types';
 import { parseActivityCatalog } from '../../../utils/activityCatalogModel';
 import { normalizeChildProfile } from '../../../utils/childProfile';
 import { composeRoutine } from '../../../utils/routineComposer';
@@ -13,7 +13,6 @@ import { version as appVersion } from '../../../package.json';
 
 export interface RegistrationInput {
   childName: string;
-  gender: ChildGender;
   birthDate: string;
   answers: QuestionnaireAnswers;
   wakeTime: string;
@@ -42,7 +41,7 @@ export function buildRegistration(uid: string, input: RegistrationInput, catalog
   const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
   if (!isValidChildName(input.childName) || !/^\d{4}-\d{2}-\d{2}$/.test(input.birthDate) ||
       !Number.isFinite(birth.getTime()) || getTodayISO(birth) !== input.birthDate ||
-      age < 2 || age > 12 || !['boy', 'girl'].includes(input.gender) ||
+      age < 2 || age > 12 ||
       !timePattern.test(input.wakeTime) || !isMorningTime(input.wakeTime) ||
       !timePattern.test(input.bedtime) || isMorningTime(input.bedtime) ||
       !input.answers.stuckPoints?.length || !input.answers.masteredTasks?.length ||
@@ -71,7 +70,7 @@ export function buildRegistration(uid: string, input: RegistrationInput, catalog
   });
   const candidate: ChildProfile = {
     userId: uid, childName: input.childName.trim(), age, birthDate: input.birthDate,
-    gender: input.gender, avatarId: 'becky', voice: 'woman', tone: toneFromMotivation(input.answers.motivationStyle),
+    avatarId: 'becky', voice: 'woman', tone: toneFromMotivation(input.answers.motivationStyle),
     scheduledTime: input.wakeTime, bedtime: input.bedtime, answers: input.answers,
     activityStack: segments[0].activities.map((activity) => [activity.activityKey]),
     stepTimes: segments[0].activities.map((activity) => activity.time), totalStarsEarned: 0, updatedAt: Date.now(),

@@ -9,12 +9,11 @@ Review it whenever a new data field, provider or feature that touches child data
 A parent sets up routines for a child aged 2–12. The child watches pre-rendered avatar videos that greet them
 by first name. The parent holds the account; the child never signs in, types or uploads anything.
 
-- **Child data:** first name, birth date/age, gender, questionnaire answers, wake-up/bedtime, routines, stars.
+- **Child data:** first name, birth date/age, questionnaire answers, wake-up/bedtime, routines, stars.
 - **Necessity:** the first name is the product's personalization; age picks age-appropriate activities;
   the schedule drives reminders. Nothing else is collected about the child.
-- ⚠️ **Gender** is currently only used for the 👦/👧 emoji in Settings. Under data minimisation (Art. 5(1)(c)),
-  either give it a real purpose (e.g. gendered phrasing in greetings) or stop asking. Older builds reject
-  profiles without `gender` (`utils/childProfile.ts`), so removing it needs a parser change shipped first.
+- **Gender** is not collected (removed under data minimisation, Art. 5(1)(c)). The profile parser ignores a
+  `gender` field left by older builds; it is dropped the next time the profile is saved.
 
 ## 2. Risks and measures
 

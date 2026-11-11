@@ -80,7 +80,7 @@ Post-setup core flow:
 
 ### Onboarding (`app/onboarding/`)
 - **`welcome.tsx`**: Downloads and plays the locally cached `welcome.mp4` via `expo-video`. A Continue button appears only after `playToEnd` fires, after the top-right **Skip** button is tapped, or after an 8 s start timeout / 30 s safety net (the safety net is cancelled once the video is ready). Leaving the app pauses the video; tapping the video pauses/resumes it, and a ▶ overlay shows while paused (replays from the start after it ended). Tapping Continue navigates to `/onboarding/questionnaire`.
-- **`questionnaire.tsx`**: Multi-step parental setup form — child name, age, gender, behaviour questions, then wake-up time and bedtime (preset chips, default 07:00 / 20:00; stored as profile `scheduledTime` / `bedtime`). Step times come from `utils/routineSchedule.ts` (see ADR-014). On save:
+- **`questionnaire.tsx`**: Multi-step parental setup form — child name, age, behaviour questions, then wake-up time and bedtime (preset chips, default 07:00 / 20:00; stored as profile `scheduledTime` / `bedtime`). Step times come from `utils/routineSchedule.ts` (see ADR-014). On save:
   1. Calls `ensureAuth()` to get `userId`.
   2. Writes `Routine` to Firestore via `saveRoutine()`.
   3. Schedules a daily local notification via `scheduleRoutineNotification()`.

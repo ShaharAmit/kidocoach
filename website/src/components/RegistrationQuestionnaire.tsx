@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ChildGender, ChildProfile, QuestionnaireAnswers } from '../../../types';
+import type { ChildProfile, QuestionnaireAnswers } from '../../../types';
 import {
   BEDTIME_OPTIONS, HELP_OPTIONS, MASTERED_OPTIONS, MORNING_STUCK_OPTIONS, MOTIVATION_OPTIONS,
   SPEED_OPTIONS, WAKE_TIME_OPTIONS, toggleMulti, type QuestionnaireOption,
@@ -28,7 +28,6 @@ export default function RegistrationQuestionnaire({ uid, onSaved }: {
 }) {
   const [step, setStep] = useState(0);
   const [childName, setChildName] = useState('');
-  const [gender, setGender] = useState<ChildGender | null>(null);
   const [birthDate, setBirthDate] = useState(() => isoDateYearsAgo(6));
   const [answers, setAnswers] = useState<QuestionnaireAnswers>({});
   const [wakeTime, setWakeTime] = useState('07:00');
@@ -38,7 +37,7 @@ export default function RegistrationQuestionnaire({ uid, onSaved }: {
   const age = calculateAgeFromISO(birthDate);
   const name = childName.trim() || 'your child';
   const valid = [
-    isValidChildName(childName) && gender !== null && age >= 2 && age <= 12,
+    isValidChildName(childName) && age >= 2 && age <= 12,
     Boolean(answers.stuckPoints?.length), Boolean(answers.motivationStyle),
     Boolean(answers.masteredTasks?.length), Boolean(answers.helpLevel), Boolean(answers.morningSpeed),
     Boolean(wakeTime && bedtime && isMorningTime(wakeTime) && !isMorningTime(bedtime)),
@@ -51,11 +50,11 @@ export default function RegistrationQuestionnaire({ uid, onSaved }: {
   }, [step]);
 
   async function save() {
-    if (busy || !valid || !gender) return;
+    if (busy || !valid) return;
     setBusy(true);
     setError('');
     try {
-      const saved = await saveRegistration(uid, { childName, gender, birthDate, answers, wakeTime, bedtime });
+      const saved = await saveRegistration(uid, { childName, birthDate, answers, wakeTime, bedtime });
       trackEvent('questionnaire_complete', questionnaireParams({ age, answers, wakeTime, bedtime }));
       setAnalyticsUserProperties({ has_child_profile: 'yes' });
       onSaved(saved);
@@ -75,8 +74,6 @@ export default function RegistrationQuestionnaire({ uid, onSaved }: {
       {step === 0 && <>
         <label>What&apos;s their name?<input value={childName} maxLength={30}
           onChange={(event) => setChildName(event.target.value)} autoComplete="off" /></label>
-        <Choices title="Boy or girl?" options={[{ key: 'boy', label: 'Boy' }, { key: 'girl', label: 'Girl' }]}
-          selected={gender ? [gender] : []} onSelect={setGender} />
         <label>Date of birth<input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} /></label>
         <p>Ages 2-12</p>
       </>}

@@ -29,7 +29,7 @@ export default function PrivacyPage() {
           </p>
           <p>
             <strong>Your child&apos;s information.</strong> When you, the parent, set up Kidocoach in the app or
-            on this website, you give us your child&apos;s first name, date of birth (or age), gender, your
+            on this website, you give us your child&apos;s first name, date of birth (or age), your
             questionnaire answers, wake-up and bedtime, and the activities in the routine. The app also
             records stars and completed routines. We keep this in your account and on your device only
             to build and personalize your child&apos;s routines; we never use it for advertising or
@@ -89,7 +89,7 @@ export default function PrivacyPage() {
             parents find and use this website: pages viewed, how you arrived (for example a partner,
             coupon or campaign link and the referring website&apos;s name), sign-up and sign-in method,
             progress through the setup questionnaire, and checkout steps. For the questionnaire we record
-            only answer categories and an age range, never your child&apos;s name, birth date or gender.
+            only answer categories and an age range, never your child&apos;s name or birth date.
             When you are signed in, events are linked to your account&apos;s internal ID (never your
             email) so we can measure our sign-up and setup funnel. Google Analytics sets first-party
             cookies (names starting with _ga). Google processes this data for us as our service provider;

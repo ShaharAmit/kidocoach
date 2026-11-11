@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -41,16 +41,6 @@ export default function SettingsScreen() {
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [lockMethod, setLockMethod] = useState<ParentalLockMethod | null>(null);
   const [isEditingLock, setIsEditingLock] = useState(false);
-
-  const avatarEmoji = useMemo(() => {
-    if (!profile) return '🙂';
-    return profile.gender === 'girl' ? '👧' : '👦';
-  }, [profile]);
-
-  const profileGenderLabel = useMemo(() => {
-    if (!profile) return '—';
-    return profile.gender === 'girl' ? 'Girl' : 'Boy';
-  }, [profile]);
 
   useEffect(() => {
     let mounted = true;
@@ -230,7 +220,7 @@ export default function SettingsScreen() {
         <View style={[styles.card, styles.profileCard]}>
           <View style={styles.cardHeader}>
             <View style={styles.iconBubble}>
-              <Text style={styles.iconEmoji}>{avatarEmoji}</Text>
+              <Text style={styles.iconEmoji}>{profile ? '🧒' : '🙂'}</Text>
             </View>
             <View style={styles.cardHeaderTextWrap}>
               <Text style={styles.cardTitle}>{profile?.childName ?? 'Your child'}</Text>
@@ -240,10 +230,6 @@ export default function SettingsScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Name</Text>
             <Text style={styles.infoValue}>{profile?.childName ?? 'Not set'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Sex</Text>
-            <Text style={styles.infoValue}>{profileGenderLabel}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Age</Text>

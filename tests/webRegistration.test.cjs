@@ -70,7 +70,7 @@ function harness() {
     auth, docs, state, load,
     registration: load('website/src/services/registration.ts'),
     input: {
-      childName: 'Liam', gender: 'boy', birthDate: isoDateYearsAgo(6),
+      childName: 'Liam', birthDate: isoDateYearsAgo(6),
       wakeTime: '07:00', bedtime: '20:00',
       answers: {
         stuckPoints: ['getting_dressed'], motivationStyle: 'autonomy_choose',

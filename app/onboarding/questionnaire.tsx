@@ -20,7 +20,6 @@ import { composeRoutine } from '../../utils/routineComposer';
 import { refreshActivityCatalog } from '../../services/activityCatalog';
 import { InPageHeader } from '../../components/ScreenHeader';
 import {
-  ChildGender,
   ChildProfile,
   QuestionnaireAnswers,
   Routine,
@@ -53,11 +52,6 @@ const MAX_AGE = 12;
 
 type Option<T extends string> = { key: T; label: string };
 
-const GENDER_OPTIONS: { key: ChildGender; label: string; emoji: string }[] = [
-  { key: 'boy', label: 'Boy', emoji: '👦' },
-  { key: 'girl', label: 'Girl', emoji: '👧' },
-];
-
 function formatTime12h(time: string): string {
   const [hour, minute] = time.split(':').map(Number);
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -70,7 +64,7 @@ function withCurrentTime(options: string[], current: string): string[] {
   return options.includes(current) ? options : [...options, current].sort();
 }
 
-// Step 0 = name + gender + age, steps 1..5 = questions (1 and 3 are multi-select),
+// Step 0 = name + age, steps 1..5 = questions (1 and 3 are multi-select),
 // step 6 = morning/evening start times. Final = trust screen.
 const QUESTION_STEP_COUNT = 7;
 
@@ -81,7 +75,6 @@ export default function QuestionnaireScreen() {
   const [saving, setSaving] = useState(false);
 
   const [childName, setChildName] = useState('');
-  const [gender, setGender] = useState<ChildGender | null>(null);
   const [birthDate, setBirthDate] = useState(() => isoDateYearsAgo(6));
 
   const age = useMemo(() => calculateAgeFromISO(birthDate), [birthDate]);
@@ -96,7 +89,6 @@ export default function QuestionnaireScreen() {
       .then((profile) => {
         if (!profile || !mounted) return;
         setChildName(profile.childName);
-        setGender(profile.gender);
         setBirthDate(profile.birthDate ?? isoDateYearsAgo(profile.age));
         if (profile.answers) setAnswers(profile.answers);
         if (isMorningTime(profile.scheduledTime)) setWakeTime(profile.scheduledTime);
@@ -125,7 +117,7 @@ export default function QuestionnaireScreen() {
   const canContinue = useMemo(() => {
     switch (stepIndex) {
       case 0:
-        return isValidChildName(childName) && !!gender && age >= MIN_AGE && age <= MAX_AGE;
+        return isValidChildName(childName) && age >= MIN_AGE && age <= MAX_AGE;
       case 1:
         return !!answers.stuckPoints?.length;
       case 2:
@@ -141,7 +133,7 @@ export default function QuestionnaireScreen() {
       default:
         return false;
     }
-  }, [stepIndex, childName, gender, age, answers, wakeTime, bedtime]);
+  }, [stepIndex, childName, age, answers, wakeTime, bedtime]);
 
   const handleContinue = useCallback(() => {
     if (!canContinue) return;
@@ -183,7 +175,6 @@ export default function QuestionnaireScreen() {
         childName: childName.trim(),
         age,
         birthDate,
-        gender: gender ?? 'boy',
         avatarId: DEFAULT_AVATAR_ID,
         voice: DEFAULT_VOICE,
         tone,
@@ -246,7 +237,7 @@ export default function QuestionnaireScreen() {
       Alert.alert('Save failed', 'Could not save setup. Please try again.');
       setSaving(false);
     }
-  }, [age, birthDate, answers, childName, gender, saving, wakeTime, bedtime]);
+  }, [age, birthDate, answers, childName, saving, wakeTime, bedtime]);
 
   return (
     <PageBackground variant="clouds">
@@ -297,8 +288,6 @@ export default function QuestionnaireScreen() {
                     <NameAgeStep
                       childName={childName}
                       onChangeName={setChildName}
-                      gender={gender}
-                      onChangeGender={setGender}
                       birthDate={birthDate}
                       age={age}
                       onChangeBirthDate={setBirthDate}
@@ -403,16 +392,12 @@ export default function QuestionnaireScreen() {
 function NameAgeStep({
   childName,
   onChangeName,
-  gender,
-  onChangeGender,
   birthDate,
   age,
   onChangeBirthDate,
 }: {
   childName: string;
   onChangeName: (value: string) => void;
-  gender: ChildGender | null;
-  onChangeGender: (value: ChildGender) => void;
   birthDate: string;
   age: number;
   onChangeBirthDate: (value: string) => void;
@@ -467,28 +452,6 @@ function NameAgeStep({
           returnKeyType="done"
           maxLength={MAX_CHILD_NAME_LENGTH}
         />
-      </View>
-
-      <Text style={[styles.fieldLabel, { marginTop: vs(22) }]}>Boy or girl?</Text>
-      <View style={styles.genderRow} accessibilityRole="radiogroup">
-        {GENDER_OPTIONS.map((option) => {
-          const active = gender === option.key;
-          return (
-            <TouchableOpacity
-              key={option.key}
-              style={[styles.option, styles.genderOption, active && styles.optionSelected]}
-              onPress={() => onChangeGender(option.key)}
-              activeOpacity={0.85}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: active }}
-            >
-              <Text style={styles.inputIcon}>{option.emoji}</Text>
-              <Text style={[styles.optionLabel, active && styles.optionLabelSelected]}>
-                {option.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
       </View>
 
       <Text style={[styles.fieldLabel, { marginTop: vs(22) }]}>How old are they?</Text>
@@ -926,15 +889,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: s(16),
     paddingVertical: vs(16),
     gap: s(14),
-  },
-  genderRow: {
-    flexDirection: 'row',
-    gap: s(12),
-  },
-  genderOption: {
-    flex: 1,
-    paddingVertical: vs(12),
-    gap: s(8),
   },
   optionSelected: {
     borderColor: TEAL,

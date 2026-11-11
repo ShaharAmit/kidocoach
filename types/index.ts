@@ -6,7 +6,6 @@ export type ActivityKey = string;
 
 export type ToneOption = 'cheerful' | 'encouraging' | 'calm';
 export type VoiceOption = 'woman' | 'man';
-export type ChildGender = 'boy' | 'girl';
 export type ActivityStep = ActivityKey[];
 export type DurationMode = 'fixed' | 'variable';
 
@@ -102,7 +101,6 @@ export interface ChildProfile {
   age: number;
   /** ISO `YYYY-MM-DD` date of birth. `age` is derived from this and kept in sync at save time. */
   birthDate?: string;
-  gender: ChildGender;
   avatarId: string;
   voice: VoiceOption;
   tone: ToneOption;

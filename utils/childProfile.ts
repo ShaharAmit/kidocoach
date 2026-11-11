@@ -72,7 +72,6 @@ export function normalizeChildProfile(value: unknown, userId?: string): ChildPro
   if (typeof value.childName !== 'string' || !value.childName.trim()) return null;
   if (typeof value.age !== 'number' || !Number.isFinite(value.age) ||
       value.age < 2 || value.age > 17) return null;
-  if (value.gender !== 'boy' && value.gender !== 'girl') return null;
   if (value.voice !== 'woman' && value.voice !== 'man') return null;
   if (value.tone !== 'cheerful' && value.tone !== 'encouraging' && value.tone !== 'calm') return null;
   if (typeof value.avatarId !== 'string' || !value.avatarId.trim()) return null;
@@ -110,7 +109,6 @@ export function normalizeChildProfile(value: unknown, userId?: string): ChildPro
     userId: value.userId,
     childName: value.childName.trim(),
     age: value.age,
-    gender: value.gender,
     avatarId: value.avatarId,
     voice: value.voice,
     tone: value.tone,

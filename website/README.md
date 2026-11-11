@@ -304,7 +304,7 @@ the program. Account deletion removes the attribution and pauses any partner cod
 ### Customer questionnaire and mobile sync
 
 A customer with no saved child profile completes the same seven questionnaire steps as the app
-before plans are displayed: child name/gender/birth date (ages 2–12), stuck points, motivation,
+before plans are displayed: child name/birth date (ages 2–12), stuck points, motivation,
 mastered tasks, help level, morning pace, and wake-up/bedtime. Choices, exclusive multi-select
 behavior and tone mapping are shared with native in `utils/questionnaire.ts`. The web reuses
 the native catalog parser, composer, schedule, and profile normalizer; no activity list is bundled.

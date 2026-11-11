@@ -184,7 +184,7 @@ test('catalog tags/routine are validated on client and server', () => {
 test('questionnaire answers migrate legacy single values and keep exclusive options alone', () => {
   const { normalizeChildProfile } = createLoader()('utils/childProfile.ts');
   const base = {
-    userId: 'u1', childName: 'Liam', age: 5, gender: 'boy', voice: 'woman', tone: 'calm',
+    userId: 'u1', childName: 'Liam', age: 5, voice: 'woman', tone: 'calm',
     avatarId: 'becky', scheduledTime: '08:00', activityStack: [['wake_up']],
   };
   const answers = (raw) => normalizeChildProfile({ ...base, answers: raw })?.answers;
