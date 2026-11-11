@@ -2,10 +2,12 @@ import { RefObject, useEffect, useState } from 'react';
 import {
   fetchSiteConfig,
   readCachedPosterUrl,
+  resolveWelcomeCaptionUrl,
   resolveWelcomePosterUrl,
   resolveWelcomeVideoUrl,
   SiteConfig,
 } from '../services/siteConfig';
+import { getCaptionTrackSource, type CaptionTrackSource } from '../services/captionTrack';
 import { getCachedVideoSource, getCachedImageSource, extractPosterFrame, getPosterFromCache, CachedVideoSource } from '../services/videoCache';
 
 type UseWelcomeVideoOptions = {
@@ -34,11 +36,13 @@ export function useWelcomeVideo({
   const [videoFinished, setVideoFinished] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [posterSrc, setPosterSrc] = useState(() => readCachedPosterUrl(fallbackConfig.welcomeVideoUrl));
+  const [captionSrc, setCaptionSrc] = useState('');
 
   useEffect(() => {
     let mounted = true;
     let releaseCachedVideo: (() => void) | undefined;
     let releaseCachedPoster: (() => void) | undefined;
+    let releaseCachedCaptions: (() => void) | undefined;
 
     async function loadConfig() {
       try {
@@ -65,13 +69,19 @@ export function useWelcomeVideo({
         // Fetch video, captions, and poster URL in parallel.
         // Poster is awaited here so posterSrc is set in the same render as loading→false.
         // This prevents the mobile shimmer from persisting after loading completes.
-        const [cachedVideo, cachedPoster] = await Promise.all([
+        const [cachedVideo, cachedPoster, cachedCaptions] = await Promise.all([
           withTimeout(getCachedVideoSource(resolvedVideoUrl), 5000, { src: resolvedVideoUrl }),
           withTimeout(
             resolveWelcomePosterUrl(config.welcomeVideoUrl)
               .then(url => url ? getCachedImageSource(url) : Promise.resolve({ src: '' } as CachedVideoSource)),
             6000,
             { src: '' } as CachedVideoSource
+          ),
+          withTimeout(
+            resolveWelcomeCaptionUrl(config.welcomeVideoUrl)
+              .then(url => url ? getCaptionTrackSource(url) : Promise.resolve({ src: '' } as CaptionTrackSource)),
+            4000,
+            { src: '' } as CaptionTrackSource
           ),
         ]);
 
@@ -82,6 +92,7 @@ export function useWelcomeVideo({
           setSiteConfig(config);
           setVideoSrc(cachedVideo.src);
           setPosterSrc(posterUrl);
+          setCaptionSrc(cachedCaptions.src);
           setVideoError('');
           setVideoFinished(false);
           setHasStarted(false);
@@ -96,11 +107,13 @@ export function useWelcomeVideo({
 
         releaseCachedVideo = cachedVideo.release;
         releaseCachedPoster = cachedPoster.release;
+        releaseCachedCaptions = cachedCaptions.release;
       } catch (error) {
         console.warn('Failed to load site config from Firestore', error);
         if (mounted) {
           setVideoSrc('');
           setPosterSrc('');
+          setCaptionSrc('');
           setVideoError('Welcome video failed to load from config.');
           setVideoFinished(true);
           setHasStarted(false);
@@ -118,6 +131,7 @@ export function useWelcomeVideo({
       mounted = false;
       if (releaseCachedVideo) releaseCachedVideo();
       if (releaseCachedPoster) releaseCachedPoster();
+      if (releaseCachedCaptions) releaseCachedCaptions();
     };
   }, [fallbackConfig]);
 
@@ -169,6 +183,7 @@ export function useWelcomeVideo({
     loading,
     videoSrc,
     posterSrc,
+    captionSrc,
     videoError,
     videoFinished,
     hasStarted,

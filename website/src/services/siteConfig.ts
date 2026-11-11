@@ -2,16 +2,53 @@ import { doc, getDoc } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from './firebase';
 
+export type SampleClipConfig = {
+  id: string;
+  name: string;
+  activityLabel: string;
+  videoUrl: string;
+  posterUrl?: string;
+};
+
 export type SiteConfig = {
   welcomeVideoUrl: string;
   appStoreUrl: string;
   playStoreUrl: string;
+  sampleClips?: SampleClipConfig[];
 };
+
+const DEFAULT_SAMPLE_CLIPS: SampleClipConfig[] = [
+  {
+    id: 'jonathan',
+    name: 'Jonathan',
+    activityLabel: 'Morning Wake-Up',
+    videoUrl: '/samples/jonathan.mp4',
+  },
+  {
+    id: 'maya',
+    name: 'Maya',
+    activityLabel: 'Brush Teeth',
+    videoUrl: '/samples/maya.mp4',
+  },
+  {
+    id: 'leo',
+    name: 'Leo',
+    activityLabel: 'Get Dressed',
+    videoUrl: '/samples/leo.mp4',
+  },
+  {
+    id: 'emma',
+    name: 'Emma',
+    activityLabel: 'Bedtime Wind-Down',
+    videoUrl: '/samples/emma.mp4',
+  },
+];
 
 const DEFAULT_CONFIG: SiteConfig = {
   welcomeVideoUrl: 'avatars/default/welcome.mp4',
   appStoreUrl: 'https://apps.apple.com/',
   playStoreUrl: 'https://play.google.com/store',
+  sampleClips: DEFAULT_SAMPLE_CLIPS,
 };
 
 function readString(value: unknown, fallback: string): string {
@@ -43,9 +80,27 @@ function writeCachedConfig(config: SiteConfig): void {
   }
 }
 
+function readSampleClips(value: unknown): SampleClipConfig[] {
+  if (!Array.isArray(value)) return DEFAULT_SAMPLE_CLIPS;
+  const parsed: SampleClipConfig[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = item as Record<string, unknown>;
+    const id = readString(rec.id, '');
+    const name = readString(rec.name, '');
+    const activityLabel = readString(rec.activityLabel, 'Routine Step');
+    const videoUrl = readString(rec.videoUrl, '');
+    const posterUrl = readString(rec.posterUrl, '');
+    if (id && name && videoUrl) {
+      parsed.push({ id, name, activityLabel, videoUrl, ...(posterUrl ? { posterUrl } : {}) });
+    }
+  }
+  return parsed.length > 0 ? parsed : DEFAULT_SAMPLE_CLIPS;
+}
+
 export async function fetchSiteConfig(): Promise<SiteConfig> {
   const cached = readCachedConfig();
-  if (cached) return cached;
+  if (cached) return { ...cached, sampleClips: cached.sampleClips ?? DEFAULT_SAMPLE_CLIPS };
 
   const docRef = doc(db, 'public_site', 'config');
   const snapshot = await getDoc(docRef);
@@ -58,9 +113,24 @@ export async function fetchSiteConfig(): Promise<SiteConfig> {
     welcomeVideoUrl: readString(data.welcomeVideoUrl, DEFAULT_CONFIG.welcomeVideoUrl),
     appStoreUrl: readString(data.appStoreUrl, DEFAULT_CONFIG.appStoreUrl),
     playStoreUrl: readString(data.playStoreUrl, DEFAULT_CONFIG.playStoreUrl),
+    sampleClips: readSampleClips(data.sampleClips),
   };
   writeCachedConfig(config);
   return config;
+}
+
+/**
+ * Public partner sign-up switch (`public_site/config.partnerProgram`, ADR-021). Read fresh, not
+ * from the 4 h config cache, so flipping it takes effect on the next page load. Off when missing
+ * or unreadable; invited emails and existing partners are handled by the server instead.
+ */
+export async function fetchPartnerProgramOpen(): Promise<boolean> {
+  try {
+    const snapshot = await getDoc(doc(db, 'public_site', 'config'));
+    return snapshot.data()?.partnerProgram === true;
+  } catch {
+    return false;
+  }
 }
 
 function isHttpUrl(value: string): boolean {
@@ -199,6 +269,19 @@ export async function resolveWelcomePosterUrl(videoRawValue: string): Promise<st
     return url;
   } catch {
     // File not found or network error — not an error condition
+    return '';
+  }
+}
+
+export async function resolveWelcomeCaptionUrl(videoRawValue: string): Promise<string> {
+  const value = videoRawValue.trim();
+  if (!value || isHttpUrl(value) || isLocalAssetUrl(value)) return '';
+  const objectPath = normalizeStoragePath(value).replace(/\.[^./?#]+$/, '.srt');
+  if (!objectPath) return '';
+
+  try {
+    return await getDownloadURL(ref(storage, objectPath));
+  } catch {
     return '';
   }
 }

@@ -2,9 +2,11 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useVisibility } from '../hooks/useVisibility';
 import { useWelcomeVideo } from '../hooks/useWelcomeVideo';
-import { trackEvent } from '../services/analytics';
+import { usePartnerMenuLink } from '../hooks/usePartnerMenuLink';
+import { openPrivacyChoices, trackEvent } from '../services/analytics';
 import { submitEarlyAccessLead } from '../services/earlyAccess';
-import { SiteConfig } from '../services/siteConfig';
+import { SiteConfig, SampleClipConfig } from '../services/siteConfig';
+import InteractiveRoutinePreview, { SampleClipSwitcher } from '../components/InteractiveRoutinePreview';
 import '../styles/home.css';
 
 const FALLBACK: SiteConfig = {
@@ -17,6 +19,7 @@ export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const heroStageRef = useRef<HTMLElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const partnerMenuLink = usePartnerMenuLink();
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
@@ -31,9 +34,11 @@ export default function HomePage() {
   const lastTouchRef = useRef(0);
 
   const {
+    siteConfig,
     loading,
     videoSrc,
     posterSrc,
+    captionSrc,
     videoError,
     hasStarted,
     shouldShowSignup,
@@ -44,33 +49,36 @@ export default function HomePage() {
     handleVideoPause,
   } = useWelcomeVideo({ videoRef, fallbackConfig: FALLBACK });
 
+  const [activeSample, setActiveSample] = useState<{ clip: SampleClipConfig; url: string } | null>(null);
+  const currentVideoSrc = activeSample ? activeSample.url : videoSrc;
+
   const isVideoFullyVisible = useVisibility(heroStageRef, 0.75);
 
   useEffect(() => {
     setIsVideoReady(false);
     setPendingPlay(false);
     if (readyFallbackRef.current) clearTimeout(readyFallbackRef.current);
-  }, [videoSrc]);
+  }, [currentVideoSrc]);
 
   // iOS often won't fire canplay/loadeddata for blob URLs without play().
   // Force-ready after 2.5s so the loading cover never stays forever.
   useEffect(() => {
-    if (!videoSrc || loading || isVideoReady) return;
+    if (!currentVideoSrc || loading || isVideoReady) return;
     if (readyFallbackRef.current) clearTimeout(readyFallbackRef.current);
     readyFallbackRef.current = setTimeout(() => setIsVideoReady(true), 2500);
     return () => {
       if (readyFallbackRef.current) clearTimeout(readyFallbackRef.current);
     };
-  }, [videoSrc, loading, isVideoReady]);
+  }, [currentVideoSrc, loading, isVideoReady]);
 
   useEffect(() => {
-    if (!pendingPlay || !videoSrc || !isVideoReady || hasStarted || shouldShowSignup) {
+    if (!pendingPlay || !currentVideoSrc || !isVideoReady || (!activeSample && (hasStarted || shouldShowSignup))) {
       return;
     }
 
     handleStartVideo();
     setPendingPlay(false);
-  }, [hasStarted, isVideoReady, pendingPlay, shouldShowSignup, videoSrc, handleStartVideo]);
+  }, [activeSample, hasStarted, isVideoReady, pendingPlay, shouldShowSignup, currentVideoSrc, handleStartVideo]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -165,8 +173,8 @@ export default function HomePage() {
     // Suppress the synthetic click that iOS fires ~300ms after touchstart
     if (e?.type === 'click' && Date.now() - lastTouchRef.current < 600) return;
     if (e?.type === 'touchstart') lastTouchRef.current = Date.now();
-    if (!videoSrc || shouldShowSignup || !isVideoReady) {
-      if (!isVideoReady && videoSrc && !shouldShowSignup) setPendingPlay(true);
+    if (!currentVideoSrc || (!activeSample && shouldShowSignup) || !isVideoReady) {
+      if (!isVideoReady && currentVideoSrc && (activeSample || !shouldShowSignup)) setPendingPlay(true);
       return;
     }
 
@@ -215,15 +223,20 @@ export default function HomePage() {
           <Link to="/profile" onClick={() => setMenuOpen(false)}>
             Profile
           </Link>
-          <Link to="/partners" onClick={() => setMenuOpen(false)}>
-            Become a partner
-          </Link>
+          {partnerMenuLink && (
+            <Link to="/partners" onClick={() => setMenuOpen(false)}>
+              {partnerMenuLink}
+            </Link>
+          )}
           <Link to="/terms" onClick={() => setMenuOpen(false)}>
             Terms and Conditions
           </Link>
           <Link to="/privacy" onClick={() => setMenuOpen(false)}>
             Privacy Policy
           </Link>
+          <button type="button" onClick={() => { setMenuOpen(false); openPrivacyChoices(); }}>
+            Privacy choices
+          </button>
         </nav>
       </header>
 
@@ -236,7 +249,10 @@ export default function HomePage() {
             routines, and daily habits, helping parents raise independent children with a
             playful routine experience.
           </p>
-          <Link to="/profile">Get started / Profile</Link>
+          <div className="hero-cta-row">
+            <Link to="/profile" className="hero-cta-primary">Get started / Profile</Link>
+            <a href="#how-it-works" className="hero-cta-secondary">How it works</a>
+          </div>
         </div>
 
         <section
@@ -257,14 +273,14 @@ export default function HomePage() {
           {loading ? <p className="state-label">Loading welcome video...</p> : null}
           {!loading && videoError ? <p className="state-label error">{videoError}</p> : null}
 
-          {videoSrc ? (
+          {currentVideoSrc ? (
             <>
             <video
               ref={videoRef}
-              key={videoSrc}
+              key={currentVideoSrc}
               className="welcome-video"
-              src={videoSrc}
-              poster={posterSrc || undefined}
+              src={currentVideoSrc}
+              poster={!activeSample ? posterSrc || undefined : undefined}
               playsInline
               preload="auto"
               controls={false}
@@ -275,6 +291,9 @@ export default function HomePage() {
               onLoadedData={() => setIsVideoReady(true)}
               onCanPlay={() => setIsVideoReady(true)}
             >
+              {!activeSample && captionSrc ? (
+                <track default kind="captions" srcLang="en" label="English" src={captionSrc} />
+              ) : null}
             </video>
 
             {/* Shimmer: show while loading, OR while no poster AND neither the video engine
@@ -343,6 +362,19 @@ export default function HomePage() {
             <p className="signup-ready-hint">Early access is open now</p>
           ) : null}
         </section>
+
+        <SampleClipSwitcher
+          clips={siteConfig.sampleClips ?? []}
+          activeClipId={activeSample?.clip.id ?? null}
+          onSelectClip={(clip, resolvedUrl) => {
+            if (!clip || !resolvedUrl) {
+              setActiveSample(null);
+              return;
+            }
+            setActiveSample({ clip, url: resolvedUrl });
+            setPendingPlay(true);
+          }}
+        />
       </section>
 
       <div className="floating-store-links" role="navigation" aria-label="Store links">
@@ -354,7 +386,7 @@ export default function HomePage() {
         >
           <img
             className="store-badge ios"
-            src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+            src="/badge-app-store.svg"
             alt="Coming soon to the App Store"
           />
         </button>
@@ -366,7 +398,7 @@ export default function HomePage() {
         >
           <img
             className="store-badge android"
-            src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg"
+            src="/badge-google-play.svg"
             alt="Coming soon to Google Play"
           />
         </button>
@@ -378,6 +410,149 @@ export default function HomePage() {
           Early Access Signup
         </button>
       </div>
+
+      <section className="info-sections" aria-label="About KidoCoach">
+        <InteractiveRoutinePreview />
+
+        <section id="how-it-works" className="info-block">
+          <p className="eyebrow">How It Works</p>
+          <h2 className="section-title">Turn Daily Nagging Into Playful Independence</h2>
+          <p className="section-lead">
+            Designed for kids ages 2 to 12, KidoCoach guides your child step by step through
+            morning and bedtime routines using an encouraging animated avatar coach that speaks
+            their name.
+          </p>
+          <div className="feature-grid">
+            <article className="feature-card">
+              <span className="feature-step">1</span>
+              <h3>Personalize in 2 Minutes</h3>
+              <p>
+                Set your child&apos;s name, age, wake-up and bedtime schedule, and where mornings
+                usually get stuck—on the web or in the mobile app.
+              </p>
+            </article>
+            <article className="feature-card">
+              <span className="feature-step">2</span>
+              <h3>Guided Avatar Coaching</h3>
+              <p>
+                At routine time, a friendly animated coach calls your child by name and walks them
+                through each task—brushing teeth, getting dressed, eating breakfast, and winding down.
+              </p>
+            </article>
+            <article className="feature-card">
+              <span className="feature-step">3</span>
+              <h3>Mission Complete!</h3>
+              <p>
+                Kids tap the giant &quot;Mission Complete&quot; button after each step and earn stars
+                for building calm, consistent habits without parent nagging.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section id="why-kidocoach" className="info-block">
+          <p className="eyebrow">Built for Real Families</p>
+          <h2 className="section-title">Why Parents &amp; Kids Love KidoCoach</h2>
+          <div className="benefit-grid">
+            <article className="benefit-card">
+              <h3>Speaks Your Child&apos;s Name</h3>
+              <p>
+                Personalized voice prompts keep kids engaged and focused on the current activity
+                instead of getting distracted.
+              </p>
+            </article>
+            <article className="benefit-card">
+              <h3>Visual &amp; Step-by-Step Pacing</h3>
+              <p>
+                One clear visual task at a time with gentle timers reduces morning overwhelm and
+                helps slow, dreamy, or easily distracted kids stay on track.
+              </p>
+            </article>
+            <article className="benefit-card">
+              <h3>Works Offline at Routine Time</h3>
+              <p>
+                The mobile app pre-downloads your child&apos;s routine videos and personalized voice
+                tracks so mornings run smoothly even without Wi-Fi.
+              </p>
+            </article>
+            <article className="benefit-card">
+              <h3>One Account Across All Devices</h3>
+              <p>
+                Set up or subscribe on the web or mobile. Your family subscription unlocks access
+                across iOS, Android, and web with a single parent login.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section id="faq" className="info-block faq-block">
+          <p className="eyebrow">Questions &amp; Answers</p>
+          <h2 className="section-title">Frequently Asked Questions</h2>
+          <div className="faq-list">
+            <details className="faq-item" open>
+              <summary>What is KidoCoach and how does it help with kids&apos; routines?</summary>
+              <p>
+                KidoCoach is a daily routine app for kids (ages 2–12) that replaces parent nagging
+                with a playful animated routine coach. It guides children through sequential morning
+                and bedtime habits—like getting out of bed, getting dressed, brushing teeth, and
+                putting toys away—using visual avatar loops, personalized voice audio that says your
+                child&apos;s name, and a rewarding &quot;Mission Complete&quot; flow.
+              </p>
+            </details>
+            <details className="faq-item">
+              <summary>What age group is KidoCoach designed for?</summary>
+              <p>
+                KidoCoach is tailored for children ages 2 to 12. During the 7-step setup, the routine
+                adapts to your child&apos;s age, natural morning pace, and how much independence or
+                step-by-step support they need.
+              </p>
+            </details>
+            <details className="faq-item">
+              <summary>Which platforms does KidoCoach support?</summary>
+              <p>
+                KidoCoach is built for iOS (iPhone and iPad) and Android, with web account setup and
+                subscription management at kidocoach.app/profile. One parent subscription unlocks the
+                app across all of your family&apos;s devices.
+              </p>
+            </details>
+            <details className="faq-item">
+              <summary>How does KidoCoach help kids who get easily distracted or overwhelmed?</summary>
+              <p>
+                Instead of overwhelming kids with a long wall of chores, KidoCoach presents one visual,
+                timed activity at a time with encouraging voice cues and immediate positive feedback,
+                making transitions easier for slow, dreamy, or easily distracted mornings. (KidoCoach
+                is an educational habit-building tool for families, not a medical or clinical device.)
+              </p>
+            </details>
+            <details className="faq-item">
+              <summary>How do I get started or join Early Access?</summary>
+              <p>
+                You can create your parent account and configure your child&apos;s routine right now on
+                our <Link to="/profile">Profile &amp; Setup page</Link>, or click &quot;Early Access
+                Signup&quot; to reserve your Founder&apos;s Pass and receive launch updates.
+              </p>
+            </details>
+          </div>
+        </section>
+
+        <footer className="home-footer">
+          <div className="home-footer-brand">
+            <img className="brand-mark" src="/logo.png?v=9e729603" alt="" aria-hidden="true" />
+            <span>KidoCoach — Daily Routine App for Kids</span>
+          </div>
+          <nav className="home-footer-links" aria-label="Footer navigation">
+            <Link to="/morning-routine-for-kids">Morning Routines</Link>
+            <Link to="/bedtime-routine-for-kids">Bedtime Routines</Link>
+            <Link to="/visual-routine-schedule-for-kids">Visual Schedules</Link>
+            <Link to="/profile">Get Started / Profile</Link>
+            <Link to="/terms">Terms &amp; Conditions</Link>
+            <Link to="/privacy">Privacy Policy</Link>
+            <button type="button" className="footer-link-btn" onClick={openPrivacyChoices}>
+              Privacy Choices
+            </button>
+          </nav>
+        </footer>
+      </section>
 
       {!isVideoFullyVisible ? (
         <button
@@ -446,6 +621,12 @@ export default function HomePage() {
                   {submitState === 'submitting' ? 'Saving...' : submitState === 'success' ? 'Saved' : 'Join Early Access'}
                 </button>
               </form>
+
+              <p className="signup-consent">
+                By joining, you agree that KidoCoach may email you launch updates and the launch-rate
+                offer. Unsubscribe anytime with the link in every email.{' '}
+                <Link to="/privacy">Privacy Policy</Link>
+              </p>
 
               {submitMessage ? (
                 <p className={`signup-message ${submitState}`}>{submitMessage}</p>

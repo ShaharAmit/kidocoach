@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Kidocoach is a daily routine app that helps families build calmer mornings, smoother bedtime routines, and more consistent habits for kids."
+      content="Kidocoach is a daily routine app for kids (ages 2–12) that helps families build calmer mornings, smoother bedtime routines, and independent habits with an animated routine coach."
     />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
     <meta name="theme-color" content="#77c4d7" />
@@ -16,10 +16,10 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Kidocoach" />
-    <meta property="og:title" content="Kidocoach | Daily Routine App for Kids" />
+    <meta property="og:title" content="Kidocoach | Daily Routine App for Kids (Morning & Bedtime)" />
     <meta
       property="og:description"
-      content="Kidocoach helps families turn chaotic mornings into calmer routines with a playful daily routine app for kids."
+      content="Kidocoach helps families turn chaotic mornings into calmer routines with a playful animated routine coach that speaks your child's name."
     />
     <meta property="og:url" content="https://kidocoach.app/" />
     <meta property="og:image" content="https://kidocoach.app/og-image.png?v=routine-coach-20261009" />
@@ -28,39 +28,153 @@
     <meta property="og:image:height" content="630" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Kidocoach | Daily Routine App for Kids" />
+    <meta name="twitter:title" content="Kidocoach | Daily Routine App for Kids (Morning & Bedtime)" />
     <meta
       name="twitter:description"
-      content="A daily routine app for kids that helps families build calmer mornings, bedtime routines, and healthy habits."
+      content="A daily routine app for kids (ages 2–12) that helps families build calmer mornings, bedtime routines, and independent habits."
     />
     <meta name="twitter:image" content="https://kidocoach.app/og-image.png?v=routine-coach-20261009" />
 
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Kidocoach",
-        "applicationCategory": "LifestyleApplication",
-        "operatingSystem": "iOS, Android",
-        "description": "Kidocoach is a daily routine app for kids that helps families build calm and consistent morning and bedtime routines.",
-        "url": "https://kidocoach.app/",
-        "offers": {
-          "@type": "Offer",
-          "price": "25",
-          "priceCurrency": "USD",
-          "description": "Founder's Pass early access"
-        }
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://kidocoach.app/#organization",
+            "name": "Kidocoach",
+            "alternateName": "KidoCoach",
+            "url": "https://kidocoach.app/",
+            "logo": "https://kidocoach.app/icon-192.png",
+            "email": "admin@kidocoach.app"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://kidocoach.app/#website",
+            "url": "https://kidocoach.app/",
+            "name": "Kidocoach",
+            "publisher": { "@id": "https://kidocoach.app/#organization" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://kidocoach.app/#app",
+            "name": "Kidocoach",
+            "alternateName": "KidoCoach Daily Routine App for Kids",
+            "applicationCategory": "LifestyleApplication",
+            "operatingSystem": "iOS, Android, Web",
+            "description": "Kidocoach is a daily routine app for kids (ages 2–12) that guides children step by step through morning and bedtime routines using an animated avatar coach and personalized voice prompts that speak the child's name.",
+            "url": "https://kidocoach.app/",
+            "publisher": { "@id": "https://kidocoach.app/#organization" },
+            "audience": {
+              "@type": "PeopleAudience",
+              "suggestedMinAge": 2,
+              "suggestedMaxAge": 12,
+              "audienceType": "Parents and families with children ages 2 to 12"
+            },
+            "featureList": [
+              "Animated avatar routine coach for morning and bedtime routines",
+              "Personalized voice prompts that speak your child's name",
+              "Step-by-step visual habit timers for brushing teeth, getting dressed, and bedtime wind-down",
+              "Single-task visual focus with Mission Complete star rewards",
+              "Offline routine playback on iOS and Android",
+              "Cross-platform family subscription shared across iPhone, iPad, Android, and Web"
+            ],
+            "offers": {
+              "@type": "Offer",
+              "price": "25",
+              "priceCurrency": "USD",
+              "description": "Founder's Pass early access"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://kidocoach.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is KidoCoach and how does it help with kids' routines?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "KidoCoach is a daily routine app for kids (ages 2–12) that replaces parent nagging with a playful animated routine coach. It guides children through sequential morning and bedtime habits—like getting out of bed, getting dressed, brushing teeth, and putting toys away—using visual avatar loops, personalized voice audio that says your child's name, and a rewarding Mission Complete flow."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What age group is KidoCoach designed for?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "KidoCoach is tailored for children ages 2 to 12. During the 7-step setup, the routine adapts to your child's age, natural morning pace, and how much independence or step-by-step support they need."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Which platforms does KidoCoach support?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "KidoCoach is built for iOS (iPhone and iPad) and Android, with web account setup and subscription management at kidocoach.app/profile. One parent subscription unlocks the app across all of your family's devices."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does KidoCoach help kids who get easily distracted or overwhelmed?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Instead of overwhelming kids with a long checklist, KidoCoach presents one visual, timed activity at a time with encouraging voice cues and immediate positive feedback, making transitions easier for slow, dreamy, or easily distracted mornings. KidoCoach is an educational habit-building tool for families, not a medical or clinical device."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How do I get started or join Early Access?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "You can create your parent account and configure your child's routine right now at kidocoach.app/profile, or click Early Access Signup on the home page to reserve your Founder's Pass and receive launch updates."
+                }
+              }
+            ]
+          }
+        ]
       }
     </script>
 
-    <title>Kidocoach | Daily Routine App for Kids</title>
+    <title>Kidocoach | Daily Routine App for Kids (Morning &amp; Bedtime)</title>
   </head>
   <body>
     <div id="root">
       <main style="max-width: 960px; margin: 0 auto; padding: 96px 24px 48px; color: #173d4b; font-family: Nunito, Avenir Next, sans-serif;">
         <p style="margin: 0 auto 12px; width: fit-content; padding: 8px 14px; border-radius: 999px; background: rgba(204,239,246,0.92); color: #175b73; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;">Morning Calm, Built In</p>
         <h1 style="margin: 0; text-align: center; font-size: clamp(38px, 6vw, 62px); line-height: 0.95; font-family: 'Baloo 2', Nunito, sans-serif;">Meet Your Child's New Routine Coach</h1>
-        <p style="max-width: 720px; margin: 16px auto 0; text-align: center; font-size: 20px; line-height: 1.5; color: #386373; font-weight: 700;">Kidocoach is a daily routine app for kids that helps families build calmer mornings, smoother bedtime routines, and more consistent habits.</p>
+        <p style="max-width: 720px; margin: 16px auto 0; text-align: center; font-size: 20px; line-height: 1.5; color: #386373; font-weight: 700;">Kidocoach is a daily routine app for kids (ages 2–12) built for morning routines, bedtime routines, and daily habits, helping parents raise independent children with a playful routine experience.</p>
+        <section style="margin-top: 48px;">
+          <h2>How KidoCoach Works</h2>
+          <p>Designed for kids ages 2 to 12, KidoCoach guides your child step by step through morning and bedtime routines using an encouraging animated avatar coach that speaks their name.</p>
+          <ol>
+            <li><strong>Personalize in 2 Minutes:</strong> Set your child's name, age, wake-up and bedtime schedule, and where mornings usually get stuck—on the web or in the mobile app.</li>
+            <li><strong>Guided Avatar Coaching:</strong> At routine time, a friendly animated coach calls your child by name and walks them through each task—brushing teeth, getting dressed, eating breakfast, and winding down.</li>
+            <li><strong>Mission Complete:</strong> Kids tap the giant "Mission Complete" button after each step and earn stars for building calm, consistent habits without parent nagging.</li>
+          </ol>
+          <h2>Why Parents &amp; Kids Love KidoCoach</h2>
+          <ul>
+            <li><strong>Speaks Your Child's Name:</strong> Personalized voice prompts keep kids engaged and focused on the current activity.</li>
+            <li><strong>Visual &amp; Step-by-Step Pacing:</strong> One clear visual task at a time with gentle timers reduces morning overwhelm for slow, dreamy, or easily distracted kids.</li>
+            <li><strong>Works Offline at Routine Time:</strong> Pre-downloads routine videos and personalized voice tracks on iOS and Android so mornings run smoothly even without Wi-Fi.</li>
+            <li><strong>One Account Across All Devices:</strong> Set up or subscribe on the web (<a href="https://kidocoach.app/profile">kidocoach.app/profile</a>) or mobile. One subscription unlocks iOS, Android, and Web.</li>
+          </ul>
+          <h2>Frequently Asked Questions</h2>
+          <h3>What is KidoCoach and how does it help with kids' routines?</h3>
+          <p>KidoCoach is a daily routine app for kids (ages 2–12) that replaces parent nagging with a playful animated routine coach for morning and bedtime habits.</p>
+          <h3>What age group is KidoCoach designed for?</h3>
+          <p>KidoCoach is tailored for children ages 2 to 12, adapting to their age, morning pace, and independence level.</p>
+          <h3>Which platforms does KidoCoach support?</h3>
+          <p>KidoCoach supports iOS (iPhone and iPad), Android, and Web account setup at <a href="https://kidocoach.app/profile">kidocoach.app/profile</a>.</p>
+          <nav aria-label="Legal and account links">
+            <a href="https://kidocoach.app/morning-routine-for-kids">Morning Routine Guide</a> |
+            <a href="https://kidocoach.app/bedtime-routine-for-kids">Bedtime Routine Guide</a> |
+            <a href="https://kidocoach.app/visual-routine-schedule-for-kids">Visual Routine Schedule</a> |
+            <a href="https://kidocoach.app/profile">Get Started / Profile</a> |
+            <a href="https://kidocoach.app/terms">Terms and Conditions</a> |
+            <a href="https://kidocoach.app/privacy">Privacy Policy</a>
+          </nav>
+        </section>
       </main>
     </div>
     <script type="module" src="/src/main.tsx"></script>
