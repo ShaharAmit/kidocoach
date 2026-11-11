@@ -1,7 +1,12 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { usePartnerProgramOpen } from '../hooks/usePartnerProgramOpen';
 import '../styles/legal.css';
 
 export default function TermsPage() {
+  const programOpen = usePartnerProgramOpen() === true;
+  const { hash } = useLocation();
+  // Partner terms are shown while the program is public, or when opened from the partner page.
+  const showPartnerTerms = programOpen || hash === '#partners';
   return (
     <main className="legal-shell">
       <article className="legal-card">
@@ -61,14 +66,16 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section id="partners">
+        {showPartnerTerms && <section id="partners">
           <h2>Partner Program</h2>
           <p>
-            Anyone 18 or older may join the partner program at kidocoach.app/partners with their own account.
+            Anyone 18 or older who has access to the partner program may join it at kidocoach.app/partners with their own account. We may open the program publicly, limit it to invited partners, or close it to new partners at any time.
             Partners earn the commission shown on their dashboard (currently 15% of the price paid before tax,
             after discounts) on web subscriptions bought on kidocoach.app by families who first arrived through
             their link, for up to 12 months after that family&apos;s first payment. A family is credited to the
-            first partner link it used within 60 days. App Store and Google Play purchases are not eligible.
+            first partner link it used within 60 days. Visitors who don&apos;t accept our privacy choices (or whose
+            browser sends a Global Privacy Control signal) are credited only if they sign in during the visit that
+            used the link. App Store and Google Play purchases are not eligible.
           </p>
           <p>
             Commissions are held for 30 days, and refunds or chargebacks reverse them (including after payout,
@@ -78,7 +85,7 @@ export default function TermsPage() {
             the Kidocoach name, and impersonating Kidocoach are not allowed. We may pause a partner account and
             withhold unpaid commissions for violations, and we may change these terms for future sales with notice.
           </p>
-        </section>
+        </section>}
 
         <section>
           <h2>4. Disclaimer of Warranties</h2>

@@ -294,8 +294,8 @@ function serverHarness() {
     name: 'Jane', email: 'jane@example.com', status: 'active', commissionRateBps: 1500, recurringMonths: 12,
     ownerUid: 'jane_uid', discountCode: 'JANE10',
   });
-  const request = (data = {}, uid = 'family', provider = 'password', email = 'parent@example.com') => ({
-    auth: { uid, token: { email, firebase: { sign_in_provider: provider } } }, data,
+  const request = (data = {}, uid = 'family', provider = 'password', email = 'parent@example.com', verified = true) => ({
+    auth: { uid, token: { email, email_verified: verified, firebase: { sign_in_provider: provider } } }, data,
   });
   const webhook = async (event, { signature, method = 'POST' } = {}) => {
     const body = JSON.stringify(event);
@@ -432,7 +432,7 @@ test('commissions are approved after the hold unless they changed concurrently',
 test('partners see only their own clicks, sales, payouts and totals', async () => {
   const h = serverHarness();
   const { Timestamp } = h.fs;
-  assert.deepEqual(await h.server.getAffiliateSummary(h.request({})), { affiliate: null });
+  assert.deepEqual(await h.server.getAffiliateSummary(h.request({})), { affiliate: null, access: 'hidden' });
   await h.server.claimAffiliateReferral(h.request({ code: 'jane' }, 'f1'));
   await h.server.claimAffiliateReferral(h.request({ code: 'jane' }, 'f2'));
   assert.deepEqual(await h.server.trackAffiliateClick({ data: { code: 'Jane' } }), { counted: true });
@@ -446,7 +446,8 @@ test('partners see only their own clicks, sales, payouts and totals', async () =
     paidAt: Timestamp.fromMillis(T0 - DAY) });
   h.fs.put('affiliate_payouts/amy_USD_1', { code: 'amy', currency: 'USD', amount: 99, commissions: 1,
     paidAt: Timestamp.fromMillis(T0) });
-  const { affiliate } = await h.server.getAffiliateSummary(h.request({}, 'jane_uid'));
+  const { affiliate, access } = await h.server.getAffiliateSummary(h.request({}, 'jane_uid'));
+  assert.equal(access, 'partner');
   assert.deepEqual(affiliate, {
     code: 'jane', name: 'Jane', status: 'active', link: 'https://kidocoach.app/?ref=jane', discountCode: 'JANE10',
     payoutEmail: 'jane@example.com', payoutMethod: 'wise', commissionRateBps: 1500, recurringMonths: 12,
@@ -458,8 +459,9 @@ test('partners see only their own clicks, sales, payouts and totals', async () =
   assert.equal(JSON.stringify(affiliate).includes('f1'), false, 'no family identifiers');
 });
 
-test('anyone signed in can pick their own partner code once, on the default terms', async () => {
+test('while the program is open, anyone signed in can pick their own partner code once, on the default terms', async () => {
   const h = serverHarness();
+  h.fs.put('public_site/config', { partnerProgram: true });
   const join = (data, uid = 'dan_uid', ...rest) => h.server.createAffiliateAccount(h.request(data, uid, 'google', 'dan@example.com', ...rest));
   const ok = { code: 'DanBlog', name: ' Dan  Blog ', acceptTerms: true };
   await assert.rejects(h.server.createAffiliateAccount(h.request(ok, 'guest', 'anonymous')), { code: 'unauthenticated' });
@@ -505,6 +507,161 @@ test('anyone signed in can pick their own partner code once, on the default term
   assert.deepEqual([h.fs.read('affiliates/danblog').status, h.fs.read('affiliates/danblog').ownerUid], ['disabled', null]);
   assert.equal(h.fs.read('affiliate_owners/dan_uid'), undefined);
   assert.deepEqual(await h.server.checkAffiliateCode(h.request({ code: 'danblog' })), { available: false, reason: 'code_taken' });
+});
+
+test('partner program visibility: partners always, else the public switch or a verified invited email', () => {
+  const access = (overrides) => model.partnerAccess({
+    isPartner: false, programOpen: false, invited: false, emailVerified: false, ...overrides,
+  });
+  assert.equal(access({}), 'hidden');
+  assert.equal(access({ emailVerified: true }), 'hidden', 'a verified email alone is not an invite');
+  assert.equal(access({ invited: true }), 'verify_email');
+  assert.equal(access({ invited: true, emailVerified: true }), 'join');
+  assert.equal(access({ programOpen: true }), 'join', 'the public program needs no invite or verification');
+  assert.equal(access({ isPartner: true }), 'partner', 'closing the program never hides a partner dashboard');
+  assert.equal(model.inviteId(' Dana@Example.COM '), 'dana@example.com');
+  for (const bad of ['dana', 'a/b@example.com', '', null, 7]) assert.equal(model.inviteId(bad), null);
+});
+
+test('a closed program is invisible and unjoinable except for partners and verified invited emails', async () => {
+  const h = serverHarness();
+  const summary = (...args) => h.server.getAffiliateSummary(h.request({}, ...args));
+  const join = (uid, email, verified, data = {}) => h.server.createAffiliateAccount(h.request(
+    { code: `${uid}_code`, name: 'Some Partner', acceptTerms: true, ...data }, uid, 'password', email, verified,
+  ));
+  const check = (uid, email, verified) => h.server.checkAffiliateCode(h.request({ code: `${uid}_code` }, uid, 'password', email, verified));
+
+  // No switch at all = closed. Strangers learn nothing, not even form validation results.
+  assert.deepEqual(await summary('stranger', 'password', 'stranger@example.com'), { affiliate: null, access: 'hidden' });
+  assert.deepEqual(await join('stranger', 'stranger@example.com', true), { status: 'not_available' });
+  assert.deepEqual(await join('stranger', 'stranger@example.com', true, { code: 'x', acceptTerms: false }), { status: 'not_available' });
+  await assert.rejects(check('stranger', 'stranger@example.com', true), { code: 'permission-denied' });
+  for (const value of ['true', 1, 'yes']) {
+    h.fs.put('public_site/config', { partnerProgram: value });
+    assert.equal((await summary('stranger', 'password', 'stranger@example.com')).access, 'hidden', `switch ${value}`);
+  }
+  h.fs.put('public_site/config', { partnerProgram: false, welcomeVideoUrl: 'x.mp4' });
+
+  // Existing partners keep their dashboard, and their links keep earning.
+  const jane = await summary('jane_uid', 'password', 'jane@example.com');
+  assert.equal(jane.access, 'partner');
+  assert.equal(jane.affiliate.code, 'jane');
+  assert.deepEqual(await h.server.trackAffiliateClick({ data: { code: 'jane' } }), { counted: true });
+  assert.deepEqual(await h.server.claimAffiliateReferral(h.request({ code: 'jane' }, 'fam')), { status: 'claimed' });
+
+  // The invite is keyed by email only, independent of any account; any sign-in with it matches.
+  h.fs.put('affiliate_invites/dana@example.com', { allowed: true });
+  h.fs.put('affiliate_invites/off@example.com', { allowed: false });
+  assert.equal((await summary('off', 'password', 'off@example.com')).access, 'hidden', 'allowed flag must be true');
+  assert.equal((await summary('dana', 'password', 'someone@example.com')).access, 'hidden', 'only the invited email');
+  assert.equal((await summary('dana', 'password', 'Dana@Example.com', false)).access, 'verify_email');
+  assert.deepEqual(await join('dana', 'Dana@Example.com', false), { status: 'email_not_verified' });
+  await assert.rejects(check('dana', 'Dana@Example.com', false), { code: 'permission-denied' });
+  assert.equal(h.fs.read('affiliates/dana_code'), undefined, 'an unverified invite can not join');
+
+  assert.equal((await summary('dana', 'google', 'Dana@Example.com')).access, 'join');
+  assert.deepEqual(await check('dana', 'Dana@Example.com', true), { available: true, code: 'dana_code' });
+  assert.deepEqual(await join('dana', 'Dana@Example.com', true), { status: 'created', code: 'dana_code' });
+  assert.equal(h.fs.read('affiliates/dana_code').email, 'dana@example.com');
+
+  // Withdrawing the invite stops new sign-ups but never hides an existing partner.
+  await h.fs.db.collection('affiliate_invites').doc('dana@example.com').delete();
+  const dana = await summary('dana', 'google', 'dana@example.com');
+  assert.deepEqual([dana.access, dana.affiliate.code], ['partner', 'dana_code']);
+  assert.deepEqual(await join('dana', 'dana@example.com', true, { code: 'another' }), { status: 'already_partner' });
+
+  // Opening the switch lets anyone join; closing it again hides the program from non-partners.
+  h.fs.put('public_site/config', { partnerProgram: true });
+  assert.equal((await summary('stranger', 'password', 'stranger@example.com', false)).access, 'join');
+  assert.deepEqual(await join('stranger', 'stranger@example.com', false), { status: 'created', code: 'stranger_code' });
+  h.fs.put('public_site/config', { partnerProgram: false });
+  assert.equal((await summary('other', 'password', 'other@example.com')).access, 'hidden');
+  assert.equal((await summary('stranger', 'password', 'stranger@example.com')).access, 'partner');
+});
+
+test('website reads the public partner switch strictly and fails closed', async () => {
+  const load = (getDoc) => {
+    const compiled = ts.transpileModule(fs.readFileSync(path.join(root, 'website/src/services/siteConfig.ts'), 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    const module = { exports: {} };
+    new Function('require', 'module', 'exports', compiled)((id) => {
+      if (id === 'firebase/firestore') return { doc: (_db, ...segments) => segments.join('/'), getDoc };
+      if (id === 'firebase/storage') return {};
+      if (id === './firebase') return { db: {}, storage: {} };
+      throw new Error(id);
+    }, module, module.exports);
+    return module.exports;
+  };
+  const reads = [];
+  const withData = (data) => async (ref) => { reads.push(ref); return { data: () => data }; };
+  assert.equal(await load(withData({ partnerProgram: true })).fetchPartnerProgramOpen(), true);
+  assert.deepEqual(reads, ['public_site/config']);
+  for (const data of [undefined, {}, { partnerProgram: 'true' }, { partnerProgram: false }]) {
+    assert.equal(await load(withData(data)).fetchPartnerProgramOpen(), false, JSON.stringify(data));
+  }
+  assert.equal(await load(async () => { throw new Error('offline'); }).fetchPartnerProgramOpen(), false);
+});
+
+test('website menu asks the server once per signed-in account and hides the link otherwise', async () => {
+  const compiled = ts.transpileModule(fs.readFileSync(path.join(root, 'website/src/services/partnerMenu.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  let authListener;
+  const answers = { dana: 'join', jane: 'partner', stranger: 'hidden' };
+  const calls = [];
+  const module = { exports: {} };
+  new Function('require', 'module', 'exports', compiled)((id) => {
+    if (id === 'firebase/auth') return { onAuthStateChanged: (_auth, listener) => { authListener = listener; return () => {}; } };
+    if (id === './firebase') return { auth: {} };
+    if (id === './partner') {
+      return {
+        loadPartnerAccess: async () => {
+          const uid = current.uid;
+          calls.push(uid);
+          if (uid === 'broken') throw new Error('offline');
+          return { summary: null, access: answers[uid] };
+        },
+      };
+    }
+    throw new Error(id);
+  }, module, module.exports);
+  let current = null;
+  const seen = [];
+  module.exports.watchPartnerAccess((access) => seen.push(access));
+  const signIn = async (user) => { current = user; authListener(user); await new Promise((r) => setImmediate(r)); };
+
+  await signIn(null);
+  await signIn({ uid: 'anon', isAnonymous: true });
+  await signIn({ uid: 'stranger', isAnonymous: false });
+  await signIn({ uid: 'dana', isAnonymous: false });
+  await signIn({ uid: 'jane', isAnonymous: false });
+  await signIn({ uid: 'broken', isAnonymous: false });
+  await signIn({ uid: 'dana', isAnonymous: false });
+  assert.deepEqual(seen, [null, null, 'hidden', 'join', 'partner', null, 'join']);
+  assert.deepEqual(calls, ['stranger', 'dana', 'jane', 'broken'], 'signed-out/anonymous never ask; answers are reused');
+});
+
+test('website shows partner entry points only when the server or the switch allows it', () => {
+  const read = (file) => fs.readFileSync(path.join(root, 'website/src', file), 'utf8');
+  const home = read('pages/Home.tsx');
+  assert.match(home, /\{partnerMenuLink && \(\s*<Link to="\/partners"[^\n]*\n\s*\{partnerMenuLink\}/, 'home menu link is gated');
+  const menu = read('hooks/usePartnerMenuLink.ts');
+  assert.match(menu, /if \(access === 'partner'\) return 'Partner dashboard';/);
+  assert.match(menu, /if \(programOpen \|\| access === 'join' \|\| access === 'verify_email'\) return 'Become a partner';\s*return null;/);
+  assert.match(menu, /import\('\.\.\/services\/partnerMenu'\)/, 'auth stays out of the home bundle');
+  const profile = read('pages/Profile.tsx');
+  assert.doesNotMatch(profile, /become a partner|to="\/partners"/i, 'profile has no unconditional partner link');
+  const partners = read('pages/Partners.tsx');
+  assert.match(partners, /if \(signedIn && access === 'hidden'\) return <Navigate to="\/profile" replace \/>;/);
+  const closedSignedOut = partners.slice(partners.indexOf('if (!signedIn && !programOpen)'), partners.indexOf('return (\n    <main', partners.indexOf('if (!signedIn && !programOpen)') + 40));
+  assert.match(closedSignedOut, /<SignInCard title="Sign in to continue" \/>/);
+  assert.doesNotMatch(closedSignedOut, /partner|commission|Pitch/i, 'signed-out page names nothing while closed');
+  const panel = read('components/PartnerPanel.tsx');
+  assert.match(panel, /if \(error\) return join \? .* : null;/, 'silent errors outside /partners');
+  assert.match(panel, /if \(access !== 'join'\) return null;/);
+  const terms = read('pages/Terms.tsx');
+  assert.match(terms, /\{showPartnerTerms && <section id="partners">/);
 });
 
 test('website keeps the first unexpired partner link and clears it once the server answers', async () => {
@@ -561,4 +718,126 @@ test('website keeps the first unexpired partner link and clears it once the serv
     { name: 'trackAffiliateClick', data: { code: 'amy' } },
     { name: 'trackAffiliateClick', data: { code: 'amy' } },
   ], 'one click per browser, code and day');
+});
+
+test('browsing the site never loses or replaces the saved partner link', () => {
+  const entries = new Map();
+  const storage = {
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => entries.set(key, value),
+    removeItem: (key) => entries.delete(key),
+  };
+  const compiled = ts.transpileModule(fs.readFileSync(path.join(root, 'website/src/services/referral.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  // Each load is a new tab or full reload sharing the same browser storage.
+  const openTab = (localStorage = storage) => {
+    const module = { exports: {} };
+    new Function('require', 'module', 'exports', 'localStorage', compiled)((id) => {
+      if (id === 'firebase/functions') return { httpsCallable: () => async () => ({ data: {} }) };
+      if (id === './firebase') return { functions: {} };
+      throw new Error(id);
+    }, module, module.exports, localStorage);
+    module.exports.setReferralStorageAllowed(true);
+    return module.exports;
+  };
+
+  let tab = openTab();
+  tab.captureReferral('?utm_source=blog&ref=Jane', T0);
+  const saved = { code: 'jane', capturedAt: T0 };
+  assert.deepEqual(tab.readReferral(T0), saved);
+
+  // In-site navigation, reloads, coupon links, malformed or empty codes and other partners' links.
+  const visits = ['', '?coupon=SAVE20', '?discount_code=SAVE', '?ref=', '?ref=%3Cx%3E', '?ref=ab',
+    '?ref=amy', '?ref=AMY&coupon=AMY10', '?via=amy', '#pricing'];
+  for (const [index, search] of visits.entries()) {
+    const now = T0 + (index + 1) * DAY;
+    if (index % 3 === 0) tab = openTab();
+    tab.captureReferral(search, now);
+    assert.deepEqual(tab.readReferral(now), saved, `kept after visiting "${search}"`);
+  }
+  assert.deepEqual(openTab().readReferral(T0 + 59 * DAY), saved, 'still there on day 59');
+
+  // Blocked or broken storage never throws during browsing.
+  const blocked = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
+  const blockedTab = openTab(blocked);
+  assert.doesNotThrow(() => blockedTab.captureReferral('?ref=amy', T0));
+  assert.equal(blockedTab.readReferral(T0).code, 'amy', 'kept in memory for this visit');
+  assert.equal(openTab(blocked).readReferral(T0), null);
+  assert.deepEqual(tab.readReferral(T0 + DAY), saved, 'a blocked tab does not affect the saved link');
+
+  // Only after the 60-day window can a new partner link take over.
+  assert.equal(tab.readReferral(T0 + 60 * DAY), null);
+  tab.captureReferral('?ref=amy', T0 + 60 * DAY);
+  assert.equal(tab.readReferral(T0 + 60 * DAY).code, 'amy');
+
+  // Corrupted storage is replaced by the next valid link instead of blocking it.
+  entries.set('kidocoach_referral_v1', '{not json');
+  tab.captureReferral('?ref=jane', T0);
+  assert.deepEqual(tab.readReferral(T0), saved);
+});
+
+test('the partner link is saved on the device only with consent', async () => {
+  const entries = new Map();
+  const calls = [];
+  const storage = {
+    getItem: (key) => entries.get(key) ?? null,
+    setItem: (key, value) => entries.set(key, value),
+    removeItem: (key) => entries.delete(key),
+  };
+  const compiled = ts.transpileModule(fs.readFileSync(path.join(root, 'website/src/services/referral.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const openTab = (allowed) => {
+    const module = { exports: {} };
+    new Function('require', 'module', 'exports', 'localStorage', compiled)((id) => {
+      if (id === 'firebase/functions') {
+        return { httpsCallable: (_f, name) => async (data) => { calls.push({ name, data }); return { data: { status: 'claimed' } }; } };
+      }
+      if (id === './firebase') return { functions: {} };
+      throw new Error(id);
+    }, module, module.exports, storage);
+    module.exports.setReferralStorageAllowed(allowed, T0);
+    return module.exports;
+  };
+
+  // No choice yet (or Reject / GPC): same-visit credit only, nothing written to the device.
+  let tab = openTab(false);
+  tab.captureReferral('?ref=jane', T0);
+  tab.trackReferralClick('?ref=jane', T0);
+  tab.trackReferralClick('?ref=jane', T0 + 1000);
+  assert.equal(entries.size, 0, 'nothing stored before consent');
+  assert.equal(tab.readReferral(T0).code, 'jane');
+  assert.equal(calls.filter((c) => c.name === 'trackAffiliateClick').length, 1, 'click deduped in memory');
+  tab.captureReferral('?ref=amy', T0);
+  assert.equal(tab.readReferral(T0).code, 'jane', 'first touch in memory too');
+  assert.equal(openTab(false).readReferral(T0), null, 'forgotten on the next visit');
+
+  // Accepting later in the same visit saves the remembered link for 60 days.
+  tab.setReferralStorageAllowed(true, T0);
+  assert.deepEqual(JSON.parse(entries.get('kidocoach_referral_v1')), { code: 'jane', capturedAt: T0 });
+  assert.ok(entries.get('kidocoach_referral_click_v1'));
+  assert.equal(openTab(true).readReferral(T0 + DAY).code, 'jane');
+
+  // Withdrawing erases it from the device but keeps it for the rest of this visit.
+  tab = openTab(true);
+  tab.setReferralStorageAllowed(false, T0 + DAY);
+  assert.equal(entries.size, 0, 'erased on withdrawal');
+  assert.equal(tab.readReferral(T0 + DAY).code, 'jane');
+  assert.equal(await tab.claimSavedReferral(T0 + DAY), 'claimed');
+  assert.deepEqual(calls.at(-1), { name: 'claimAffiliateReferral', data: { code: 'jane' } });
+  assert.equal(tab.readReferral(T0 + DAY), null, 'cleared after the claim');
+
+  const main = fs.readFileSync(path.join(root, 'website/src/main.tsx'), 'utf8');
+  assert.match(main, /subscribeConsent\(\(\{ choice \}\) => setReferralStorageAllowed\(choice === 'granted'\)\)/,
+    'storage follows the consent banner');
+});
+
+test('website captures the partner link on every route, including legacy redirects', () => {
+  const app = fs.readFileSync(path.join(root, 'website/src/App.tsx'), 'utf8');
+  assert.match(app, /useEffect\(\(\) => \{\n(?:(?!\n {2}\}, \[).)*?captureReferral\(location\.search\);[\s\S]*?\}, \[location\.pathname, location\.search\]\);/s,
+    'captured from the URL on every navigation');
+  assert.match(app, /<Navigate to=\{`\$\{path\}\$\{location\.search\}`\} replace \/>/, 'redirects keep ?ref=');
+  const billing = fs.readFileSync(path.join(root, 'website/src/services/billing.ts'), 'utf8');
+  assert.match(billing, /referral: readReferral\(\)\?\.code/, 'checkout sends the saved link, not the current URL');
 });

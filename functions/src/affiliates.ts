@@ -14,10 +14,10 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import {
   applyAdjustment, claimRejection, clickDay, commissionIneligibility, DEFAULT_COMMISSION_RATE_BPS,
   DEFAULT_PAYOUT_METHOD, DEFAULT_RECURRING_MONTHS, isAttributionOpen, newCommission, normalizeAffiliateCode, normalizeCouponCode,
-  normalizeEmail, normalizePartnerName, normalizePayoutMethod, parseAffiliate, parsePaddleAdjustment, parsePaddleTransaction,
-  partnerConversions, selfServeCodeProblem, summarizeEarnings, verifyPaddleSignature,
-  type Attribution, type AttributionSource, type ClaimRejection, type Commission, type PartnerLedgerEntry,
-  type SelfServeCodeProblem,
+  inviteId, normalizeEmail, normalizePartnerName, normalizePayoutMethod, parseAffiliate, parsePaddleAdjustment,
+  parsePaddleTransaction, partnerAccess, partnerConversions, selfServeCodeProblem, summarizeEarnings, verifyPaddleSignature,
+  type Attribution, type AttributionSource, type ClaimRejection, type Commission, type PartnerAccess,
+  type PartnerLedgerEntry, type SelfServeCodeProblem,
 } from './affiliateModel';
 
 export const paddleWebhookSecret = defineSecret('PADDLE_WEBHOOK_SECRET');
@@ -31,7 +31,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ClaimStatus = 'claimed' | 'already_attributed' | ClaimRejection;
 export type JoinStatus = 'created' | 'already_partner' | 'code_taken' | 'invalid_name' | 'invalid_payout_email' |
-  'invalid_payout_method' | 'terms_required' | SelfServeCodeProblem;
+  'invalid_payout_method' | 'terms_required' | 'not_available' | 'email_not_verified' | SelfServeCodeProblem;
 
 const db = () => getFirestore();
 const affiliateRef = (code: string) => db().collection('affiliates').doc(code);
@@ -77,11 +77,34 @@ function commissionFromFirestore(transactionId: string, data: DocumentData | und
   };
 }
 
-function requireParent(request: CallableRequest): { uid: string; email: string | null } {
+function requireParent(request: CallableRequest): { uid: string; email: string | null; emailVerified: boolean } {
   if (!request.auth || request.auth.token.firebase?.sign_in_provider === 'anonymous') {
     throw new HttpsError('unauthenticated', 'Sign in to your parent account first.');
   }
-  return { uid: request.auth.uid, email: normalizeEmail(request.auth.token.email) };
+  return {
+    uid: request.auth.uid,
+    email: normalizeEmail(request.auth.token.email),
+    emailVerified: request.auth.token.email_verified === true,
+  };
+}
+
+/**
+ * Whether a non-partner account may see and join the program (ADR-021): the public switch
+ * `public_site/config.partnerProgram`, or an invite for its verified email. Missing switch = closed.
+ */
+async function joinAccess(email: string | null, emailVerified: boolean): Promise<Exclude<PartnerAccess, 'partner'>> {
+  const id = inviteId(email);
+  const [config, invite] = await Promise.all([
+    db().collection('public_site').doc('config').get(),
+    id ? db().collection('affiliate_invites').doc(id).get() : Promise.resolve(null),
+  ]);
+  const access = partnerAccess({
+    isPartner: false,
+    programOpen: config.data()?.partnerProgram === true,
+    invited: invite?.data()?.allowed === true,
+    emailVerified,
+  });
+  return access === 'partner' ? 'hidden' : access;
 }
 
 /**
@@ -162,7 +185,10 @@ async function ownedAffiliate(uid: string): Promise<QueryDocumentSnapshot | null
 
 /** Live availability check for the "choose your code" field (codes are public in links anyway). */
 export const checkAffiliateCode = onCall({ cors: true, timeoutSeconds: 10 }, async (request) => {
-  requireParent(request);
+  const { email, emailVerified } = requireParent(request);
+  if (await joinAccess(email, emailVerified) !== 'join') {
+    throw new HttpsError('permission-denied', 'The partner program is not available for this account.');
+  }
   const problem = selfServeCodeProblem(request.data?.code);
   if (problem) return { available: false, reason: problem };
   const code = normalizeAffiliateCode(request.data?.code) as string;
@@ -176,8 +202,19 @@ export const checkAffiliateCode = onCall({ cors: true, timeoutSeconds: 10 }, asy
  * pause any partner (`set-status disabled`).
  */
 export const createAffiliateAccount = onCall({ cors: true, timeoutSeconds: 15 }, async (request) => {
-  const { uid, email } = requireParent(request);
+  const { uid, email, emailVerified } = requireParent(request);
   if (!email) throw new HttpsError('failed-precondition', 'Your account needs an email address to join.');
+  let access: Exclude<PartnerAccess, 'partner'>;
+  try {
+    if (await ownedAffiliate(uid)) return { status: 'already_partner' satisfies JoinStatus };
+    access = await joinAccess(email, emailVerified);
+  } catch (error) {
+    console.error('[Affiliates] Join access check failed:', error);
+    throw new HttpsError('unavailable', 'Could not create your partner account. Please try again.');
+  }
+  // Checked before validating the form, so a closed program reveals nothing else.
+  if (access === 'verify_email') return { status: 'email_not_verified' satisfies JoinStatus };
+  if (access !== 'join') return { status: 'not_available' satisfies JoinStatus };
   const problem = selfServeCodeProblem(request.data?.code);
   if (problem) return { status: problem satisfies JoinStatus };
   const code = normalizeAffiliateCode(request.data?.code) as string;
@@ -191,7 +228,6 @@ export const createAffiliateAccount = onCall({ cors: true, timeoutSeconds: 15 },
   if (!payoutMethod) return { status: 'invalid_payout_method' satisfies JoinStatus };
   if (request.data?.acceptTerms !== true) return { status: 'terms_required' satisfies JoinStatus };
   try {
-    if (await ownedAffiliate(uid)) return { status: 'already_partner' satisfies JoinStatus };
     const status = await db().runTransaction(async (tx): Promise<JoinStatus> => {
       const [codeSnap, ownerSnap] = await Promise.all([tx.get(affiliateRef(code)), tx.get(ownerRef(uid))]);
       if (ownerSnap.exists) return 'already_partner';
@@ -264,13 +300,16 @@ export const trackAffiliateClick = onCall({ cors: true, timeoutSeconds: 10, maxI
   }
 });
 
-/** Partner dashboard data for the signed-in account that owns an affiliate code (no family PII). */
+/**
+ * Partner dashboard data for the signed-in account that owns an affiliate code (no family PII).
+ * Non-partners get `affiliate: null` and whether the program is shown to them (`access`).
+ */
 export const getAffiliateSummary = onCall({ cors: true, timeoutSeconds: 30 }, async (request) => {
-  const { uid } = requireParent(request);
+  const { uid, email, emailVerified } = requireParent(request);
   try {
     const doc = await ownedAffiliate(uid);
     const affiliate = doc ? parseAffiliate(doc.id, doc.data()) : null;
-    if (!doc || !affiliate) return { affiliate: null };
+    if (!doc || !affiliate) return { affiliate: null, access: await joinAccess(email, emailVerified) };
     const [signups, commissionDocs, clickDocs, payoutDocs] = await Promise.all([
       db().collection('affiliate_attributions').where('code', '==', affiliate.code).count().get(),
       db().collection('affiliate_commissions').where('code', '==', affiliate.code).get(),
@@ -319,6 +358,7 @@ export const getAffiliateSummary = onCall({ cors: true, timeoutSeconds: 30 }, as
         conversions: partnerConversions(ledger),
         payouts,
       },
+      access: 'partner' satisfies PartnerAccess,
     };
   } catch (error) {
     console.error('[Affiliates] Summary failed:', error);

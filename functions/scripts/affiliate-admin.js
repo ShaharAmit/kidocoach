@@ -10,6 +10,10 @@
  *   npm run affiliates -- list                           # partners also join themselves at /partners (source self_serve)
  *   npm run affiliates -- report [--csv payouts.csv]       # what each partner is owed now (approved, net of clawbacks) + how to pay them
  *   npm run affiliates -- mark-paid <code> --currency USD --amount <owed_minor>   # after paying the reported amount
+ *   npm run affiliates -- program open|closed            # public partner sign-up (public_site/config.partnerProgram)
+ *   npm run affiliates -- invite <email>                 # lets this verified sign-in email see and join while closed
+ *   npm run affiliates -- uninvite <email>
+ *   npm run affiliates -- invites
  *
  * Amounts are minor units (cents). Commissions become "approved" 30 days after payment
  * (approveAffiliateCommissions); refunds after a payout show up as negative owed amounts.
@@ -17,7 +21,7 @@
 const fs = require('node:fs');
 const admin = require('firebase-admin');
 const {
-  DEFAULT_COMMISSION_RATE_BPS, DEFAULT_PAYOUT_METHOD, DEFAULT_RECURRING_MONTHS, normalizeAffiliateCode,
+  DEFAULT_COMMISSION_RATE_BPS, DEFAULT_PAYOUT_METHOD, DEFAULT_RECURRING_MONTHS, inviteId, normalizeAffiliateCode,
   normalizeCouponCode, normalizeEmail, normalizePayoutMethod, owedAmount, parseAffiliate, payoutLines,
 } = require('../lib/affiliateModel');
 
@@ -197,6 +201,32 @@ async function markPaid(rawCode, flags) {
   console.log(`Marked ${settled} commissions paid for ${code}: ${(total / 100).toFixed(2)} ${currency}.`);
 }
 
+async function setProgram(state) {
+  if (state !== 'open' && state !== 'closed') fail('Usage: program open|closed');
+  await db.collection('public_site').doc('config').set({ partnerProgram: state === 'open' }, { merge: true });
+  console.log(state === 'open'
+    ? 'Partner program is public: anyone signed in can join at /partners.'
+    : 'Partner program is hidden: only existing partners and invited emails see it.');
+}
+
+async function setInvite(rawEmail, allowed) {
+  const id = inviteId(rawEmail) || fail(`Invalid email "${rawEmail}".`);
+  const ref = db.collection('affiliate_invites').doc(id);
+  if (allowed) await ref.set({ allowed: true, createdAt: admin.firestore.Timestamp.now() });
+  else await ref.delete();
+  console.log(allowed
+    ? `Invited ${id}: after signing in with this (verified) email, Profile links to /partners.`
+    : `Removed the invite for ${id} (an existing partner keeps their dashboard).`);
+}
+
+async function listInvites() {
+  const config = await db.collection('public_site').doc('config').get();
+  console.log(`Program: ${config.data()?.partnerProgram === true ? 'open' : 'closed'}`);
+  for (const doc of (await db.collection('affiliate_invites').get()).docs) {
+    console.log([doc.id, doc.data().allowed === true ? 'allowed' : 'not allowed'].join('\t'));
+  }
+}
+
 async function run() {
   const { positional: [command, ...rest], flags } = parseArgs(process.argv.slice(2));
   switch (command) {
@@ -206,7 +236,11 @@ async function run() {
     case 'list': return list();
     case 'report': return report(flags);
     case 'mark-paid': return markPaid(rest[0], flags);
-    default: fail('Usage: affiliate-admin.js create|update|set-status|list|report|mark-paid (see file header).');
+    case 'program': return setProgram(rest[0]);
+    case 'invite': return setInvite(rest[0], true);
+    case 'uninvite': return setInvite(rest[0], false);
+    case 'invites': return listInvites();
+    default: fail('Usage: affiliate-admin.js create|update|set-status|list|report|mark-paid|program|invite|uninvite|invites (see file header).');
   }
   return undefined;
 }

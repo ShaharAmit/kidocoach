@@ -56,7 +56,14 @@ export type CodeCheck = { available: true; code: string } |
   { available: false; reason: 'invalid_code' | 'reserved_code' | 'code_taken' };
 
 export type JoinStatus = 'created' | 'already_partner' | 'code_taken' | 'invalid_code' | 'reserved_code' |
-  'invalid_name' | 'invalid_payout_email' | 'invalid_payout_method' | 'terms_required';
+  'invalid_name' | 'invalid_payout_email' | 'invalid_payout_method' | 'terms_required' | 'not_available' |
+  'email_not_verified';
+
+/**
+ * What this account sees of the partner program (server-decided, ADR-021): its dashboard, the
+ * sign-up form, a "verify your email" step for an invited address, or nothing at all.
+ */
+export type PartnerAccess = 'partner' | 'join' | 'verify_email' | 'hidden';
 
 export interface JoinRequest {
   code: string;
@@ -75,12 +82,17 @@ export const JOIN_MESSAGES: Record<Exclude<JoinStatus, 'created'>, string> = {
   invalid_payout_email: 'Enter a valid payout email.',
   invalid_payout_method: 'Choose Wise or PayPal.',
   terms_required: 'Accept the partner terms to join.',
+  not_available: 'This page is not available for your account.',
+  email_not_verified: 'Verify your email address first.',
 };
 
-/** The signed-in account's partner program summary, or null when it isn't a partner. */
-export async function loadPartnerSummary(): Promise<PartnerSummary | null> {
-  const result = await httpsCallable<void, { affiliate: PartnerSummary | null }>(functions, 'getAffiliateSummary')();
-  return result.data.affiliate;
+/** The signed-in account's partner summary (null when it isn't a partner) and what it may see. */
+export async function loadPartnerAccess(): Promise<{ summary: PartnerSummary | null; access: PartnerAccess }> {
+  const result = await httpsCallable<void, { affiliate: PartnerSummary | null; access?: PartnerAccess }>(
+    functions, 'getAffiliateSummary',
+  )();
+  const summary = result.data.affiliate;
+  return { summary, access: summary ? 'partner' : result.data.access ?? 'hidden' };
 }
 
 export async function checkPartnerCode(code: string): Promise<CodeCheck> {

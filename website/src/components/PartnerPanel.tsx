@@ -1,8 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { sendEmailVerification } from 'firebase/auth';
+import { auth } from '../services/firebase';
 import {
-  checkPartnerCode, formatMinor, JOIN_MESSAGES, joinPartnerProgram, loadPartnerSummary, PAYOUT_METHOD_HELP,
-  updatePartnerSettings, type CodeCheck, type PartnerSummary, type PayoutMethod,
+  checkPartnerCode, formatMinor, JOIN_MESSAGES, joinPartnerProgram, loadPartnerAccess, PAYOUT_METHOD_HELP,
+  updatePartnerSettings, type CodeCheck, type PartnerAccess, type PartnerSummary, type PayoutMethod,
 } from '../services/partner';
+import { trackEvent } from '../services/analytics';
 
 const CODE_HINT = /^[a-z0-9][a-z0-9_-]{2,31}$/;
 
@@ -69,6 +73,7 @@ function JoinForm({ defaultName, defaultEmail, onJoined }: {
       const status = await joinPartnerProgram({
         code: normalized, name: name.trim(), payoutEmail: payoutEmail.trim(), payoutMethod, acceptTerms,
       });
+      trackEvent('partner_join', { status });
       if (status === 'created' || status === 'already_partner') onJoined();
       else setMessage(JOIN_MESSAGES[status]);
     } catch (error) {
@@ -140,14 +145,59 @@ function SettingsForm({ summary, onSaved }: { summary: PartnerSummary; onSaved: 
   );
 }
 
+function VerifyEmail({ email, onVerified }: { email: string; onVerified: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function run(action: () => Promise<string>) {
+    setBusy(true);
+    setMessage('');
+    try {
+      setMessage(await action());
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Something went wrong. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const send = async () => {
+    if (!auth.currentUser) return 'Sign in again.';
+    await sendEmailVerification(auth.currentUser);
+    return `Verification email sent to ${email}. Open the link, then tap "I verified my email".`;
+  };
+  const check = async () => {
+    const user = auth.currentUser;
+    if (!user) return 'Sign in again.';
+    await user.reload();
+    if (!user.emailVerified) return 'Not verified yet. Open the link in the email first.';
+    // The server reads email_verified from the ID token, so refresh it before asking again.
+    await user.getIdToken(true);
+    onVerified();
+    return '';
+  };
+
+  return (
+    <section className="subscription-card" aria-labelledby="verify-heading">
+      <h2 id="verify-heading">You&apos;re invited to the KidoCoach partner program</h2>
+      <p>Verify {email} to continue.</p>
+      <button type="button" disabled={busy} onClick={() => void run(send)}>Send verification email</button>
+      <button type="button" disabled={busy} onClick={() => void run(check)}>I verified my email</button>
+      {message && <p role="status" aria-live="polite">{message}</p>}
+    </section>
+  );
+}
+
 /**
  * Partner dashboard: link, clicks → sign-ups → paying families, earnings, conversions and payouts.
- * Renders nothing for non-partners unless `join` is set, which shows the self-serve sign-up form.
+ * What a non-partner sees is decided by the server (ADR-021): nothing while the program is closed
+ * to them; otherwise the sign-up form when `join` is set, or a link to /partners.
  */
-export default function PartnerPanel({ uid, join, defaultName = '', defaultEmail = '' }: {
+export default function PartnerPanel({ uid, join, defaultName = '', defaultEmail = '', onAccess }: {
   uid: string; join?: boolean; defaultName?: string; defaultEmail?: string;
+  onAccess?: (access: PartnerAccess) => void;
 }) {
-  const [summary, setSummary] = useState<PartnerSummary | null | undefined>(undefined);
+  const [state, setState] = useState<{ summary: PartnerSummary | null; access: PartnerAccess } | undefined>(undefined);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -155,23 +205,38 @@ export default function PartnerPanel({ uid, join, defaultName = '', defaultEmail
   useEffect(() => {
     let cancelled = false;
     setError('');
-    loadPartnerSummary().then((next) => {
-      if (!cancelled) setSummary(next);
+    loadPartnerAccess().then((next) => {
+      if (!cancelled) setState(next);
     }).catch((failure: unknown) => {
       console.warn('[Partner] Could not load summary:', failure);
-      if (!cancelled) setError('Could not load your partner summary.');
+      if (!cancelled) setError('Could not load this page.');
     });
     return () => { cancelled = true; };
   }, [uid, revision]);
 
-  useEffect(() => setSummary(undefined), [uid]);
+  useEffect(() => setState(undefined), [uid]);
+
+  useEffect(() => {
+    if (state) onAccess?.(state.access);
+  }, [state, onAccess]);
 
   const reload = () => setRevision((value) => value + 1);
 
-  if (error) return <p role="alert">{error} <button type="button" onClick={reload}>Retry</button></p>;
-  if (summary === undefined) return join ? <p>Loading your partner account...</p> : null;
+  // Outside the partner page, failures stay silent so a hidden program isn't hinted at.
+  if (error) return join ? <p role="alert">{error} <button type="button" onClick={reload}>Retry</button></p> : null;
+  if (state === undefined) return join ? <p>Loading...</p> : null;
+  const { summary, access } = state;
   if (summary === null) {
-    return join ? <JoinForm defaultName={defaultName} defaultEmail={defaultEmail} onJoined={reload} /> : null;
+    if (access === 'verify_email') return <VerifyEmail email={defaultEmail || 'your email'} onVerified={reload} />;
+    if (access !== 'join') return null;
+    return join ? <JoinForm defaultName={defaultName} defaultEmail={defaultEmail} onJoined={reload} />
+      : (
+        <section className="subscription-card" aria-labelledby="partner-invite-heading">
+          <h2 id="partner-invite-heading">KidoCoach partner program</h2>
+          <p>Recommend KidoCoach to parents and earn commission on their web subscriptions.</p>
+          <Link to="/partners">Become a partner</Link>
+        </section>
+      );
   }
 
   async function copy(text: string) {
@@ -198,14 +263,22 @@ export default function PartnerPanel({ uid, join, defaultName = '', defaultEmail
         Commissions are held for 30 days for refunds, then approved for the next monthly payout.</p>
 
       <dl className="partner-stats">
-        <div><dt>Clicks</dt><dd>{summary.clicks}</dd></div>
-        <div><dt>Last 30 days</dt><dd>{summary.clicksLast30Days}</dd></div>
-        <div><dt>Sign-ups</dt><dd>{summary.signups}</dd></div>
-        <div><dt>Sign-up rate</dt><dd>{conversionRate}</dd></div>
-        <div><dt>Paying families</dt><dd>{summary.payingFamilies}</dd></div>
+        <div><dt>Link visits</dt><dd>{summary.clicks}</dd>
+          <p className="partner-stat-hint">All time, counted once per visitor per day</p></div>
+        <div><dt>Visits, last 30 days</dt><dd>{summary.clicksLast30Days}</dd>
+          <p className="partner-stat-hint">Same count, recent month only</p></div>
+        <div><dt>Sign-ups</dt><dd>{summary.signups}</dd>
+          <p className="partner-stat-hint">Families who created an account from your link</p></div>
+        <div><dt>Sign-up rate</dt><dd>{conversionRate}</dd>
+          <p className="partner-stat-hint">Sign-ups ÷ link visits</p></div>
+        <div><dt>Paying families</dt><dd>{summary.payingFamilies}</dd>
+          <p className="partner-stat-hint">Families who bought a subscription (refunds excluded)</p></div>
       </dl>
 
       <h3>Earnings</h3>
+      <p className="partner-stat-hint"><strong>Pending</strong>: in the 30-day refund hold.{' '}
+        <strong>Approved</strong>: ready for the next monthly payout.{' '}
+        <strong>Paid</strong>: already sent to you.</p>
       {summary.earnings.length === 0 ? <p>No commissions yet.</p> : (
         <table>
           <thead><tr><th>Currency</th><th>Pending</th><th>Approved</th><th>Paid</th></tr></thead>

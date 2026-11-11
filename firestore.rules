@@ -97,6 +97,10 @@ service cloud.firestore {
     match /affiliate_payouts/{payoutId} {
       allow read, write: if false;
     }
+    // Invite-only partner access while the public program is closed (ADR-021); doc id = email.
+    match /affiliate_invites/{email} {
+      allow read, write: if false;
+    }
 
   }
 }

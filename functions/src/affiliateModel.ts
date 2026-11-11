@@ -150,6 +150,29 @@ export function normalizeEmail(value: unknown): string | null {
   return EMAIL.test(email) && email.length <= 254 ? email : null;
 }
 
+/**
+ * What the signed-in account may see of the partner program (ADR-021). Partners always keep their
+ * dashboard. Otherwise the program is visible only while `public_site/config.partnerProgram` is
+ * true, or to an invited email (`affiliate_invites/{email}.allowed`), which must be verified so
+ * nobody can claim an invite by creating an unverified password account with that address.
+ */
+export type PartnerAccess = 'partner' | 'join' | 'verify_email' | 'hidden';
+
+export function partnerAccess(input: {
+  isPartner: boolean; programOpen: boolean; invited: boolean; emailVerified: boolean;
+}): PartnerAccess {
+  if (input.isPartner) return 'partner';
+  if (input.programOpen) return 'join';
+  if (!input.invited) return 'hidden';
+  return input.emailVerified ? 'join' : 'verify_email';
+}
+
+/** `affiliate_invites` doc id for an email, or null when it can't be one (Firestore ids can't contain "/"). */
+export function inviteId(email: unknown): string | null {
+  const normalized = normalizeEmail(email);
+  return normalized && !normalized.includes('/') ? normalized : null;
+}
+
 function isRate(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) > 0 && (value as number) <= 5000;
 }
