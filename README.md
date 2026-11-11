@@ -237,7 +237,7 @@ Activities come from the cloud. To add or update one, see
 
 - Firestore rules restrict family data (`users/{uid}/**`) to the owning UID.
 - `audio_cache` and `rate_limits` are server-only; clients resolve clips exclusively through the authenticated `generateRoutinePart1Audio` callable.
-- Storage is private by default: only `avatars/default/welcome.mp4` (pre-auth welcome video) and `avatars/public_site/**` (website) are public. Everything else is `get`-only for signed-in users, with no listing. Generated audio is never made public; the app downloads it via `getDownloadURL`.
+- Storage is private by default: only `avatars/default/welcome.mp4` (pre-auth welcome video) and `avatars/public_site/**` (legacy website media) are public. Website videos and images ship with the site in `website/public/videos` and `website/public/samples` (Firebase Hosting), not Storage. Everything else is `get`-only for signed-in users, with no listing. Generated audio is never made public; the app downloads it via `getDownloadURL`.
 - TTS callables require auth, validate name (1–30 letters), tone, voice and activity keys, cap batches at 20 keys, enforce a per-UID daily generation quota (`DAILY_GENERATION_LIMIT_PER_USER`), and run with `maxInstances` limits. Cache hits never consume quota.
 - Audio cache docs carry `expireAt`; a Firestore TTL policy deletes clips no device has requested for 12 months (`onAudioCacheDocDeleted` removes the Storage object). Docs store no plain-text child name.
 - `deleteAccount` removes `users/{uid}` recursively and the Auth user; the app also revokes the Google grant and wipes local data. Store subscriptions are not cancelled by deletion.

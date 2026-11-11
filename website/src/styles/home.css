@@ -17,16 +17,8 @@
   background:
     conic-gradient(from 230deg at 12% 24%, rgba(255, 250, 226, 0.55), transparent 42%),
     conic-gradient(from 55deg at 88% 70%, rgba(78, 179, 207, 0.28), transparent 38%);
-  animation: drift 14s linear infinite alternate;
-}
-
-@keyframes drift {
-  from {
-    transform: rotate(0deg) scale(1);
-  }
-  to {
-    transform: rotate(8deg) scale(1.06);
-  }
+  /* Static on purpose: rotating this page-tall layer under the blurred blocks made scrolling janky. */
+  pointer-events: none;
 }
 
 .top-bar {

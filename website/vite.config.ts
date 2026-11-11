@@ -190,6 +190,13 @@ const LLMS_TXT = `# KidoCoach (kidocoach.app)
 - [Terms and Conditions](https://kidocoach.app/terms): Service terms, Early Access waitlist terms, and subscription policies.
 - [Privacy Policy](https://kidocoach.app/privacy): Family data privacy, Firebase & Paddle security, and cookie/analytics consent details.
 - [Full AI Context (llms-full.txt)](https://kidocoach.app/llms-full.txt): Extended product, FAQ, and policy documentation for AI agents.
+
+## Home Page Videos (Transcripts)
+- **Meet Becky (welcome video, 27 s):** "Late for work again because the morning routine fell apart? Bedtime turning into a negotiation? Hi, I'm Becky. We're building a gamified coach that turns your kids' daily routines into fun, independent adventures. We're opening early access soon. Drop your email below to reserve your founder's pass, locking in an exclusive lifetime early adopter discount. Let's get your mornings back."
+- **Sample, Jonathan (Morning Wake-Up):** "Good morning, Jonathan! The sun is up, and a brand new adventure is waiting for us!" (https://kidocoach.app/samples/jonathan.mp4)
+- **Sample, Maya (Brush Teeth):** "Toothbrush time, Maya! Let's make those teeth sparkle!" (https://kidocoach.app/samples/maya.mp4)
+- **Sample, Leo (Get Dressed):** "Let's get dressed, Leo! Time to put on comfy clothes and get ready for an amazing day." (https://kidocoach.app/samples/leo.mp4)
+- **Sample, Emma (Bedtime Wind-Down):** "Time to transform for the night, Emma! Let's put on our cozy pajamas." (https://kidocoach.app/samples/emma.mp4)
 `;
 
 const LLMS_FULL_TXT = `${LLMS_TXT}
@@ -214,6 +221,8 @@ KidoCoach does not sell, rent, or trade parent email addresses or family data. A
 function buildRouteHtml(baseHtml: string, route: PrerenderedRoute): string {
   const canonicalUrl = `${SITE_URL}${route.path}`;
   return baseHtml
+    // The home videos aren't on the guide pages, so their VideoObjects don't belong there.
+    .replace(/\s*<script type="application\/ld\+json" id="ld-home-videos">[\s\S]*?<\/script>/, '')
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${route.title}</title>`)
     .replace(
       /<meta\s+name="description"\s+content="[^"]*"\s*\/>/,

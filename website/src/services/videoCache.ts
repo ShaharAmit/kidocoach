@@ -28,24 +28,58 @@ function getStableCacheKey(url: string): string {
  * Falls back to the raw URL on any error so the <img> can still load.
  */
 export async function getCachedImageSource(url: string): Promise<CachedVideoSource> {
+  return getCachedSource(url);
+}
+
+const warmingKeys = new Set<string>();
+
+/** Downloads `url` into the cache after the page is interactive, for instant return visits. */
+function warmCacheInBackground(cache: Cache, cacheRequest: Request, url: string): void {
+  const key = cacheRequest.url;
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  if (connection?.saveData || /(^|-)2g|3g/.test(connection?.effectiveType ?? '')) return;
+  if (warmingKeys.has(key)) return;
+  warmingKeys.add(key);
+  const run = async () => {
+    try {
+      const response = await fetch(new Request(url, { mode: 'cors', credentials: 'omit' }));
+      if (response.ok) await cache.put(cacheRequest, response);
+    } catch {
+      // Next visit streams again and retries.
+    } finally {
+      warmingKeys.delete(key);
+    }
+  };
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(() => void run(), { timeout: 4000 });
+  } else {
+    setTimeout(() => void run(), 1500);
+  }
+}
+
+/**
+ * Cache hit → blob URL (instant, works offline). Cache miss → the network URL right away, so a
+ * first visit streams (range requests) instead of waiting for the whole file, while the file is
+ * cached in the background for the next visit.
+ */
+async function getCachedSource(url: string): Promise<CachedVideoSource> {
   if (!url) return { src: '' };
   if (!canUseCacheApi()) return { src: url };
 
   try {
     const cache = await window.caches.open(VIDEO_CACHE_NAME);
-    const stableKey = getStableCacheKey(url);
-    const cacheRequest = new Request(stableKey);
-
-    let response = await cache.match(cacheRequest);
-    if (!response) {
-      response = await fetch(new Request(url, { mode: 'cors', credentials: 'omit' }));
-      if (response.ok) await cache.put(cacheRequest, response.clone());
+    const cacheRequest = new Request(getStableCacheKey(url));
+    const response = await cache.match(cacheRequest);
+    if (!response || !response.ok) {
+      warmCacheInBackground(cache, cacheRequest, url);
+      return { src: url };
     }
 
-    if (!response || !response.ok) return { src: url };
-
     const blob = await response.blob();
-    if (!blob || blob.size === 0) return { src: url };
+    if (!blob || blob.size === 0) {
+      await cache.delete(cacheRequest);
+      return { src: url };
+    }
 
     const objectUrl = URL.createObjectURL(blob);
     return { src: objectUrl, release: () => URL.revokeObjectURL(objectUrl) };
@@ -55,46 +89,7 @@ export async function getCachedImageSource(url: string): Promise<CachedVideoSour
 }
 
 export async function getCachedVideoSource(url: string): Promise<CachedVideoSource> {
-  if (!url) {
-    return { src: '' };
-  }
-
-  if (!canUseCacheApi()) {
-    return { src: url };
-  }
-
-  try {
-    const cache = await window.caches.open(VIDEO_CACHE_NAME);
-    const stableKey = getStableCacheKey(url);
-    // Use stable key for lookup/storage, real URL for the actual fetch
-    const cacheRequest = new Request(stableKey);
-    const fetchRequest = new Request(url, { mode: 'cors', credentials: 'omit' });
-
-    let response = await cache.match(cacheRequest);
-    if (!response) {
-      response = await fetch(fetchRequest);
-      if (response.ok) {
-        await cache.put(cacheRequest, response.clone());
-      }
-    }
-
-    if (!response || !response.ok) {
-      return { src: url };
-    }
-
-    const blob = await response.blob();
-    if (!blob || blob.size === 0) {
-      return { src: url };
-    }
-
-    const objectUrl = URL.createObjectURL(blob);
-    return {
-      src: objectUrl,
-      release: () => URL.revokeObjectURL(objectUrl),
-    };
-  } catch {
-    return { src: url };
-  }
+  return getCachedSource(url);
 }
 
 const POSTER_LS_PREFIX = 'kidocoach:poster:v1:';

@@ -44,8 +44,15 @@ const DEFAULT_SAMPLE_CLIPS: SampleClipConfig[] = [
   },
 ];
 
+/**
+ * Website media is hosted with the site (`website/public/videos`, `website/public/samples`), not in
+ * Cloud Storage. Same as the live `public_site/config.welcomeVideoUrl`, so first visits start loading
+ * before Firestore answers. The poster (`.jpg`) and captions (`.srt`) sit next to the video.
+ */
+export const DEFAULT_WELCOME_VIDEO_URL = '/videos/becky-welcome.mp4';
+
 const DEFAULT_CONFIG: SiteConfig = {
-  welcomeVideoUrl: 'avatars/default/welcome.mp4',
+  welcomeVideoUrl: DEFAULT_WELCOME_VIDEO_URL,
   appStoreUrl: 'https://apps.apple.com/',
   playStoreUrl: 'https://play.google.com/store',
   sampleClips: DEFAULT_SAMPLE_CLIPS,
@@ -55,10 +62,10 @@ function readString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
 }
 
-const CONFIG_CACHE_KEY = 'kidocoach:siteConfig:v2';
+const CONFIG_CACHE_KEY = 'kidocoach:siteConfig:v3';
 const CONFIG_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-function readCachedConfig(): SiteConfig | null {
+export function readCachedConfig(): SiteConfig | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(CONFIG_CACHE_KEY);
@@ -145,6 +152,21 @@ function normalizeStoragePath(value: string): string {
   return value.replace(/^gs:\/\/[^/]+\//, '').replace(/^\/+/, '');
 }
 
+/**
+ * Objects that storage.rules make world-readable can be fetched without a download token, so their
+ * URL is known synchronously (no `getDownloadURL` round trip before the welcome video can load).
+ */
+function isPublicStoragePath(objectPath: string): boolean {
+  return objectPath.startsWith('avatars/public_site/')
+    || /^avatars\/default\/welcome\.(mp4|jpg|srt|vtt)$/.test(objectPath);
+}
+
+function publicStorageUrl(objectPath: string): string {
+  const bucket = storage.app.options.storageBucket;
+  if (!bucket || !isPublicStoragePath(objectPath)) return '';
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(objectPath)}?alt=media`;
+}
+
 function getResolvedVideoUrlCacheKey(objectPath: string): string {
   return `kidocoach:welcomeVideoDownloadUrl:${objectPath}`;
 }
@@ -172,13 +194,18 @@ export async function resolveWelcomeVideoUrl(rawValue: string): Promise<string> 
   const value = rawValue.trim();
   if (!value) return '';
 
-  if (isHttpUrl(value)) {
+  if (isHttpUrl(value) || isLocalAssetUrl(value)) {
     return value;
   }
 
   const objectPath = normalizeStoragePath(value);
   if (!objectPath) {
     return '';
+  }
+
+  const publicUrl = publicStorageUrl(objectPath);
+  if (publicUrl) {
+    return publicUrl;
   }
 
   const cachedResolvedUrl = readCachedResolvedVideoUrl(objectPath);
@@ -212,6 +239,11 @@ export async function resolveStorageAssetUrl(rawValue: string): Promise<string> 
     return '';
   }
 
+  const publicUrl = publicStorageUrl(objectPath);
+  if (publicUrl) {
+    return publicUrl;
+  }
+
   try {
     return await getDownloadURL(ref(storage, objectPath));
   } catch {
@@ -220,6 +252,16 @@ export async function resolveStorageAssetUrl(rawValue: string): Promise<string> 
 }
 
 // ── Poster URL (first-frame preview image alongside the video in Storage) ──
+
+function swapExtension(path: string, extension: string): string {
+  return path.replace(/\.[^./?#]+$/, extension);
+}
+
+/** Poster/captions of a site-hosted video live next to it, so their URL needs no lookup. */
+function siblingLocalAsset(videoRawValue: string, extension: string): string {
+  const value = videoRawValue.trim();
+  return isLocalAssetUrl(value) ? swapExtension(value, extension) : '';
+}
 
 function derivePosterObjectPath(videoRawValue: string): string {
   const value = videoRawValue.trim();
@@ -235,8 +277,12 @@ function getPosterUrlCacheKey(objectPath: string): string {
 /** Synchronous — safe to call before rendering to avoid a second-render flash. */
 export function readCachedPosterUrl(videoRawValue: string): string {
   if (typeof window === 'undefined') return '';
+  const localPoster = siblingLocalAsset(videoRawValue, '.jpg');
+  if (localPoster) return localPoster;
   const objectPath = derivePosterObjectPath(videoRawValue);
   if (!objectPath) return '';
+  const publicUrl = publicStorageUrl(objectPath);
+  if (publicUrl) return publicUrl;
   try {
     const raw = window.localStorage.getItem(getPosterUrlCacheKey(objectPath));
     return raw && raw.trim().length > 0 ? raw : '';
@@ -252,8 +298,13 @@ export function readCachedPosterUrl(videoRawValue: string): string {
  * Returns '' if the file does not exist — caller must handle gracefully.
  */
 export async function resolveWelcomePosterUrl(videoRawValue: string): Promise<string> {
+  const localPoster = siblingLocalAsset(videoRawValue, '.jpg');
+  if (localPoster) return localPoster;
   const objectPath = derivePosterObjectPath(videoRawValue);
   if (!objectPath) return '';
+
+  const publicUrl = publicStorageUrl(objectPath);
+  if (publicUrl) return publicUrl;
 
   const cacheKey = getPosterUrlCacheKey(objectPath);
   try {
@@ -274,10 +325,14 @@ export async function resolveWelcomePosterUrl(videoRawValue: string): Promise<st
 }
 
 export async function resolveWelcomeCaptionUrl(videoRawValue: string): Promise<string> {
+  const localCaptions = siblingLocalAsset(videoRawValue, '.srt');
+  if (localCaptions) return localCaptions;
   const value = videoRawValue.trim();
-  if (!value || isHttpUrl(value) || isLocalAssetUrl(value)) return '';
-  const objectPath = normalizeStoragePath(value).replace(/\.[^./?#]+$/, '.srt');
+  if (!value || isHttpUrl(value)) return '';
+  const objectPath = swapExtension(normalizeStoragePath(value), '.srt');
   if (!objectPath) return '';
+  const publicUrl = publicStorageUrl(objectPath);
+  if (publicUrl) return publicUrl;
 
   try {
     return await getDownloadURL(ref(storage, objectPath));

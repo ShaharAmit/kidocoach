@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import HomePage from './pages/Home';
 import TermsPage from './pages/Terms';
 import PrivacyPage from './pages/Privacy';
@@ -144,9 +144,30 @@ function RouteSeoSync() {
   return promotionError ? <p role="alert">{promotionError}</p> : null;
 }
 
+// New pages open at the top (or at their #hash); Back/Forward keep the browser's restored position.
+function ScrollOnNavigate() {
+  const { pathname, hash } = useLocation();
+  const navigationType = useNavigationType();
+
+  useEffect(() => {
+    if (navigationType === 'POP') return;
+    if (hash) {
+      const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+      if (target) {
+        target.scrollIntoView();
+        return;
+      }
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname, hash, navigationType]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <>
+      <ScrollOnNavigate />
       <RouteSeoSync />
       <ConsentBanner />
       <Routes>

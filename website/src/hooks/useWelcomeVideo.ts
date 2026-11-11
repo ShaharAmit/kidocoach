@@ -1,6 +1,7 @@
-import { RefObject, useEffect, useState } from 'react';
+import { RefObject, useEffect, useRef, useState } from 'react';
 import {
   fetchSiteConfig,
+  readCachedConfig,
   readCachedPosterUrl,
   resolveWelcomeCaptionUrl,
   resolveWelcomePosterUrl,
@@ -28,7 +29,7 @@ export function useWelcomeVideo({
   videoRef,
   fallbackConfig,
 }: UseWelcomeVideoOptions) {
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(fallbackConfig);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => readCachedConfig() ?? fallbackConfig);
   const [loading, setLoading] = useState(true);
   const [videoSrc, setVideoSrc] = useState('');
 
@@ -38,100 +39,105 @@ export function useWelcomeVideo({
   const [posterSrc, setPosterSrc] = useState(() => readCachedPosterUrl(fallbackConfig.welcomeVideoUrl));
   const [captionSrc, setCaptionSrc] = useState('');
 
+  // Set when playback starts, so a late config answer never swaps the video under the viewer.
+  const startedRef = useRef(false);
+
   useEffect(() => {
     let mounted = true;
-    let releaseCachedVideo: (() => void) | undefined;
-    let releaseCachedPoster: (() => void) | undefined;
-    let releaseCachedCaptions: (() => void) | undefined;
+    let shownPath = '';
+    const releases: Array<() => void> = [];
+    const keep = (release?: () => void) => {
+      if (!release) return;
+      if (mounted) releases.push(release);
+      else release();
+    };
 
-    async function loadConfig() {
-      try {
-        const config = await withTimeout(fetchSiteConfig(), 4000, fallbackConfig);
+    async function showVideo(videoPath: string): Promise<boolean> {
+      const videoUrl = await withTimeout(resolveWelcomeVideoUrl(videoPath), 5000, '');
+      if (!videoUrl || !mounted) return false;
 
-        let resolvedVideoUrl = await withTimeout(
-          resolveWelcomeVideoUrl(config.welcomeVideoUrl),
-          5000,
-          ''
-        );
-        if (!resolvedVideoUrl && config.welcomeVideoUrl !== fallbackConfig.welcomeVideoUrl) {
-          resolvedVideoUrl = await withTimeout(
-            resolveWelcomeVideoUrl(fallbackConfig.welcomeVideoUrl),
-            4000,
-            ''
-          );
-        }
+      // Stable key for canvas-poster cache (strip rotating Firebase token)
+      const tokenIndex = videoUrl.indexOf('&token=');
+      const stableKey = tokenIndex !== -1 ? videoUrl.substring(0, tokenIndex) : videoUrl;
 
-        // Stable key for canvas-poster cache (strip rotating Firebase token)
-        const stableKey = resolvedVideoUrl.indexOf('?alt=media') !== -1
-          ? resolvedVideoUrl.substring(0, resolvedVideoUrl.indexOf('?alt=media'))
-          : resolvedVideoUrl;
+      // Cache hits are blob URLs; misses return the network URL immediately (streamed).
+      const [cachedVideo, cachedPoster] = await Promise.all([
+        withTimeout(getCachedVideoSource(videoUrl), 3000, { src: videoUrl } as CachedVideoSource),
+        withTimeout(
+          resolveWelcomePosterUrl(videoPath)
+            .then(url => url ? getCachedImageSource(url) : Promise.resolve({ src: '' } as CachedVideoSource)),
+          3000,
+          { src: '' } as CachedVideoSource
+        ),
+      ]);
+      keep(cachedVideo.release);
+      keep(cachedPoster.release);
+      if (!mounted) return false;
 
-        // Fetch video, captions, and poster URL in parallel.
-        // Poster is awaited here so posterSrc is set in the same render as loading→false.
-        // This prevents the mobile shimmer from persisting after loading completes.
-        const [cachedVideo, cachedPoster, cachedCaptions] = await Promise.all([
-          withTimeout(getCachedVideoSource(resolvedVideoUrl), 5000, { src: resolvedVideoUrl }),
-          withTimeout(
-            resolveWelcomePosterUrl(config.welcomeVideoUrl)
-              .then(url => url ? getCachedImageSource(url) : Promise.resolve({ src: '' } as CachedVideoSource)),
-            6000,
-            { src: '' } as CachedVideoSource
-          ),
-          withTimeout(
-            resolveWelcomeCaptionUrl(config.welcomeVideoUrl)
-              .then(url => url ? getCaptionTrackSource(url) : Promise.resolve({ src: '' } as CaptionTrackSource)),
-            4000,
-            { src: '' } as CaptionTrackSource
-          ),
-        ]);
+      shownPath = videoPath;
+      setVideoSrc(cachedVideo.src);
+      setPosterSrc(cachedPoster.src || getPosterFromCache(stableKey));
+      setCaptionSrc('');
+      setVideoError('');
+      setVideoFinished(false);
+      setHasStarted(false);
+      setLoading(false);
 
-        // Sync canvas read as fallback for desktop return visits (zero cost if present)
-        const posterUrl = cachedPoster.src || getPosterFromCache(stableKey);
-
-        if (mounted) {
-          setSiteConfig(config);
-          setVideoSrc(cachedVideo.src);
-          setPosterSrc(posterUrl);
-          setCaptionSrc(cachedCaptions.src);
-          setVideoError('');
-          setVideoFinished(false);
-          setHasStarted(false);
-        }
-
-        // Desktop-only: extract canvas poster for future visits if storage poster is absent
-        if (!cachedPoster.src) {
-          extractPosterFrame(cachedVideo.src, stableKey).then((dataUrl) => {
-            if (mounted && dataUrl) setPosterSrc((prev) => prev || dataUrl);
-          }).catch(() => {});
-        }
-
-        releaseCachedVideo = cachedVideo.release;
-        releaseCachedPoster = cachedPoster.release;
-        releaseCachedCaptions = cachedCaptions.release;
-      } catch (error) {
-        console.warn('Failed to load site config from Firestore', error);
-        if (mounted) {
-          setVideoSrc('');
-          setPosterSrc('');
-          setCaptionSrc('');
-          setVideoError('Welcome video failed to load from config.');
-          setVideoFinished(true);
-          setHasStarted(false);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      // Desktop-only: extract canvas poster for future visits if storage poster is absent
+      if (!cachedPoster.src) {
+        extractPosterFrame(cachedVideo.src, stableKey).then((dataUrl) => {
+          if (mounted && dataUrl) setPosterSrc((prev) => prev || dataUrl);
+        }).catch(() => {});
       }
+
+      // Captions are optional and never hold up the video.
+      void withTimeout(
+        resolveWelcomeCaptionUrl(videoPath)
+          .then(url => url ? getCaptionTrackSource(url) : Promise.resolve({ src: '' } as CaptionTrackSource)),
+        6000,
+        { src: '' } as CaptionTrackSource
+      ).then((captions) => {
+        keep(captions.release);
+        if (mounted && shownPath === videoPath) setCaptionSrc(captions.src);
+      });
+      return true;
     }
 
-    loadConfig();
+    async function load() {
+      const initialConfig = readCachedConfig() ?? fallbackConfig;
+      const configPromise = withTimeout<SiteConfig | null>(fetchSiteConfig(), 4000, null).catch((error) => {
+        console.warn('Failed to load site config from Firestore', error);
+        return null;
+      });
+
+      // Start the known video right away; Firestore usually agrees with the cached/default path.
+      await showVideo(initialConfig.welcomeVideoUrl);
+
+      const config = await configPromise;
+      if (!mounted) return;
+      if (config) {
+        setSiteConfig(config);
+        if (config.welcomeVideoUrl !== shownPath && !startedRef.current) {
+          await showVideo(config.welcomeVideoUrl);
+        }
+      }
+
+      if (mounted && !shownPath) {
+        setVideoSrc('');
+        setPosterSrc('');
+        setCaptionSrc('');
+        setVideoError('Welcome video failed to load from config.');
+        setVideoFinished(true);
+        setHasStarted(false);
+      }
+      if (mounted) setLoading(false);
+    }
+
+    void load();
 
     return () => {
       mounted = false;
-      if (releaseCachedVideo) releaseCachedVideo();
-      if (releaseCachedPoster) releaseCachedPoster();
-      if (releaseCachedCaptions) releaseCachedCaptions();
+      releases.forEach((release) => release());
     };
   }, [fallbackConfig]);
 
@@ -146,11 +152,13 @@ export function useWelcomeVideo({
       videoElement.muted = true;
       await videoElement.play();
       videoElement.muted = false;
+      startedRef.current = true;
       setHasStarted(true);
     } catch (error) {
       try {
         videoElement.muted = false;
         await videoElement.play();
+        startedRef.current = true;
         setHasStarted(true);
       } catch (secondError) {
         console.warn('Manual video playback failed', secondError ?? error);
@@ -167,6 +175,7 @@ export function useWelcomeVideo({
   }
 
   function handleVideoPlay() {
+    startedRef.current = true;
     setVideoFinished(false);
     setHasStarted(true);
   }

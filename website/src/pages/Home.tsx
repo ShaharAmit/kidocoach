@@ -5,15 +5,26 @@ import { useWelcomeVideo } from '../hooks/useWelcomeVideo';
 import { usePartnerMenuLink } from '../hooks/usePartnerMenuLink';
 import { openPrivacyChoices, trackEvent } from '../services/analytics';
 import { submitEarlyAccessLead } from '../services/earlyAccess';
-import { SiteConfig, SampleClipConfig } from '../services/siteConfig';
+import { DEFAULT_WELCOME_VIDEO_URL, SiteConfig, SampleClipConfig } from '../services/siteConfig';
 import InteractiveRoutinePreview, { SampleClipSwitcher } from '../components/InteractiveRoutinePreview';
 import '../styles/home.css';
 
 const FALLBACK: SiteConfig = {
-  welcomeVideoUrl: 'avatars/default/welcome.mp4',
+  welcomeVideoUrl: DEFAULT_WELCOME_VIDEO_URL,
   appStoreUrl: 'https://apps.apple.com/',
   playStoreUrl: 'https://play.google.com/store',
 };
+
+// Keep in sync with the VideoObject JSON-LD and static copy in index.html and llms.txt (vite.config.ts).
+const WELCOME_VIDEO_TRANSCRIPT =
+  "Late for work again because the morning routine fell apart? Bedtime turning into a negotiation? Hi, I'm Becky. We're building a gamified coach that turns your kids' daily routines into fun, independent adventures. We're opening early access soon. Drop your email below to reserve your founder's pass, locking in an exclusive lifetime early adopter discount. Let's get your mornings back.";
+
+const SAMPLE_TRANSCRIPTS = [
+  { name: 'Jonathan', activity: 'Morning Wake-Up', text: 'Good morning, Jonathan! The sun is up, and a brand new adventure is waiting for us!' },
+  { name: 'Maya', activity: 'Brush Teeth', text: "Toothbrush time, Maya! Let's make those teeth sparkle!" },
+  { name: 'Leo', activity: 'Get Dressed', text: "Let's get dressed, Leo! Time to put on comfy clothes and get ready for an amazing day." },
+  { name: 'Emma', activity: 'Bedtime Wind-Down', text: "Time to transform for the night, Emma! Let's put on our cozy pajamas." },
+];
 
 export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -56,7 +67,9 @@ export default function HomePage() {
 
   useEffect(() => {
     setIsVideoReady(false);
-    setPendingPlay(false);
+    // A newly selected sample should start as soon as it's ready; the welcome video waits for a tap.
+    setPendingPlay(Boolean(activeSample));
+    setIsPaused(true);
     if (readyFallbackRef.current) clearTimeout(readyFallbackRef.current);
   }, [currentVideoSrc]);
 
@@ -284,15 +297,16 @@ export default function HomePage() {
               playsInline
               preload="auto"
               controls={false}
-              onEnded={handleVideoEnded}
-              onPlay={() => { handleVideoPlay(); setIsPaused(false); }}
+              onEnded={() => (activeSample ? setActiveSample(null) : handleVideoEnded())}
+              onPlay={() => { if (!activeSample) handleVideoPlay(); setIsPaused(false); }}
               onPause={() => setIsPaused(true)}
-              onError={handleVideoError}
+              onError={() => (activeSample ? setActiveSample(null) : handleVideoError())}
               onLoadedData={() => setIsVideoReady(true)}
               onCanPlay={() => setIsVideoReady(true)}
             >
+              {/* Not `default`: the welcome video already has captions burned into the picture. */}
               {!activeSample && captionSrc ? (
-                <track default kind="captions" srcLang="en" label="English" src={captionSrc} />
+                <track kind="captions" srcLang="en" label="English" src={captionSrc} />
               ) : null}
             </video>
 
@@ -531,6 +545,17 @@ export default function HomePage() {
                 our <Link to="/profile">Profile &amp; Setup page</Link>, or click &quot;Early Access
                 Signup&quot; to reserve your Founder&apos;s Pass and receive launch updates.
               </p>
+            </details>
+            <details className="faq-item" id="video-transcripts">
+              <summary>What does Becky say in the videos? (Transcripts)</summary>
+              <p>
+                <strong>Meet Becky:</strong> {WELCOME_VIDEO_TRANSCRIPT}
+              </p>
+              {SAMPLE_TRANSCRIPTS.map(sample => (
+                <p key={sample.name}>
+                  <strong>{sample.name}, {sample.activity}:</strong> &ldquo;{sample.text}&rdquo;
+                </p>
+              ))}
             </details>
           </div>
         </section>

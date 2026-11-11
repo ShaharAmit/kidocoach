@@ -1,6 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { resolveStorageAssetUrl, type SampleClipConfig } from '../services/siteConfig';
+
+/** Playable URL for a sample clip, or '' when the file doesn't exist (the SPA fallback serves HTML for missing /samples files). */
+async function resolveSampleClipUrl(videoUrl: string): Promise<string> {
+  try {
+    const url = await resolveStorageAssetUrl(videoUrl);
+    if (!url || !url.startsWith('/')) return url;
+    const res = await fetch(url, { method: 'HEAD' });
+    const contentType = res.headers.get('content-type') ?? '';
+    return res.ok && contentType.startsWith('video/') ? url : '';
+  } catch {
+    return '';
+  }
+}
 
 const PREVIEW_STEPS = [
   { emoji: '☀️', label: 'Wake Up', mins: 2, prompt: (n: string) => `Good morning, ${n}! Time to wake up and start a wonderful day.` },
@@ -31,40 +44,25 @@ export function SampleClipSwitcher({
   activeClipId: string | null;
   onSelectClip: (clip: SampleClipConfig | null, resolvedVideoUrl: string) => void;
 }) {
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [missingId, setMissingId] = useState<string | null>(null);
+  // Clips whose file exists, with their playable URL. Missing clips are never shown.
+  const [available, setAvailable] = useState<{ clip: SampleClipConfig; url: string }[]>([]);
+  const clipsKey = clips.map((clip) => `${clip.id}|${clip.videoUrl}`).join(',');
 
-  if (!clips || clips.length === 0) return null;
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all(clips.map(async (clip) => {
+      const url = await resolveSampleClipUrl(clip.videoUrl);
+      return url ? { clip, url } : null;
+    })).then((results) => {
+      if (!cancelled) setAvailable(results.filter((item): item is { clip: SampleClipConfig; url: string } => item !== null));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipsKey]);
 
-  async function handleSelect(clip: SampleClipConfig) {
-    setMissingId(null);
-    if (activeClipId === clip.id) {
-      onSelectClip(null, '');
-      return;
-    }
-    setBusyId(clip.id);
-    try {
-      const resolved = await resolveStorageAssetUrl(clip.videoUrl);
-      if (!resolved) {
-        setMissingId(clip.id);
-        return;
-      }
-      // If it's a local path (/samples/...), do a quick HEAD check so missing sample files fail gracefully
-      if (resolved.startsWith('/')) {
-        const res = await fetch(resolved, { method: 'HEAD' });
-        const contentType = res.headers.get('content-type') ?? '';
-        if (!res.ok || contentType.includes('text/html')) {
-          setMissingId(clip.id);
-          return;
-        }
-      }
-      onSelectClip(clip, resolved);
-    } catch {
-      setMissingId(clip.id);
-    } finally {
-      setBusyId(null);
-    }
-  }
+  if (available.length === 0) return null;
 
   return (
     <div className="sample-clip-bar" aria-label="Sample personalized greeting videos">
@@ -81,16 +79,14 @@ export function SampleClipSwitcher({
             ↩ Welcome Video
           </button>
         )}
-        {clips.map((clip) => {
+        {available.map(({ clip, url }) => {
           const isActive = activeClipId === clip.id;
-          const isBusy = busyId === clip.id;
           return (
             <button
               key={clip.id}
               type="button"
               className={`sample-pill ${isActive ? 'active' : ''}`}
-              disabled={isBusy}
-              onClick={() => void handleSelect(clip)}
+              onClick={() => (isActive ? onSelectClip(null, '') : onSelectClip(clip, url))}
             >
               <span className="sample-pill-icon" aria-hidden="true">
                 {isActive ? '🔊' : '▶'}
@@ -101,12 +97,6 @@ export function SampleClipSwitcher({
           );
         })}
       </div>
-      {missingId ? (
-        <p className="sample-clip-hint">
-          Sample clip coming soon! Set up your child&apos;s custom name in{' '}
-          <Link to="/profile">your profile</Link>.
-        </p>
-      ) : null}
     </div>
   );
 }
