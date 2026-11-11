@@ -132,6 +132,12 @@
   font-weight: 700;
 }
 
+.partner-stat-hint {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
 .partner-dashboard table {
   width: 100%;
   border-collapse: collapse;

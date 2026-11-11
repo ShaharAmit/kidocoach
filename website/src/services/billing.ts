@@ -36,8 +36,13 @@ function assertSameUser(uid: string): void {
   if (auth.currentUser?.uid !== uid) throw new Error('Your account changed. Please try again.');
 }
 
+/** Price in major units (e.g. 9.99), as shown to the parent and reported to analytics. */
+export function planMajorAmount(plan: WebPlan): number {
+  return ZERO_DECIMAL.has(plan.currency) ? plan.amount : plan.amount / 100;
+}
+
 export function formatPlanPrice(plan: WebPlan, locale?: string): string {
-  const amount = ZERO_DECIMAL.has(plan.currency) ? plan.amount : plan.amount / 100;
+  const amount = planMajorAmount(plan);
   const price = new Intl.NumberFormat(locale, { style: 'currency', currency: plan.currency.toUpperCase() })
     .format(amount);
   const every = plan.intervalCount === 1 ? plan.interval : `${plan.intervalCount} ${plan.interval}s`;

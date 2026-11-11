@@ -1,10 +1,27 @@
 import { useState, type FormEvent } from 'react';
 import {
-  createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword,
+  createUserWithEmailAndPassword, getAdditionalUserInfo, sendPasswordResetEmail, signInWithEmailAndPassword,
+  type UserCredential,
 } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { getAuthErrorMessage, signInWithProvider, type SignInProvider } from '../services/accountAuth';
 import ProviderSignInButton from './ProviderSignInButton';
+import { setAnalyticsUserProperties, trackEvent } from '../services/analytics';
+import { readReferral } from '../services/referral';
+
+type AuthMethod = 'password' | SignInProvider;
+
+/**
+ * `sign_up` for new accounts, `login` otherwise. The partner code is read before signing in,
+ * because the saved link is claimed and cleared as soon as the account is signed in.
+ */
+function trackAuth(credential: UserCredential, method: AuthMethod, partner: string | undefined): void {
+  const isNew = getAdditionalUserInfo(credential)?.isNewUser === true;
+  if (isNew) setAnalyticsUserProperties({ signup_method: method });
+  trackEvent(isNew ? 'sign_up' : 'login', {
+    method, via_partner_link: Boolean(partner), affiliate_code: partner,
+  });
+}
 
 function messageFor(error: unknown): string {
   const authMessage = getAuthErrorMessage(error);
@@ -39,9 +56,15 @@ export default function SignInCard({ title }: { title?: string }) {
 
   function authenticate(event: FormEvent) {
     event.preventDefault();
-    void run(() => register
+    const partner = readReferral()?.code;
+    void run(async () => trackAuth(await (register
       ? createUserWithEmailAndPassword(auth, email.trim(), password)
-      : signInWithEmailAndPassword(auth, email.trim(), password));
+      : signInWithEmailAndPassword(auth, email.trim(), password)), 'password', partner));
+  }
+
+  function signInWith(provider: SignInProvider) {
+    const partner = readReferral()?.code;
+    void run(async () => trackAuth(await signInWithProvider(provider), provider, partner), provider);
   }
 
   return (
@@ -63,9 +86,9 @@ export default function SignInCard({ title }: { title?: string }) {
         setMessage('If an account exists, you will receive a password reset email.');
       })}>Reset password</button>
       <ProviderSignInButton provider="google" disabled={busy}
-        onClick={() => void run(() => signInWithProvider('google'), 'google')} />
+        onClick={() => signInWith('google')} />
       <ProviderSignInButton provider="apple" disabled={busy}
-        onClick={() => void run(() => signInWithProvider('apple'), 'apple')} />
+        onClick={() => signInWith('apple')} />
       {pendingProvider && <div>
         <p role="status" aria-live="polite">
           Waiting for {pendingProvider === 'apple' ? 'Apple' : 'Google'}.

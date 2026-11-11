@@ -143,9 +143,11 @@ function profileHarness() {
       useEffect() {},
     },
     'react/jsx-runtime': require('../website/node_modules/react/jsx-runtime'),
-    'firebase/auth': {},
+    'firebase/auth': { getAdditionalUserInfo: () => null },
     '../services/firebase': { auth: { currentUser: null } },
     './ProviderSignInButton': { default: 'provider-button' },
+    '../services/analytics': { trackEvent() {}, setAnalyticsUserProperties() {} },
+    '../services/referral': { readReferral: () => null },
     '../services/accountAuth': {
       getAuthErrorMessage: harness().service.getAuthErrorMessage,
       signInWithProvider: () => { providerCalls++; return pending; },

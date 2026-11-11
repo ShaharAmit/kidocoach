@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ChildGender, ChildProfile, QuestionnaireAnswers } from '../../../types';
 import {
   BEDTIME_OPTIONS, HELP_OPTIONS, MASTERED_OPTIONS, MORNING_STUCK_OPTIONS, MOTIVATION_OPTIONS,
@@ -8,6 +8,8 @@ import { calculateAgeFromISO, isoDateYearsAgo } from '../../../utils/date';
 import { isValidChildName } from '../../../utils/nameToken';
 import { isMorningTime } from '../../../utils/timeOfDay';
 import { saveRegistration } from '../services/registration';
+import { setAnalyticsUserProperties, trackEvent } from '../services/analytics';
+import { QUESTIONNAIRE_STEPS, questionnaireParams } from '../services/analyticsEvents';
 
 function Choices<T extends string>({ title, options, selected, onSelect, multi = false }: {
   title: string; options: QuestionnaireOption<T>[]; selected: T[]; onSelect: (key: T) => void; multi?: boolean;
@@ -42,14 +44,24 @@ export default function RegistrationQuestionnaire({ uid, onSaved }: {
     Boolean(wakeTime && bedtime && isMorningTime(wakeTime) && !isMorningTime(bedtime)),
   ][step];
 
+  useEffect(() => {
+    trackEvent(step === 0 ? 'questionnaire_start' : 'questionnaire_step', {
+      step_number: step + 1, step_name: QUESTIONNAIRE_STEPS[step],
+    });
+  }, [step]);
+
   async function save() {
     if (busy || !valid || !gender) return;
     setBusy(true);
     setError('');
     try {
-      onSaved(await saveRegistration(uid, { childName, gender, birthDate, answers, wakeTime, bedtime }));
+      const saved = await saveRegistration(uid, { childName, gender, birthDate, answers, wakeTime, bedtime });
+      trackEvent('questionnaire_complete', questionnaireParams({ age, answers, wakeTime, bedtime }));
+      setAnalyticsUserProperties({ has_child_profile: 'yes' });
+      onSaved(saved);
     } catch (failure) {
       console.warn('[Registration] Could not save setup:', failure);
+      trackEvent('questionnaire_error', { step_name: QUESTIONNAIRE_STEPS[step] });
       setError(failure instanceof Error ? failure.message : 'Could not save setup. Please try again.');
     } finally {
       setBusy(false);

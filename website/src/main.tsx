@@ -2,7 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-import { initAnalytics } from './services/analytics';
+import { initAnalytics, subscribeConsent } from './services/analytics';
+import { setReferralStorageAllowed } from './services/referral';
 import './styles/global.css';
 
 const rootElement = document.getElementById('root');
@@ -11,6 +12,8 @@ if (!rootElement) {
 }
 
 initAnalytics();
+// One consent covers analytics and remembering the partner link (docs/WEB_ANALYTICS.md §7).
+subscribeConsent(({ choice }) => setReferralStorageAllowed(choice === 'granted'));
 
 createRoot(rootElement).render(
   <StrictMode>

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import {
-  formatPlanPrice, loadBilling, openBillingPortal, startCheckout, storeLabel, syncPurchases,
+  formatPlanPrice, loadBilling, planMajorAmount, openBillingPortal, startCheckout, storeLabel, syncPurchases,
   type WebAccess, type WebPlan,
 } from '../services/billing';
 import { parseCampaign, readCampaign } from '../services/campaign';
@@ -11,8 +11,11 @@ import { loadChildProfile } from '../services/registration';
 import RegistrationQuestionnaire from '../components/RegistrationQuestionnaire';
 import SignInCard from '../components/SignInCard';
 import PartnerPanel from '../components/PartnerPanel';
-import { claimSavedReferral } from '../services/referral';
+import { claimSavedReferral, readReferral } from '../services/referral';
 import { getAuthErrorMessage } from '../services/accountAuth';
+import {
+  identifyUser, openPrivacyChoices, setAnalyticsUserProperties, trackEvent,
+} from '../services/analytics';
 import type { ChildProfile } from '../../../types';
 import '../styles/subscribe.css';
 
@@ -46,6 +49,7 @@ export default function ProfilePage() {
       if (cancelled || auth.currentUser?.uid !== user.uid) return;
       setProfile(child);
       setProfileLoaded(true);
+      setAnalyticsUserProperties({ has_child_profile: child ? 'yes' : 'no' });
     }).catch((failure: unknown) => {
       console.warn('[Profile] Could not load account:', failure);
       if (!cancelled) setAccountError('Could not load your profile. Check your connection and try again.');
@@ -71,9 +75,15 @@ export default function ProfilePage() {
     setMessage('');
     setUser(next);
     setAuthReady(true);
+    identifyUser(next && !next.isAnonymous ? next.uid : null);
     if (next && !next.isAnonymous) {
       // A partner link saved before sign-in follows the account (first touch, checked on the server).
-      claimSavedReferral().catch((error: unknown) => console.warn('[Referral] Claim failed; will retry:', error));
+      const code = readReferral()?.code;
+      claimSavedReferral().then((status) => {
+        if (!status) return;
+        trackEvent('referral_claim', { status, affiliate_code: code });
+        if (status === 'claimed' && code) setAnalyticsUserProperties({ first_partner_code: code });
+      }).catch((error: unknown) => console.warn('[Referral] Claim failed; will retry:', error));
     }
   }), []);
 
@@ -85,6 +95,10 @@ export default function ProfilePage() {
       if (version !== refreshVersion.current || auth.currentUser?.uid !== uid) return;
       setAccess(billing.access);
       setPlans(billing.plans);
+      setAnalyticsUserProperties({
+        subscriber: billing.access.active ? 'yes' : 'no',
+        subscription_store: billing.access.store ?? 'none',
+      });
     } catch (error) {
       if (version === refreshVersion.current) setMessage(messageFor(error));
     } finally {
@@ -126,11 +140,24 @@ export default function ProfilePage() {
   async function purchase(plan: WebPlan) {
     if (!user) return;
     const uid = user.uid;
+    const price = planMajorAmount(plan);
+    const checkout = {
+      currency: plan.currency.toUpperCase(),
+      // Charged today: 0 during a free trial. Paddle stays the source of truth for revenue.
+      value: plan.trialDays ? 0 : price,
+      coupon: discount.trim() || undefined,
+      plan_interval: plan.intervalCount === 1 ? plan.interval : `${plan.intervalCount}_${plan.interval}`,
+      trial_days: plan.trialDays ?? 0,
+      items: [{ item_id: plan.priceId, item_name: plan.name, price, quantity: 1 }],
+    };
+    trackEvent('begin_checkout', checkout);
     const paidTransaction = await startCheckout(uid, plan.priceId, discount);
     if (!paidTransaction) {
+      trackEvent('checkout_closed', { currency: checkout.currency, value: checkout.value, coupon: checkout.coupon });
       setMessage('Checkout closed. You have not been charged.');
       return;
     }
+    trackEvent('purchase', { ...checkout, transaction_id: paidTransaction });
     // Import the purchase into RevenueCat right away so the mobile apps unlock too.
     const synced = await syncPurchases(uid, paidTransaction);
     if (auth.currentUser?.uid !== uid) return;
@@ -163,7 +190,7 @@ export default function ProfilePage() {
         <SignInCard />
       ) : (
         <>
-        <PartnerPanel uid={user.uid} />
+        <PartnerPanel uid={user.uid} defaultEmail={user.email ?? ''} />
         <section className="subscription-card">
           <p>Signed in as {user.email ?? 'parent'}</p>
           {accountError ? <>
@@ -218,8 +245,7 @@ export default function ProfilePage() {
       {message && <p role="status" aria-live="polite">{message}</p>}
       <p>Web coupons apply to web checkout only, not App Store or Google Play purchases.
         Already subscribed elsewhere? Sign in instead of buying again.</p>
-      <p>Recommend KidoCoach and earn commission: <Link to="/partners">become a partner</Link>.</p>
-      <footer><Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link></footer>
+      <footer><Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link> · <button type="button" className="privacy-choices" onClick={openPrivacyChoices}>Privacy choices</button></footer>
     </main>
   );
 }
