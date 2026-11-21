@@ -19,15 +19,16 @@
  * (approveAffiliateCommissions); refunds after a payout show up as negative owed amounts.
  */
 const fs = require('node:fs');
-const admin = require('firebase-admin');
+const { initializeApp, getApps } = require('firebase-admin/app');
+const { Timestamp, getFirestore } = require('firebase-admin/firestore');
 const {
   DEFAULT_COMMISSION_RATE_BPS, DEFAULT_PAYOUT_METHOD, DEFAULT_RECURRING_MONTHS, inviteId, normalizeAffiliateCode,
   normalizeCouponCode, normalizeEmail, normalizePayoutMethod, owedAmount, parseAffiliate, payoutLines,
 } = require('../lib/affiliateModel');
 
 const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'kids-routine-coach-app';
-if (!admin.apps.length) admin.initializeApp({ projectId });
-const db = admin.firestore();
+if (!getApps().length) initializeApp({ projectId });
+const db = getFirestore();
 
 function parseArgs(argv) {
   const positional = [];
@@ -76,7 +77,7 @@ async function create(rawCode, flags) {
     payoutEmail: normalizeEmail(flags['payout-email']) || email,
     payoutMethod: flags['payout-method'] === undefined ? DEFAULT_PAYOUT_METHOD
       : (normalizePayoutMethod(flags['payout-method']) || fail('--payout-method must be wise or paypal.')),
-    createdAt: admin.firestore.Timestamp.now(),
+    createdAt: Timestamp.now(),
   };
   if (!parseAffiliate(code, doc)) fail('Invalid partner fields (rate-bps 1-5000, months 0-120).');
   if (coupon) {
@@ -115,7 +116,7 @@ async function update(rawCode, flags) {
       const owner = taken.docs.find((doc) => doc.id !== code);
       if (owner) fail(`Coupon ${changes.discountCode} already belongs to ${owner.id}.`);
     }
-    tx.update(ref, { ...changes, updatedAt: admin.firestore.Timestamp.now() });
+    tx.update(ref, { ...changes, updatedAt: Timestamp.now() });
   });
   console.log(`Updated ${code}: ${Object.keys(changes).join(', ')}. Rate/months apply to future payments only.`);
 }
@@ -183,7 +184,7 @@ async function markPaid(rawCode, flags) {
     if (sum !== expected) {
       fail(`${code} is owed ${sum} ${currency} minor units now, not ${expected}. Re-run \`report\`; nothing was changed.`);
     }
-    const now = admin.firestore.Timestamp.now();
+    const now = Timestamp.now();
     // Shown to the partner as payout history on their dashboard.
     tx.create(db.collection('affiliate_payouts').doc(`${code}_${currency}_${now.toMillis()}`), {
       code, currency, amount: sum, commissions: due.length, paidAt: now,
@@ -212,7 +213,7 @@ async function setProgram(state) {
 async function setInvite(rawEmail, allowed) {
   const id = inviteId(rawEmail) || fail(`Invalid email "${rawEmail}".`);
   const ref = db.collection('affiliate_invites').doc(id);
-  if (allowed) await ref.set({ allowed: true, createdAt: admin.firestore.Timestamp.now() });
+  if (allowed) await ref.set({ allowed: true, createdAt: Timestamp.now() });
   else await ref.delete();
   console.log(allowed
     ? `Invited ${id}: after signing in with this (verified) email, Profile links to /partners.`

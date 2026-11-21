@@ -100,7 +100,7 @@ Decisions that are already made. Don't undo them without the user's agreement. A
 
 ## ADR-012: Stack baseline (2026-10)
 
-**Decision.** Expo SDK 57 (managed), React Native 0.86, React 19.2, Firebase JS SDK 12; Cloud Functions on Node 22 with `firebase-functions` 7 (v2 APIs). Media uses `expo-video` / `expo-audio` (no `expo-av`). Upgrades must keep every native package on the SDK-compatible version (`npx expo install --check`). Read the matching versioned Expo docs before writing code.
+**Decision.** Expo SDK 58 (managed), React Native 0.88, React 19.3, Firebase JS SDK 13; Cloud Functions on Node 22 with `firebase-functions` 7 (v2 APIs) and `firebase-admin` 14 (modular imports only). Media uses `expo-video` / `expo-audio` (no `expo-av`). Upgrades must keep every native package on the SDK-compatible version (`npx expo install --check`). Read the matching versioned Expo docs before writing code.
 
 ## ADR-013: The app bundles no activities; the catalog is the only source (2026-10)
 
@@ -263,7 +263,7 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 
 ## ADR-025: iOS uses the UIScene lifecycle (2026-11)
 
-**Decision.** `expo-build-properties` → `ios.enableSceneSupport: true` in `app.json`. Apps built with the iOS 27 SDK that don't adopt UIScene are killed at launch on iOS 27 (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`; TestFlight build 10 crashed this way). The plugin makes the generated AppDelegate an `ExpoReactNativeFactoryProvider` and adds a `UIApplicationSceneManifest` with `EXExpoAppSceneDelegate`, which forwards deep links, user activities and lifecycle events.
+**Decision.** The iOS app adopts the UIScene lifecycle. Apps built with the iOS 27 SDK that don't adopt UIScene are killed at launch on iOS 27 (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`; TestFlight build 10 crashed this way). Since Expo SDK 58, prebuild generates it natively: `SceneDelegate.swift` plus a `UIApplicationSceneManifest` in `Info.plist`, which forward deep links, user activities and lifecycle events. (On SDK 57 this needed `expo-build-properties` → `ios.enableSceneSupport: true`; the flag was removed on SDK 58, where it is redundant.)
 
-- Never remove the flag or hand-edit `ios/` (CNG; it's regenerated). Requires expo ≥ 57.0.23; SDK 58 templates include it natively.
+- Never hand-edit `ios/` (CNG; it's regenerated). After an SDK upgrade, check that prebuild still emits `SceneDelegate.swift` and the scene manifest.
 - iOS 26 simulators don't reproduce the crash. Test launches on an iOS 27 simulator before each release.

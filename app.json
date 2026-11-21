@@ -13,7 +13,7 @@
       "usesAppleSignIn": true,
       "bundleIdentifier": "com.kidocoach.app",
       "appleTeamId": "B44958G529",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -77,8 +77,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "usePrecompiledModules": false,
-            "enableSceneSupport": true
+            "usePrecompiledModules": false
           }
         }
       ]

@@ -1,5 +1,7 @@
-import * as admin from 'firebase-admin';
-import { FieldValue, Timestamp, type DocumentReference } from 'firebase-admin/firestore';
+import { initializeApp } from 'firebase-admin/app';
+import { getAuth, type UserRecord } from 'firebase-admin/auth';
+import { FieldValue, Timestamp, getFirestore, type DocumentReference } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { sign as cryptoSign } from 'crypto';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onDocumentDeleted } from 'firebase-functions/v2/firestore';
@@ -20,7 +22,7 @@ import {
   type CatalogEntry,
 } from './catalogModel';
 
-admin.initializeApp();
+initializeApp();
 
 // Hard ceiling on parallel instances so a flood of calls cannot scale Gemini spend unbounded.
 setGlobalOptions({ maxInstances: 10 });
@@ -34,7 +36,7 @@ export {
 import { deleteAffiliateAttribution } from './affiliates';
 export { submitEarlyAccessLead, updateEarlyAccessPreference } from './earlyAccess';
 
-const db = admin.firestore();
+const db = getFirestore();
 const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT;
 const geminiModel = 'gemini-3.8-flash-tts';
 
@@ -286,13 +288,13 @@ async function revokeAppleRefreshToken(refreshToken: string): Promise<boolean> {
   return false;
 }
 
-function hasAppleProvider(user: admin.auth.UserRecord | null): boolean {
+function hasAppleProvider(user: UserRecord | null): boolean {
   return user?.providerData.some((provider) => provider.providerId === 'apple.com') ?? false;
 }
 
-async function getAuthUserOrNull(uid: string): Promise<admin.auth.UserRecord | null> {
+async function getAuthUserOrNull(uid: string): Promise<UserRecord | null> {
   try {
-    return await admin.auth().getUser(uid);
+    return await getAuth().getUser(uid);
   } catch (err: unknown) {
     if ((err as { code?: string }).code === 'auth/user-not-found') return null;
     throw err;
@@ -554,7 +556,7 @@ async function generatePart1AudioInternal(
       throw new Error('Generated audio failed WAV validation.');
     }
 
-    await admin.storage().bucket().file(storagePath).save(audioBuffer, {
+    await getStorage().bucket().file(storagePath).save(audioBuffer, {
       resumable: false,
       contentType: 'audio/wav',
       metadata: {
@@ -728,7 +730,7 @@ export const deleteAccount = onCall(
     await appleTokenRef.delete();
 
     try {
-      await admin.auth().deleteUser(uid);
+      await getAuth().deleteUser(uid);
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
       if (code !== 'auth/user-not-found') throw err;
@@ -830,7 +832,7 @@ export const onAudioCacheDocDeleted = onDocumentDeleted(
 
     for (const storagePath of storagePaths) {
       try {
-        await admin.storage().bucket().file(storagePath).delete();
+        await getStorage().bucket().file(storagePath).delete();
         console.info(`[onAudioCacheDeleted] Deleted storage file: ${storagePath}`);
       } catch (err) {
         console.warn(`[onAudioCacheDeleted] Could not delete ${storagePath}:`, err);
@@ -878,7 +880,7 @@ function assetRefFromObject(object: StorageObjectData) {
 /** True when `object` is no longer the live generation (a newer upload's event will apply it). */
 async function isSupersededObject(object: StorageObjectData): Promise<boolean> {
   try {
-    const [metadata] = await admin.storage().bucket(object.bucket).file(object.name).getMetadata();
+    const [metadata] = await getStorage().bucket(object.bucket).file(object.name).getMetadata();
     return String(metadata.generation) !== String(object.generation);
   } catch {
     return true; // Already deleted again.
@@ -886,7 +888,7 @@ async function isSupersededObject(object: StorageObjectData): Promise<boolean> {
 }
 
 async function objectStillExists(object: StorageObjectData): Promise<boolean> {
-  const [exists] = await admin.storage().bucket(object.bucket).file(object.name).exists();
+  const [exists] = await getStorage().bucket(object.bucket).file(object.name).exists();
   return exists;
 }
 
@@ -897,7 +899,7 @@ export const onCatalogAssetFinalized = onObjectFinalized({ memory: '256MiB', max
 
   if (parsed.type === 'metadata') {
     if (await isSupersededObject(object)) return;
-    const [contents] = await admin.storage().bucket(object.bucket).file(object.name).download();
+    const [contents] = await getStorage().bucket(object.bucket).file(object.name).download();
     let raw: unknown;
     try {
       raw = JSON.parse(contents.toString('utf8'));
@@ -935,7 +937,7 @@ export const onCatalogAssetDeleted = onObjectDeleted({ memory: '256MiB', maxInst
   const generation = String(object.generation);
   if (parsed.type === 'media' && parsed.kind === 'p2' && !parsed.isAlias) {
     // The canonical clip is gone; fall back to a `{key}_p2.mp4` alias if one is still uploaded.
-    const alias = admin.storage().bucket(object.bucket).file(`avatars/${parsed.avatarId}/${parsed.activityKey}_p2.mp4`);
+    const alias = getStorage().bucket(object.bucket).file(`avatars/${parsed.avatarId}/${parsed.activityKey}_p2.mp4`);
     const [aliasExists] = await alias.exists();
     if (aliasExists) {
       const [aliasMeta] = await alias.getMetadata();

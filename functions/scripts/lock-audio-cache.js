@@ -10,7 +10,9 @@
  *
  * Uses Application Default Credentials (`gcloud auth application-default login`).
  */
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase-admin/app');
+const { FieldValue, Timestamp, getFirestore } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
 
 const projectId = process.env.GCLOUD_PROJECT || 'kids-routine-coach-app';
 const bucketName = process.env.STORAGE_BUCKET || `${projectId}.firebasestorage.app`;
@@ -18,9 +20,9 @@ const apply = process.argv.includes('--apply');
 const purgeLegacy = process.argv.includes('--purge-legacy');
 const TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
-admin.initializeApp({ projectId, storageBucket: bucketName });
-const db = admin.firestore();
-const bucket = admin.storage().bucket();
+initializeApp({ projectId, storageBucket: bucketName });
+const db = getFirestore();
+const bucket = getStorage().bucket();
 
 async function lockStorageObjects() {
   const [files] = await bucket.getFiles({ prefix: 'audio/' });
@@ -34,8 +36,8 @@ async function lockStorageObjects() {
 
 async function migrateCacheDocs() {
   const snap = await db.collection('audio_cache').get();
-  const expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + TTL_MS);
-  const deleteField = admin.firestore.FieldValue.delete();
+  const expireAt = Timestamp.fromMillis(Date.now() + TTL_MS);
+  const deleteField = FieldValue.delete();
   let updated = 0;
   let purged = 0;
 

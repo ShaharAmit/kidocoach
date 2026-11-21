@@ -30,7 +30,7 @@ Post-setup core flow:
 - **Storage / caching**: `expo-file-system` ~55 (legacy import path `expo-file-system/legacy`), `@react-native-async-storage/async-storage` ^3
 - **Notifications**: `expo-notifications` ~55 + `expo-device` ~55
 - **UI / gestures**: `react-native-gesture-handler` ~2.30, `react-native-reanimated` ^4.3, `react-native-safe-area-context` ~5.6, `react-native-screens` ~4.23, `react-native-worklets` ^0.8
-- **Backend**: Firebase JS SDK ^12 — Firestore, Cloud Functions (callable), Cloud Storage, Anonymous Auth
+- **Backend**: Firebase JS SDK ^13 — Firestore, Cloud Functions (callable), Cloud Storage, Anonymous Auth
 - **Cloud Functions runtime**: Node.js, Firebase Functions v2 (`firebase-functions/v2`)
 - **AI voice generation**: Gemini 3.8 Flash TTS (`gemini-3.8-flash-tts`) via `@google/genai` on Vertex AI, server-side only. The text part is spoken verbatim — tone goes in `speechMetadata.style`, never in the text.
 

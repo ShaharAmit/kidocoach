@@ -57,8 +57,7 @@ function harness() {
   class HttpsError extends Error { constructor(code, message) { super(message); this.code = code; } }
   const server = loadSource('functions/src/earlyAccess.ts', {
     './earlyAccessModel': model,
-    'firebase-admin': { firestore: () => db },
-    'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => SERVER_TIME, delete: () => DELETE } },
+    'firebase-admin/firestore': { getFirestore: () => db, FieldValue: { serverTimestamp: () => SERVER_TIME, delete: () => DELETE } },
     'firebase-functions/v2/https': { onCall: (_options, handler) => handler, HttpsError },
   });
   const submit = (email, consentVersion) => server.submitEarlyAccessLead({ data: { email, consentVersion } });

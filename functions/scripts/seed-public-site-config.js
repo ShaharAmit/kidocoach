@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
-const admin = require('firebase-admin');
+const { initializeApp, getApps } = require('firebase-admin/app');
+const { FieldValue, getFirestore } = require('firebase-admin/firestore');
 
 async function run() {
   const projectId =
@@ -8,11 +9,11 @@ async function run() {
     process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ||
     'kids-routine-coach-app';
 
-  if (!admin.apps.length) {
-    admin.initializeApp({ projectId });
+  if (!getApps().length) {
+    initializeApp({ projectId });
   }
 
-  const db = admin.firestore();
+  const db = getFirestore();
 
   const data = {
     welcomeVideoUrl:
@@ -24,7 +25,7 @@ async function run() {
     playStoreUrl:
       process.env.WEBSITE_PLAY_STORE_URL ||
       'https://play.google.com/store/apps/details?id=com.kidocoach.app',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     updatedBy: 'seed-public-site-config-script',
   };
 

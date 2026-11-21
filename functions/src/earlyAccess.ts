@@ -1,5 +1,4 @@
-import * as admin from 'firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import {
   LEAD_PURPOSE, isValidLeadEmail, leadId, newUnsubscribeToken, normalizeLeadEmail, tokensMatch,
@@ -27,7 +26,7 @@ interface EarlyAccessPreferenceRequest {
 const SOURCE = 'website_welcome_video';
 
 function leads() {
-  return admin.firestore().collection('early_access');
+  return getFirestore().collection('early_access');
 }
 
 function formConsent(version: string) {
@@ -50,7 +49,7 @@ export const submitEarlyAccessLead = onCall(
     const leadRef = leads().doc(leadId(email));
     const legacyLeadRef = leads().doc(email);
 
-    const status = await admin.firestore().runTransaction(async (transaction) => {
+    const status = await getFirestore().runTransaction(async (transaction) => {
       const [leadDoc, legacyLeadDoc] = await Promise.all([transaction.get(leadRef), transaction.get(legacyLeadRef)]);
       const fields = { email, emailLower: email, emailHash: leadRef.id };
 
@@ -107,7 +106,7 @@ export const updateEarlyAccessPreference = onCall(
     if (!validPreferenceRequest(id, token, action)) return { status: 'invalid' };
     const leadRef = leads().doc(id);
 
-    const status = await admin.firestore().runTransaction(async (transaction): Promise<PreferenceStatus> => {
+    const status = await getFirestore().runTransaction(async (transaction): Promise<PreferenceStatus> => {
       const doc = await transaction.get(leadRef);
       const data = doc.data();
       if (!data || !tokensMatch(data.unsubscribeToken, token)) return 'invalid';

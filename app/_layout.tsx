@@ -47,6 +47,11 @@ function HeaderTitle({ segment }: { segment: DaySegment }) {
   );
 }
 
+// Tab tints are plain strings; the navigator types them as any ColorValue (incl. null/number).
+function tabIconColor(color: ColorValue | null | undefined): string | undefined {
+  return typeof color === 'string' ? color : undefined;
+}
+
 function TabLabel({ text, color }: { text: string; color: ColorValue }) {
   return (
     <Text
@@ -268,7 +273,6 @@ export default function RootLayout() {
       pathname.startsWith('/onboarding') ||
       (pathname === '/' && !isBootComplete()) ? (
         <Stack
-          initialRouteName="loading"
           screenOptions={{
             headerStyle: { backgroundColor: colors.primary },
             headerTintColor: '#FFF',
@@ -344,7 +348,7 @@ export default function RootLayout() {
                     },
               tabBarLabel: ({ color }) => <TabLabel text="Routines" color={color} />,
               tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={size} color={color} />
+                <MaterialCommunityIcons name="checkbox-marked-circle-outline" size={size} color={tabIconColor(color)} />
               ),
             }}
           />
@@ -358,7 +362,7 @@ export default function RootLayout() {
               tabBarStyle: { display: 'none' },
               tabBarLabel: ({ color }) => <TabLabel text="Rewards" color={color} />,
               tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="star" size={size} color={color} />
+                <MaterialCommunityIcons name="star" size={size} color={tabIconColor(color)} />
               ),
             }}
           />
@@ -376,7 +380,7 @@ export default function RootLayout() {
               tabBarStyle: { display: 'none' },
               tabBarLabel: ({ color }) => <TabLabel text="Profile" color={color} />,
               tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="account-circle-outline" size={size} color={color} />
+                <MaterialCommunityIcons name="account-circle-outline" size={size} color={tabIconColor(color)} />
               ),
             }}
           />
@@ -391,7 +395,7 @@ export default function RootLayout() {
               tabBarStyle: { display: 'none' },
               tabBarLabel: ({ color }) => <TabLabel text="Settings" color={color} />,
               tabBarIcon: ({ color, size }) => (
-                <MaterialCommunityIcons name="cog" size={size} color={color} />
+                <MaterialCommunityIcons name="cog" size={size} color={tabIconColor(color)} />
               ),
             }}
           />

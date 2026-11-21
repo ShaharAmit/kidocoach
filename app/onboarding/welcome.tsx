@@ -11,6 +11,7 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { setAudioModeAsync } from 'expo-audio';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -197,7 +198,7 @@ const MIN_VIDEO_BYTES = 16 * 1024; // same threshold as assetCacheService
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const scrollRef = React.useRef<ScrollView>(null);
+  const scrollRef = React.useRef<ScrollViewInstance>(null);
   const [videoDone, setVideoDone] = useState(false);
   const isOnline = useIsOnline();
   const [isPreparing, setIsPreparing] = useState(true);

@@ -12,14 +12,15 @@
  * Never commit exported CSVs. On export, leads without a token get one and pre-hash documents are migrated.
  */
 const fs = require('node:fs');
-const admin = require('firebase-admin');
+const { initializeApp, getApps } = require('firebase-admin/app');
+const { FieldValue, getFirestore } = require('firebase-admin/firestore');
 const {
   exportRow, isMailable, isValidLeadEmail, leadId, newUnsubscribeToken, normalizeLeadEmail, toCsv,
 } = require('../lib/earlyAccessModel');
 
 const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'kids-routine-coach-app';
-if (!admin.apps.length) admin.initializeApp({ projectId });
-const db = admin.firestore();
+if (!getApps().length) initializeApp({ projectId });
+const db = getFirestore();
 const leads = db.collection('early_access');
 
 function parseArgs(argv) {
@@ -52,7 +53,7 @@ async function migratePreHash() {
       if (!(await transaction.get(ref)).exists) {
         transaction.create(ref, {
           ...doc.data(), email, emailLower: email, emailHash: ref.id,
-          migratedAt: admin.firestore.FieldValue.serverTimestamp(),
+          migratedAt: FieldValue.serverTimestamp(),
         });
       }
       transaction.delete(doc.ref);
@@ -104,7 +105,7 @@ async function main() {
     const email = normalizeLeadEmail(arg);
     if (!isValidLeadEmail(email)) throw new Error('Usage: unsubscribe <email>');
     const id = leadId(email);
-    await leads.doc(id).set({ emailHash: id, unsubscribedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await leads.doc(id).set({ emailHash: id, unsubscribedAt: FieldValue.serverTimestamp() });
     await leads.doc(email).delete();
     console.log('Unsubscribed; the address was deleted and only its hash is kept as a suppression record.');
   } else if (command === 'purge-unconfirmed') {

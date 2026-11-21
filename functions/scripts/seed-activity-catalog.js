@@ -11,7 +11,9 @@
  * - Uses the same pure model as the onCatalogAsset* triggers (lib/catalogModel.js).
  */
 const path = require('node:path');
-const admin = require('firebase-admin');
+const { initializeApp, getApps } = require('firebase-admin/app');
+const { FieldValue, getFirestore } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
 const {
   applyAssetUpload,
   applyImageUpload,
@@ -31,9 +33,9 @@ async function run() {
     'kids-routine-coach-app';
   const bucketName = process.env.STORAGE_BUCKET || `${projectId}.firebasestorage.app`;
 
-  if (!admin.apps.length) admin.initializeApp({ projectId, storageBucket: bucketName });
-  const db = admin.firestore();
-  const bucket = admin.storage().bucket();
+  if (!getApps().length) initializeApp({ projectId, storageBucket: bucketName });
+  const db = getFirestore();
+  const bucket = getStorage().bucket();
   const docRef = db.doc('catalog/activities');
 
   const snap = await docRef.get();
@@ -109,7 +111,7 @@ async function run() {
   }
   await docRef.set({
     schemaVersion: 1,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     activities,
   });
   console.log(`Wrote catalog/activities (${Object.keys(activities).length} activities) in ${projectId}.`);
