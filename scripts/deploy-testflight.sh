@@ -16,6 +16,10 @@ fi
 
 mkdir -p build
 
+# ios/ is generated (CNG): sync app.json (buildNumber, plugins) into it before archiving.
+echo "🧩 Syncing native project from app.json..."
+npx expo prebuild --platform ios
+
 echo "📦 1/3 Archiving iOS project..."
 xcodebuild \
   -workspace ios/KidoCoach.xcworkspace \
