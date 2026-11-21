@@ -260,3 +260,10 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 5. **AI runs on the server only.** Only the child's first name goes to Gemini TTS (ADR-007).
 6. **Retention matches the privacy policy** (ADR-023). A new collection or bucket needs a defined retention (TTL, expiry or "until account deletion").
 7. **Account deletion deletes everything** about the family (Firestore user data, Auth account, attribution) and cancels the Paddle subscription. Only commission and payment records stay, for accounting.
+
+## ADR-025: iOS uses the UIScene lifecycle (2026-11)
+
+**Decision.** `expo-build-properties` → `ios.enableSceneSupport: true` in `app.json`. Apps built with the iOS 27 SDK that don't adopt UIScene are killed at launch on iOS 27 (`_UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`; TestFlight build 10 crashed this way). The plugin makes the generated AppDelegate an `ExpoReactNativeFactoryProvider` and adds a `UIApplicationSceneManifest` with `EXExpoAppSceneDelegate`, which forwards deep links, user activities and lifecycle events.
+
+- Never remove the flag or hand-edit `ios/` (CNG; it's regenerated). Requires expo ≥ 57.0.23; SDK 58 templates include it natively.
+- iOS 26 simulators don't reproduce the crash. Test launches on an iOS 27 simulator before each release.

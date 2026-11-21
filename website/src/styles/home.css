@@ -10,17 +10,6 @@
   gap: 56px;
 }
 
-.home-shell::before {
-  content: '';
-  position: absolute;
-  inset: -20%;
-  background:
-    conic-gradient(from 230deg at 12% 24%, rgba(255, 250, 226, 0.55), transparent 42%),
-    conic-gradient(from 55deg at 88% 70%, rgba(78, 179, 207, 0.28), transparent 38%);
-  /* Static on purpose: rotating this page-tall layer under the blurred blocks made scrolling janky. */
-  pointer-events: none;
-}
-
 .top-bar {
   position: absolute;
   top: 20px;
@@ -125,7 +114,7 @@
 
 .menu-sheet a:hover,
 .menu-sheet button:hover {
-  background: rgba(255, 211, 99, 0.35);
+  background: rgba(119, 196, 215, 0.28);
 }
 
 .hero-layout {
@@ -291,14 +280,14 @@
 
 .video-filler.loading {
   background:
-    radial-gradient(circle at 20% 18%, rgba(255, 229, 145, 0.55), transparent 32%),
+    radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.6), transparent 32%),
     radial-gradient(circle at 78% 70%, rgba(103, 197, 216, 0.44), transparent 38%),
     linear-gradient(165deg, #e4f7f9, #8bd0de);
 }
 
 .video-filler.unavailable {
   background:
-    radial-gradient(circle at 50% 38%, rgba(255, 231, 159, 0.7), rgba(163, 220, 230, 0.9) 58%),
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.7), rgba(163, 220, 230, 0.9) 58%),
     linear-gradient(180deg, #e5f7f9, #8bcddd);
 }
 
@@ -1063,7 +1052,7 @@
 }
 
 .sample-pill--reset {
-  background: rgba(255, 232, 163, 0.72);
+  background: rgba(204, 239, 246, 0.92);
 }
 
 .sample-pill-sub {

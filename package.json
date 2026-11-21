@@ -19,23 +19,23 @@
     "@react-native-async-storage/async-storage": "~3.1.1",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-google-signin/google-signin": "^16.1.5",
-    "expo": "~57.0.26",
+    "expo": "~57.0.33",
     "expo-apple-authentication": "~57.0.2",
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",
-    "expo-build-properties": "~57.0.22",
+    "expo-build-properties": "~57.0.23",
     "expo-constants": "~57.0.20",
-    "expo-crypto": "~57.0.3",
-    "expo-dev-client": "~57.0.19",
+    "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.21",
     "expo-device": "~57.0.2",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
-    "expo-linking": "~57.0.11",
+    "expo-linking": "~57.0.14",
     "expo-network": "~57.0.3",
-    "expo-notifications": "~57.0.21",
-    "expo-router": "~57.0.24",
+    "expo-notifications": "~57.0.25",
+    "expo-router": "~57.0.31",
     "expo-secure-store": "~57.0.4",
-    "expo-splash-screen": "~57.0.9",
+    "expo-splash-screen": "~57.0.11",
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.5",
     "expo-video-thumbnails": "~57.0.2",
@@ -73,17 +73,10 @@
     }
   },
   "overrides": {
-    "@babel/core": "^7.29.7",
-    "brace-expansion": "^1.1.18",
-    "image-size": "^1.2.1",
-    "js-yaml": "^4.3.1",
-    "nanoid": "^3.3.18",
-    "postcss": "^8.5.26",
-    "protobufjs": "^7.6.5",
-    "shell-quote": "^1.10.0",
-    "uuid": "^11.1.1",
-    "websocket-driver": "^0.7.5",
-    "ws": "^8.21.3"
+    "@expo/fingerprint": {
+      "minimatch": "^11.0.9"
+    },
+    "@grpc/grpc-js": "^1.14.7"
   },
   "private": true
 }

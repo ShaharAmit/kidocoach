@@ -30,7 +30,7 @@ echo "📱 2/3 Exporting .ipa package..."
 xcodebuild \
   -exportArchive \
   -archivePath build/KidoCoach.xcarchive \
-  -exportOptionsPlist ios/exportOptions.plist \
+  -exportOptionsPlist scripts/ExportOptions.plist \
   -exportPath build \
   -allowProvisioningUpdates \
   -quiet

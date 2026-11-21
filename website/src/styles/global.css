@@ -25,6 +25,16 @@ body {
   margin: 0;
   font-family: 'Nunito', 'Avenir Next', 'Trebuchet MS', sans-serif;
   color: var(--ink-1);
+  background: var(--sunrise-2);
+}
+
+/* Screen-sized, not page-sized: on tall pages a page-sized gradient showed only its pale top. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(circle at 12% 15%, rgba(255, 246, 209, 0.72), transparent 44%),
     radial-gradient(circle at 88% 75%, rgba(80, 178, 205, 0.3), transparent 42%),
