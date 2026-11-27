@@ -11,12 +11,12 @@ export default function PrivacyPage() {
         </Link>
 
         <h1>Privacy Policy</h1>
-        <p className="meta">Kidocoach | Last updated: 11/11/2026</p>
+        <p className="meta">Kidocoach | Last updated: 11/27/2026</p>
 
         <p>
           This policy covers the Kidocoach app (iPhone, iPad and Android) and this website. Kidocoach,
           based in Israel, is responsible for your information (the &quot;controller&quot;). You can
-          reach us at admin@kidocoach.app.
+          reach us at privacy@kidocoach.app.
         </p>
 
         <section>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
             cookies (names starting with _ga). Google processes this data for us as our service provider;
             we do not use it for advertising, we turn off Google signals and ad personalization, and we
             do not sell or share it for cross-context behavioral advertising. Analytics data is kept for
-            up to 14 months in Google Analytics and up to 26 months in our analytics database.
+            up to 2 months in Google Analytics and up to 26 months in our analytics database.
           </p>
           <p>
             The same choice lets us remember a partner link in your browser for up to 60 days (see
@@ -124,12 +124,14 @@ export default function PrivacyPage() {
         <section>
           <h2>6. How Long We Keep It</h2>
           <p>
-            Account, child profile, routine and parent lock information: until you delete your account.
-            Spoken greetings: deleted after a year without use. Early Access email: until you unsubscribe
-            (then only a one-way code of it). Analytics: up to 14 months in Google Analytics and up to 26
+            Account, child profile, routine and parent lock information, and the subscription record at
+            RevenueCat: until you delete your account. Spoken greetings are shared clips identified only by
+            first name, activity and voice, not linked to any account; they are deleted after a year without use. Early Access email: until you unsubscribe
+            (then only a one-way code of it). Analytics: up to 2 months in Google Analytics and up to 26
             months in our analytics database. Coupon codes saved in your browser: up to 30 days; partner
             codes saved in your browser: up to 60 days. Payment, commission and payout records: as long as
-            tax and accounting laws require. Security logs and payment-notification records: up to 90 days.
+            tax and accounting laws require (deleting your account cancels any web subscription; Paddle, as
+            merchant of record, keeps its own payment records under its tax obligations). Security logs and payment-notification records: up to 90 days.
           </p>
         </section>
 
@@ -159,7 +161,7 @@ export default function PrivacyPage() {
         <section>
           <h2>9. Contact Us</h2>
           <p>
-            If you have any questions about this policy, you can reach us at admin@kidocoach.app.
+            If you have any questions about this policy, you can reach us at privacy@kidocoach.app.
           </p>
         </section>
       </article>

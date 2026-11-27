@@ -70,7 +70,7 @@ const PRERENDERED_ROUTES: PrerenderedRoute[] = [
         <article class="legal-card">
           <a href="/" class="back-link">Back to Home</a>
           <h1>Privacy Policy</h1>
-          <p class="meta">Kidocoach | Last updated: 01/11/2026</p>
+          <p class="meta">Kidocoach | Last updated: 27/11/2026</p>
           <section>
             <h2>1. What Information We Collect</h2>
             <p>We collect your email when you join the Early Access list or create a parent account. Parent sign-in is handled by Firebase Authentication. For subscriptions, we also process account identifiers, subscription status, and transaction records. Payment details are handled by Paddle, our merchant of record, not stored by this website.</p>
@@ -93,7 +93,7 @@ const PRERENDERED_ROUTES: PrerenderedRoute[] = [
           </section>
           <section>
             <h2>6. Contact Us</h2>
-            <p>If you have any questions about this policy, you can reach us at admin@kidocoach.app.</p>
+            <p>If you have any questions about this policy, you can reach us at privacy@kidocoach.app.</p>
           </section>
         </article>
       </main>`,

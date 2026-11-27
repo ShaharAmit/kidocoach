@@ -310,4 +310,23 @@ export async function cancelPaddleBilling(uid: string): Promise<void> {
   await customerRef(uid).delete();
 }
 
-export { paddleApiKey };
+/**
+ * Account deletion: erase the RevenueCat customer (App User ID = UID) with its purchase history.
+ * Needs the secret key's `customer_information:customers:read_write` permission. Best effort:
+ * a failure is logged for manual follow-up instead of blocking the family's deletion.
+ */
+export async function deleteRevenueCatCustomer(uid: string): Promise<void> {
+  try {
+    const response = await fetch(
+      `${REVENUECAT_V2_API}/projects/${encodeURIComponent(revenueCatProjectId.value())}/customers/${encodeURIComponent(uid)}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${revenueCatSecretKey.value()}` } },
+    );
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`${response.status} ${await response.text()}`);
+    }
+  } catch (error) {
+    console.error(`[deleteAccount] RevenueCat customer ${uid} was not deleted; delete it manually:`, error);
+  }
+}
+
+export { paddleApiKey, revenueCatSecretKey };

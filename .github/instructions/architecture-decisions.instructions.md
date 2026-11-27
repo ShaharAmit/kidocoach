@@ -244,7 +244,7 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 **Decision.** Kidocoach (Israel, no EU/UK establishment) serves EU/UK families under GDPR / UK GDPR and the UK Children's Code with these rules. Details: `docs/WEB_ANALYTICS.md` §5, `docs/RECORD_OF_PROCESSING.md`, `docs/DPIA.md`.
 
 - **No third-party requests before consent.** The website self-hosts fonts (`@fontsource`) and store badges. Google Fonts, CDN images and embeds send the visitor's IP to a third party (a German court fined Google Fonts in 2022), so self-host them or load them only after Accept. Firebase/Paddle calls needed for the service are processors and are fine.
-- **Retention is defined** and must match the privacy policy: account data until deletion, greetings 1 year without use (TTL), GA 14 months, BigQuery GA export tables 26 months (dataset default expiration), `paddle_events` 90 days.
+- **Retention is defined** and must match the privacy policy: account data until deletion, greetings 1 year without use (TTL), GA 2 months (Explorations only; standard reports are aggregated), BigQuery GA export tables 26 months (dataset default expiration), `paddle_events` 90 days.
 - **EU/UK representative (Art. 27):** not appointed while EU/UK use is occasional. Server location doesn't change this. Appoint a representative service once EU/UK families subscribe regularly, or stop selling there.
 - **Child data changes** (new fields, providers, in-app analytics, voice/camera, social features) require updating the DPIA, the record of processing and the privacy policy in the same change. The privacy policy covers both the app and the website and is linked from the paywall and Settings (behind the parental gate).
 - **Data minimisation:** the child's gender is not collected (it was only used for a Settings emoji). `normalizeChildProfile` ignores a legacy `gender` field, so profiles from older builds still load. Don't ask for a child field unless a feature uses it.
@@ -259,7 +259,7 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 4. **The parent is the user.** Purchases, sign-in, outside links and settings are always behind the parental gate (ADR-011).
 5. **AI runs on the server only.** Only the child's first name goes to Gemini TTS (ADR-007).
 6. **Retention matches the privacy policy** (ADR-023). A new collection or bucket needs a defined retention (TTL, expiry or "until account deletion").
-7. **Account deletion deletes everything** about the family (Firestore user data, Auth account, attribution) and cancels the Paddle subscription. Only commission and payment records stay, for accounting.
+7. **Account deletion deletes everything** about the family (Firestore user data, Auth account, attribution, RevenueCat customer) and cancels the Paddle subscription. Only commission and payment records stay, for accounting.
 
 ## ADR-025: iOS uses the UIScene lifecycle (2026-11)
 

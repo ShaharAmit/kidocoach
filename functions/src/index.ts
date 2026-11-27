@@ -28,7 +28,7 @@ initializeApp();
 setGlobalOptions({ maxInstances: 10 });
 
 export { createPaddleCheckout, createPaddlePortal, getWebBilling, syncPaddlePurchases } from './billing';
-import { cancelPaddleBilling, paddleApiKey } from './billing';
+import { cancelPaddleBilling, deleteRevenueCatCustomer, paddleApiKey, revenueCatSecretKey } from './billing';
 export {
   approveAffiliateCommissions, checkAffiliateCode, claimAffiliateReferral, createAffiliateAccount,
   getAffiliateSummary, paddleWebhook, trackAffiliateClick, updateAffiliateSettings,
@@ -708,7 +708,7 @@ export const registerAppleAuthorization = onCall(
  * revokes via a fresh Apple authorization, then retries with `appleTokenRevoked: true`.
  */
 export const deleteAccount = onCall(
-  { timeoutSeconds: 120, memory: '256MiB', secrets: [appleSignInPrivateKey, paddleApiKey] },
+  { timeoutSeconds: 120, memory: '256MiB', secrets: [appleSignInPrivateKey, paddleApiKey, revenueCatSecretKey] },
   async (request: CallableRequest<{ appleTokenRevoked?: unknown }>): Promise<{ deleted: true }> => {
     const uid = requireUid(request);
     const appleTokenRef = db.collection('apple_tokens').doc(uid);
@@ -725,6 +725,7 @@ export const deleteAccount = onCall(
 
     // Before deleting data: a failed cancellation must not leave a deleted family still being charged.
     await cancelPaddleBilling(uid);
+    await deleteRevenueCatCustomer(uid);
     await deleteAffiliateAttribution(uid);
     await db.recursiveDelete(db.collection('users').doc(uid));
     await appleTokenRef.delete();

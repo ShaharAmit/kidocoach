@@ -230,11 +230,11 @@ FROM `kids-routine-coach-app.analytics_539565663.events_*`;
 
 ## 5. GA4 / Firebase admin checklist (before launch)
 
-- [ ] GA4 Admin → Account settings: accept the **Data Processing Terms** (GDPR) and fill in DPO / EU representative contacts if applicable.
+- [x] GA4 Admin → Account settings: accept the **Data Processing Terms** (2026-11-27) (GDPR) and fill in DPO / EU representative contacts if applicable.
 - [ ] Data collection: **Google signals OFF**; *Granular location and device data* OFF for EU regions (or all).
-- [ ] Data retention: **14 months** (max for free GA4; BigQuery keeps raw data as long as you choose).
+- [x] Data retention: **2 months** (data minimisation; limits only Explorations, standard aggregated reports keep history; long-range funnels come from BigQuery, 26 months). Verified 2026-11-27.
 - [ ] Data sharing settings: turn off everything except "Technical support".
-- [ ] Do **not** link Google Ads / ad platforms.
+- [x] Do **not** link Google Ads / ad platforms (verified none, 2026-11-27).
 - [ ] Register the custom dimensions in §3.
 - [x] Link BigQuery (§3) before launch (2026-11-08, daily, region `us`).
 - [ ] Data deletion: honor "delete my data" requests with GA4 *Data deletion requests* (by user ID) and BigQuery `DELETE … WHERE user_id = …`.
@@ -248,9 +248,10 @@ BigQuery, Paddle and RevenueCat are all US-based. Our safeguards:
   certified). The EU General Court upheld the DPF in *Latombe v Commission* (Sept 2025); an appeal to the
   CJEU is possible.
 - **Standard Contractual Clauses** in each provider's data processing terms, which still apply if the DPF falls.
-- [ ] Accept the Google Cloud/Firebase **Data Processing and Security Terms** (Cloud console → IAM & Admin →
-  Legal & compliance) and the GA4 Data Processing Terms (above).
-- [ ] Accept or sign the Paddle and RevenueCat DPAs.
+- [x] Accept the Google Cloud/Firebase **Data Processing and Security Terms** (Cloud console → IAM & Admin →
+  Legal & compliance) (2026-11-27).
+- [x] Accept the GA4 Data Processing Terms (above) (2026-11-27).
+- [x] Accept or sign the Paddle and RevenueCat DPAs (incorporated in their terms; PDFs saved 2026-11-27).
 - [x] Keep a record of processing listing each processor, its country and its transfer mechanism
   (`docs/RECORD_OF_PROCESSING.md`, 2026-11-11).
 - [x] Privacy policy §3 discloses the US transfer and the safeguards (2026-11-01).
