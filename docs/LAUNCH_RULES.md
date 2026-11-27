@@ -17,6 +17,7 @@ A short checklist of rules to remember before and after launch. The details live
 - [x] GA4 admin: set event data retention to 2 months, turn off Google signals and ads personalization, and add no ad links. (Verified 2026-11-27.)
 - [x] RevenueCat secret key (`REVENUECAT_SECRET_API_KEY`) has **Customer information: Read & write**, so `deleteAccount` erases the RevenueCat customer (verified 2026-11-27).
 - [x] GA4 Admin → Data retention: event and user data 2 months, "Reset user data on new activity" off (verified 2026-11-27).
+- [x] GA4 data sharing: only "Technical support" on (products/services, modelling, business recommendations off); granular location/device data off; ads personalisation allowed in no region (verified 2026-11-27).
 - [x] Deploy the website (`cd website && npm run build && firebase deploy --only hosting:website`), then check in a fresh browser that **nothing** loads from a third party (fonts, images, analytics) before you click Accept. (2026-11-27: only Firestore/Storage, no cookies, on `/`, `/privacy`, `/subscribe`, `/profile`.)
 - [x] Ship an app build with the current profile shape. Older TestFlight builds reject profiles saved without `gender`. (TestFlight build 12, 2026-11-21, includes it; testers must update.)
 - [ ] Privacy policy and terms are linked from the paywall, Settings (behind the parental gate), the website footer (✓ verified 2026-11-27) and App Store Connect privacy policy URL (✓ set via API 2026-11-27) and the Play Console privacy policy (App content → Privacy policy, still to set).
