@@ -14,9 +14,9 @@ export default function PrivacyPage() {
         <p className="meta">Kidocoach | Last updated: 11/27/2026</p>
 
         <p>
-          This policy covers the Kidocoach app (iPhone, iPad and Android) and this website. Kidocoach,
-          based in Israel, is responsible for your information (the &quot;controller&quot;). You can
-          reach us at privacy@kidocoach.app.
+          This policy covers the Kidocoach app (iPhone, iPad and Android) and this website. Kidocoach is
+          run by Liron David, a sole proprietor in Israel, who is responsible for your information (the
+          &quot;controller&quot;). You can reach us at privacy@kidocoach.app or Gai 5, Be&apos;er Ya&apos;akov, Israel.
         </p>
 
         <section>
@@ -156,12 +156,20 @@ export default function PrivacyPage() {
             authority. You can opt-out of our communications at any time. Every email we send will
             include a clear &quot;Unsubscribe&quot; link at the bottom.
           </p>
+          <p id="delete-account">
+            <strong>Deleting your account:</strong> in the app, open Profile (behind the parent lock) and tap
+            Delete account. Or email privacy@kidocoach.app from your account&apos;s email and we&apos;ll delete
+            it within 30 days. This deletes your child profile, routines, stars, trophies and sign-in
+            account, and cancels any web subscription. App Store and Google Play subscriptions are cancelled
+            in the store. Payment records are kept only as tax law requires (see section 6).
+          </p>
         </section>
 
         <section>
           <h2>9. Contact Us</h2>
           <p>
-            If you have any questions about this policy, you can reach us at privacy@kidocoach.app.
+            If you have any questions about this policy, you can reach us at privacy@kidocoach.app, or
+            write to Liron David (Kidocoach), Gai 5, Be&apos;er Ya&apos;akov, Israel.
           </p>
         </section>
       </article>

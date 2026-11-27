@@ -3,7 +3,7 @@
 Internal record, not published. Update it in the same change whenever a new provider, data field or
 purpose is added. Last reviewed: 2026-11-11. Not legal advice.
 
-**Controller:** Kidocoach (Israel), privacy@kidocoach.app (Cloudflare Email Routing → Worker `privacy-mail-fanout`, which forwards to both founders). No EU/UK establishment; EU/UK representative
+**Controller:** Liron David (sole proprietor, brand Kidocoach), Gai 5, Be'er Ya'akov, Israel; privacy@kidocoach.app (Cloudflare Email Routing → Worker `privacy-mail-fanout`, which forwards to both founders). No EU/UK establishment; EU/UK representative
 not yet appointed (see `docs/WEB_ANALYTICS.md` §5, *International transfers*). No DPO (not required: no
 large-scale special-category processing or systematic monitoring as a core activity).
 

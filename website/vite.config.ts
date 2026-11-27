@@ -90,10 +90,11 @@ const PRERENDERED_ROUTES: PrerenderedRoute[] = [
           <section>
             <h2>5. Your Rights</h2>
             <p>Depending on where you live (including the EU/EEA, UK, Canada, Australia and US states such as California), you can ask to access, correct, delete or receive a copy of your personal information, object to or restrict its use, and withdraw consent at any time. We do not sell your personal information.</p>
+            <p id="delete-account"><strong>Deleting your account:</strong> in the app, open Profile (behind the parent lock) and tap Delete account. Or email privacy@kidocoach.app from your account's email and we'll delete it within 30 days. This deletes your child profile, routines, stars, trophies and sign-in account, and cancels any web subscription. App Store and Google Play subscriptions are cancelled in the store. Payment records are kept only as tax law requires.</p>
           </section>
           <section>
             <h2>6. Contact Us</h2>
-            <p>If you have any questions about this policy, you can reach us at privacy@kidocoach.app.</p>
+            <p>Kidocoach is run by Liron David, a sole proprietor in Israel, who is responsible for your information (the "controller"). If you have any questions about this policy, you can reach us at privacy@kidocoach.app, or write to Liron David (Kidocoach), Gai 5, Be'er Ya'akov, Israel.</p>
           </section>
         </article>
       </main>`,

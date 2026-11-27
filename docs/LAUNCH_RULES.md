@@ -4,25 +4,48 @@ A short checklist of rules to remember before and after launch. The details live
 
 ## Who we are
 
-- **Controller:** the business owner, an Israeli sole proprietor (עוסק) with no registered trade name. "Kidocoach" is the brand.
+- **Controller:** Liron David, an Israeli sole proprietor (עוסק) with no registered trade name; contact privacy@kidocoach.app, Gai 5, Be'er Ya'akov, Israel. "Kidocoach" is the brand.
 - The privacy policy must name the owner (full name) plus a contact email. Marketing emails to US addresses must also include a postal address (CAN-SPAM).
 - Payments: Paddle is merchant of record on the web (it handles VAT and sales tax). Apple and Google handle tax for in-app purchases. Neither covers GDPR duties.
 
 ## Before launch (blocking)
 
-- [ ] Add the owner's full name to the privacy policy (`website/src/pages/Privacy.tsx`, intro and Contact).
-- [ ] Add a postal address to the footer of marketing emails (a PO box or virtual address is fine).
+- [x] Add the owner's full name to the privacy policy (`website/src/pages/Privacy.tsx`, intro and Contact) (2026-11-27).
+- [x] Add a postal address to the footer of marketing emails: footer text in `docs/WEB_ANALYTICS.md` §6 step 4; paste it into the email provider's template when one is chosen.
 - [x] Accept Google Cloud's data processing terms (Cloud console → IAM & Admin → Settings / Privacy & Security) (2026-11-27).
 - [x] Sign or accept the Paddle and RevenueCat DPAs. Record the dates in `docs/RECORD_OF_PROCESSING.md`. (Both are incorporated in the providers' terms; PDFs saved 2026-11-27.)
 - [x] GA4 admin: set event data retention to 2 months, turn off Google signals and ads personalization, and add no ad links. (Verified 2026-11-27.)
 - [x] RevenueCat secret key (`REVENUECAT_SECRET_API_KEY`) has **Customer information: Read & write**, so `deleteAccount` erases the RevenueCat customer (verified 2026-11-27).
 - [x] GA4 Admin → Data retention: event and user data 2 months, "Reset user data on new activity" off (verified 2026-11-27).
-- [ ] Deploy the website (`cd website && npm run build && firebase deploy --only hosting:website`), then check in a fresh browser that **nothing** loads from a third party (fonts, images, analytics) before you click Accept.
+- [x] Deploy the website (`cd website && npm run build && firebase deploy --only hosting:website`), then check in a fresh browser that **nothing** loads from a third party (fonts, images, analytics) before you click Accept. (2026-11-27: only Firestore/Storage, no cookies, on `/`, `/privacy`, `/subscribe`, `/profile`.)
 - [ ] Ship an app build with the current profile shape. Older TestFlight builds reject profiles saved without `gender`.
-- [ ] Privacy policy and terms are linked from the paywall, Settings (behind the parental gate), the website footer and both store listings.
-- [ ] App Store / Play: privacy labels and Data Safety form match reality (no tracking, no ads, the child data listed below). Kids Category or Designed for Families rules: no third-party analytics or ads in the app, and purchases and external links behind the parental gate.
+- [ ] Privacy policy and terms are linked from the paywall, Settings (behind the parental gate), the website footer (✓ verified 2026-11-27) and both store listings (store listings still to set).
+- [ ] App Store / Play: enter the answers from **Store privacy answers** below. Privacy labels and Data Safety form must match reality (no tracking, no ads, the child data listed below). Kids Category or Designed for Families rules: no third-party analytics or ads in the app, and purchases and external links behind the parental gate.
 - [x] Turn on Firestore backups. Keep them for no more than 35 days so deletions take effect. (Daily schedule, 35-day retention, 2026-11-27.)
 - [ ] Have a lawyer read the privacy policy and terms once.
+
+## Store privacy answers (App Store labels / Play Data Safety)
+
+Fill these in exactly; update them in the same change as any new data field or SDK. The app has no analytics, ads, crash-reporting or attribution SDK.
+
+**App Store Connect → App Privacy**
+- Tracking: **No** (no data is used to track across apps/websites; no IDFA, no ATT prompt).
+- Data collected, all **Linked to the user**, **Not used for tracking**, purpose **App Functionality** only:
+  - Contact Info → **Name** (child's first name; Apple/Google sign-in name if the parent links one) and **Email Address** (only if the parent links an account).
+  - Identifiers → **User ID** (Firebase UID, also the RevenueCat App User ID).
+  - Purchases → **Purchase History** (RevenueCat entitlement/receipts).
+  - User Content → **Other User Content** (birth date, questionnaire answers, wake-up/bedtime, routines, stars, trophies).
+- Not collected: location, health, financial info, contacts, browsing/search history, diagnostics, usage data, sensitive info, photos/audio.
+- Privacy policy URL: `https://kidocoach.app/privacy`.
+
+**Google Play Console → Data safety**
+- Collected (all *required for app functionality*, *processed ephemerally: no*, *users can request deletion: yes*):
+  - Personal info → **Name**, **Email address** (optional), **User IDs**, **Other info** (birth date).
+  - Financial info → **Purchase history**.
+  - App activity → **Other user-generated content** (questionnaire answers, routines, stars, trophies).
+- Shared with third parties: **No** (Google Cloud, RevenueCat and Paddle are processors / service providers, which Play excludes from "sharing").
+- Encrypted in transit: **Yes**. Account deletion: **in the app** and URL `https://kidocoach.app/privacy#delete-account`.
+- Target audience includes children → Families policy: no ads SDKs, parental gate on purchases/links ✓.
 
 ## Rules that never change (ADR-024)
 
@@ -32,7 +55,7 @@ A short checklist of rules to remember before and after launch. The details live
 4. **The parent is the user.** Kids never see purchases, sign-in, outside links or settings without the parental gate (PIN or math question).
 5. **AI runs on the server only.** Only the child's first name goes to Gemini TTS, to make the greeting. No API keys in the app.
 6. **Retention must match the privacy policy:** account data until deletion; greetings 1 year without use (TTL); GA 2 months (aggregated reports are unaffected); BigQuery GA export 26 months; `paddle_events` 90 days; unsubscribed emails keep only a hash.
-7. **Account deletion actually deletes** the Firestore user data, Auth account, attribution and the Paddle subscription (cancelled). Commission and payment records stay for accounting.
+7. **Account deletion actually deletes** the Firestore user data, Auth account, attribution and RevenueCat customer, and cancels the Paddle subscription. Commission and payment records stay for accounting.
 
 ## After launch (recurring)
 

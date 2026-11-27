@@ -323,8 +323,8 @@ Privacy Policy"*. If you change it, bump `EARLY_ACCESS_CONSENT_VERSION` in
 |---|---|---|---|
 | EU/EEA, UK | GDPR + ePrivacy / PECR | Freely given, specific opt-in; proof of consent; easy withdrawal | ✅ Wording + stored version/time + confirm (double opt-in) + unsubscribe that deletes the address. |
 | Canada | **CASL** (strictest) | Express consent stating purpose **and who is asking** with contact info; proof; unsubscribe honored within 10 business days | ✅ Purpose, proof, unsubscribe. ⚠️ Every email must identify KidoCoach with a **mailing address** and contact. |
-| US | CAN-SPAM | Opt-out, no deceptive subject, **physical postal address**, unsubscribe honored within 10 business days | ✅ Unsubscribe. ⚠️ Postal address in the email template. |
-| Australia | Spam Act 2003 | Consent, identify sender, functional unsubscribe (5 business days) | ✅ Consent + unsubscribe (instant). ⚠️ Sender identity in the template. |
+| US | CAN-SPAM | Opt-out, no deceptive subject, **physical postal address**, unsubscribe honored within 10 business days | ✅ Unsubscribe. ✅ Postal address in the footer text (§6 step 4). |
+| Australia | Spam Act 2003 | Consent, identify sender, functional unsubscribe (5 business days) | ✅ Consent + unsubscribe (instant). ✅ Sender identity in the footer text (§6 step 4). |
 
 **Status (2026-10-31):** 2 leads, both collected before the notice (`needs_reconfirm`).
 
@@ -337,8 +337,9 @@ Privacy Policy"*. If you change it, bump `EARLY_ACCESS_CONSENT_VERSION` in
    ("Still want KidoCoach launch updates? [Confirm]({confirm_url})", plus the footer below). Later run
    `purge-unconfirmed --before <date ~30 days after sending> --yes`.
 4. **Launch emails:** `npm run early-access -- export --csv leads.csv` right before each send (it skips
-   new unsubscribes). Footer of every email: "KidoCoach", a **physical mailing address** (a PO box or virtual
-   office is fine), a contact email, and `[Unsubscribe]({unsubscribe_url})`. Also set the `List-Unsubscribe` header.
+   new unsubscribes). Footer of every email (sender identity + postal address, required by CAN-SPAM, Israel §30A
+   and the Australian Spam Act): "KidoCoach · Liron David · Gai 5, Be'er Ya'akov, Israel ·
+   privacy@kidocoach.app · [Unsubscribe]({unsubscribe_url})". Also set the `List-Unsubscribe` header.
 5. Opt-outs in the provider (its own unsubscribe link, replies, complaints): run `unsubscribe <email>`
    within 5 business days, the strictest deadline (Australia).
 6. Retention: after launch, delete leads that neither confirmed nor converted, e.g. after 12 months
