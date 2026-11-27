@@ -18,8 +18,8 @@ A short checklist of rules to remember before and after launch. The details live
 - [x] RevenueCat secret key (`REVENUECAT_SECRET_API_KEY`) has **Customer information: Read & write**, so `deleteAccount` erases the RevenueCat customer (verified 2026-11-27).
 - [x] GA4 Admin → Data retention: event and user data 2 months, "Reset user data on new activity" off (verified 2026-11-27).
 - [x] Deploy the website (`cd website && npm run build && firebase deploy --only hosting:website`), then check in a fresh browser that **nothing** loads from a third party (fonts, images, analytics) before you click Accept. (2026-11-27: only Firestore/Storage, no cookies, on `/`, `/privacy`, `/subscribe`, `/profile`.)
-- [ ] Ship an app build with the current profile shape. Older TestFlight builds reject profiles saved without `gender`.
-- [ ] Privacy policy and terms are linked from the paywall, Settings (behind the parental gate), the website footer (✓ verified 2026-11-27) and both store listings (store listings still to set).
+- [x] Ship an app build with the current profile shape. Older TestFlight builds reject profiles saved without `gender`. (TestFlight build 12, 2026-11-21, includes it; testers must update.)
+- [ ] Privacy policy and terms are linked from the paywall, Settings (behind the parental gate), the website footer (✓ verified 2026-11-27) and App Store Connect privacy policy URL (✓ set via API 2026-11-27) and the Play Console privacy policy (App content → Privacy policy, still to set).
 - [ ] App Store / Play: enter the answers from **Store privacy answers** below. Privacy labels and Data Safety form must match reality (no tracking, no ads, the child data listed below). Kids Category or Designed for Families rules: no third-party analytics or ads in the app, and purchases and external links behind the parental gate.
 - [x] Turn on Firestore backups. Keep them for no more than 35 days so deletions take effect. (Daily schedule, 35-day retention, 2026-11-27.)
 - [ ] Have a lawyer read the privacy policy and terms once.
