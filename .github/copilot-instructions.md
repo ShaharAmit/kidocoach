@@ -232,4 +232,5 @@ Post-setup core flow:
 | `affiliate_attributions` | `{uid}` | Immutable first-touch partner attribution (server-only) |
 | `affiliate_commissions` | Paddle `txn_` id | Commission ledger: `pending → approved → paid`, `void`; refunds tracked in `reversed` (server-only) |
 | `paddle_events` | Paddle `evt_` id | Webhook dedupe markers, 90-day TTL (server-only) |
+| `analytics_deletions` | `{uid}` | Deleted accounts awaiting GA4/BigQuery erasure by the daily `processAnalyticsDeletions`; removed when done (server-only) |
 | `catalog` | `activities` | Activity catalog: `activities.{key}` = metadata, `part1 {text, tone, version}`, `image`, `assets.{avatarId}.{p1,p2,captions}` = `{path, generation, md5, size}`. Signed-in read; written only by Storage triggers / seed script |

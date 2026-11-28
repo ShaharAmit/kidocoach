@@ -56,7 +56,7 @@ Fill these in exactly; update them in the same change as any new data field or S
 4. **The parent is the user.** Kids never see purchases, sign-in, outside links or settings without the parental gate (PIN or math question).
 5. **AI runs on the server only.** Only the child's first name goes to Gemini TTS, to make the greeting. No API keys in the app.
 6. **Retention must match the privacy policy:** account data until deletion; greetings 1 year without use (TTL); GA 2 months (aggregated reports are unaffected); BigQuery GA export 26 months; `paddle_events` 90 days; unsubscribed emails keep only a hash.
-7. **Account deletion actually deletes** the Firestore user data, Auth account, attribution and RevenueCat customer, and cancels the Paddle subscription. Commission and payment records stay for accounting.
+7. **Account deletion actually deletes** the Firestore user data, Auth account, attribution, RevenueCat customer and website analytics (GA4 + BigQuery, ~5 days later), and cancels the Paddle subscription. Commission and payment records stay for accounting.
 
 ## After launch (recurring)
 

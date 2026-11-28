@@ -63,3 +63,51 @@ test('analytics loads nothing before consent and the banner offers an equal Reje
   assert.match(banner, /setAnalyticsConsent\('denied'\)\}>Reject</);
   assert.match(banner, /setAnalyticsConsent\('granted'\)\}>Accept</);
 });
+
+const deletion = load('functions/src/analyticsDeletionModel.ts');
+
+function deletionDeps({ uids = ['uid1'], fail } = {}) {
+  const log = [];
+  return {
+    log,
+    deps: {
+      exportDataset: 'proj.analytics_1',
+      listDue: async () => uids,
+      bigQuery: async (sql, params) => {
+        log.push(['sql', sql, params]);
+        if (fail === 'bigQuery' && sql.startsWith('DELETE')) throw new Error('boom');
+        if (sql.includes('DISTINCT user_pseudo_id')) return [{ user_pseudo_id: 'c.1' }, { user_pseudo_id: 'c.1' }];
+        if (sql.includes('_TABLE_SUFFIX')) return [{ suffix: '20261101' }, { suffix: 'intraday_20261102' }, { suffix: 'x`; DROP' }];
+        return [];
+      },
+      submitGaDeletion: async (user) => log.push(['ga', user]),
+      markDone: async (ids) => log.push(['done', ids]),
+      markFailed: async (ids) => log.push(['failed', ids]),
+    },
+  };
+}
+
+test('deleted accounts lose GA4 and BigQuery analytics, including pre-sign-in browser events', async () => {
+  const { deps, log } = deletionDeps();
+  assert.equal(await deletion.processAnalyticsDeletionBatch(deps), 1);
+  assert.deepEqual(log.filter(([k]) => k === 'ga').map(([, u]) => u), [{ userId: 'uid1' }, { clientId: 'c.1' }]);
+  const deletes = log.filter(([k, sql]) => k === 'sql' && sql.startsWith('DELETE'));
+  assert.deepEqual(deletes.map(([, sql]) => sql.match(/`([^`]+)`/)[1]),
+    ['proj.analytics_1.events_20261101', 'proj.analytics_1.events_intraday_20261102'],
+    'only real export table suffixes are written into SQL');
+  assert.deepEqual(deletes[0][2], { uids: ['uid1'], clientIds: ['c.1'] });
+  assert.deepEqual(log.at(-1), ['done', ['uid1']]);
+});
+
+test('analytics erasure waits for the GA4 export and retries a failed batch', async () => {
+  const day = 24 * 60 * 60 * 1000;
+  assert.equal(deletion.isAnalyticsDeletionDue(0, 3 * day), false, 'late events still land for 72 h');
+  assert.equal(deletion.isAnalyticsDeletionDue(0, 4 * day), true);
+
+  const { deps, log } = deletionDeps({ fail: 'bigQuery' });
+  await assert.rejects(deletion.processAnalyticsDeletionBatch(deps));
+  assert.deepEqual(log.at(-1), ['failed', ['uid1']]);
+  assert.equal(log.some(([k]) => k === 'done'), false);
+
+  assert.equal(await deletion.processAnalyticsDeletionBatch(deletionDeps({ uids: [] }).deps), 0);
+});

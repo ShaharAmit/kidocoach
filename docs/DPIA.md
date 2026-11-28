@@ -23,7 +23,7 @@ by first name. The parent holds the account; the child never signs in, types or 
 | A child changes settings, buys or leaves the app | Medium / medium | Parental gate (PIN or math, no bypass) on settings, purchases, restores and outside links (ADR-011) | Low |
 | Child data used for profiling or ads | Low / high | No ads, no ad SDKs, no analytics in the app; website analytics is opt-in, parent-only and never receives names, birth date or gender (age band only) | Low |
 | The first name leaves our systems for TTS | Certain / low | Sent only to Google Vertex AI (processor, DPA); the audio is keyed by name, not account, shared across children and deleted after a year without use | Low |
-| Data kept longer than needed | Medium / low | Account deletion removes `users/{uid}` recursively; TTLs on `audio_cache`, `paddle_events`, `rate_limits`; BigQuery tables expire after 26 months; GA 2 months | Low |
+| Data kept longer than needed | Medium / low | Account deletion removes `users/{uid}` recursively and erases the account's GA4/BigQuery analytics; TTLs on `audio_cache`, `paddle_events`, `rate_limits`; BigQuery tables expire after 26 months; GA 2 months | Low |
 | International transfer to the US | Certain / low | DPF + SCCs (Google), SCCs (RevenueCat), UK adequacy (Paddle) | Low |
 | Nudging the child to share more or stay longer | Low / medium | No social features, chat, location, camera or microphone; rewards are stars for finishing routines, not for time in the app | Low |
 | Parent not informed | Low / medium | Privacy policy covers child data, legal bases, retention and a kids' section; linked from the paywall and Settings | Low |

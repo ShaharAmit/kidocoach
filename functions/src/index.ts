@@ -28,12 +28,14 @@ initializeApp();
 setGlobalOptions({ maxInstances: 10 });
 
 export { createPaddleCheckout, createPaddlePortal, getWebBilling, syncPaddlePurchases } from './billing';
+export { processAnalyticsDeletions } from './analyticsDeletion';
 import { cancelPaddleBilling, deleteRevenueCatCustomer, paddleApiKey, revenueCatSecretKey } from './billing';
 export {
   approveAffiliateCommissions, checkAffiliateCode, claimAffiliateReferral, createAffiliateAccount,
   getAffiliateSummary, paddleWebhook, trackAffiliateClick, updateAffiliateSettings,
 } from './affiliates';
 import { deleteAffiliateAttribution } from './affiliates';
+import { queueAnalyticsDeletion } from './analyticsDeletion';
 export { submitEarlyAccessLead, updateEarlyAccessPreference } from './earlyAccess';
 
 const db = getFirestore();
@@ -727,6 +729,7 @@ export const deleteAccount = onCall(
     await cancelPaddleBilling(uid);
     await deleteRevenueCatCustomer(uid);
     await deleteAffiliateAttribution(uid);
+    await queueAnalyticsDeletion(uid);
     await db.recursiveDelete(db.collection('users').doc(uid));
     await appleTokenRef.delete();
 

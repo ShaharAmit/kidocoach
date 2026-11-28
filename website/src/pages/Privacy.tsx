@@ -159,8 +159,8 @@ export default function PrivacyPage() {
           <p id="delete-account">
             <strong>Deleting your account:</strong> in the app, open Profile (behind the parent lock) and tap
             Delete account. Or email privacy@kidocoach.app from your account&apos;s email and we&apos;ll delete
-            it within 30 days. This deletes your child profile, routines, stars, trophies and sign-in
-            account, and cancels any web subscription. App Store and Google Play subscriptions are cancelled
+            it within 30 days. This deletes your child profile, routines, stars, trophies, sign-in account and
+            the website analytics linked to your account, and cancels any web subscription. App Store and Google Play subscriptions are cancelled
             in the store. Payment records are kept only as tax law requires (see section 6).
           </p>
         </section>

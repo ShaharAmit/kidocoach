@@ -259,7 +259,7 @@ grant affiliate access. Reports remain counts-only and reject customers without 
 4. **The parent is the user.** Purchases, sign-in, outside links and settings are always behind the parental gate (ADR-011).
 5. **AI runs on the server only.** Only the child's first name goes to Gemini TTS (ADR-007).
 6. **Retention matches the privacy policy** (ADR-023). A new collection or bucket needs a defined retention (TTL, expiry or "until account deletion").
-7. **Account deletion deletes everything** about the family (Firestore user data, Auth account, attribution, RevenueCat customer) and cancels the Paddle subscription. Only commission and payment records stay, for accounting.
+7. **Account deletion deletes everything** about the family (Firestore user data, Auth account, attribution, RevenueCat customer, website analytics in GA4 and BigQuery) and cancels the Paddle subscription. Only commission and payment records stay, for accounting.
 
 ## ADR-025: iOS uses the UIScene lifecycle (2026-11)
 

@@ -101,6 +101,10 @@ service cloud.firestore {
     match /affiliate_invites/{email} {
       allow read, write: if false;
     }
+    // Deleted accounts waiting for GA4/BigQuery erasure (processAnalyticsDeletions); doc id = uid.
+    match /analytics_deletions/{uid} {
+      allow read, write: if false;
+    }
 
   }
 }

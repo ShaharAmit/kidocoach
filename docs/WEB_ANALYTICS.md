@@ -151,7 +151,8 @@ Sign-out clears the user ID and these properties.
 2. **Register custom dimensions in GA4** (Admin → Custom definitions) to see custom parameters in the
    GA4 UI: event-scoped `entry_type`, `affiliate_code`, `coupon_code`, `method`, `via_partner_link`,
    `status`, `step_name`, `child_age_band`, `motivation_style`, `help_level`, `morning_speed`;
-   user-scoped `first_partner_code`, `has_child_profile`, `subscriber`, `signup_method`.
+   user-scoped `first_partner_code`, `has_child_profile`, `subscriber`, `subscription_store`, `signup_method`.
+   Register them with `scripts/ga4-custom-dimensions.sh` (idempotent; add new parameters to its lists).
    **BigQuery doesn't need this**: the export contains every parameter raw.
 
 ### One-time setup
@@ -231,13 +232,13 @@ FROM `kids-routine-coach-app.analytics_539565663.events_*`;
 ## 5. GA4 / Firebase admin checklist (before launch)
 
 - [x] GA4 Admin → Account settings: accept the **Data Processing Terms** (2026-11-27) (GDPR) and fill in DPO / EU representative contacts if applicable.
-- [ ] Data collection: **Google signals OFF**; *Granular location and device data* OFF for EU regions (or all).
+- [x] Data collection: **Google signals OFF**; *Granular location and device data* OFF for EU regions (or all). Verified 2026-11-27.
 - [x] Data retention: **2 months** (data minimisation; limits only Explorations, standard aggregated reports keep history; long-range funnels come from BigQuery, 26 months). Verified 2026-11-27.
-- [ ] Data sharing settings: turn off everything except "Technical support".
+- [x] Data sharing settings: turn off everything except "Technical support". Verified 2026-11-27.
 - [x] Do **not** link Google Ads / ad platforms (verified none, 2026-11-27).
-- [ ] Register the custom dimensions in §3.
+- [x] Register the custom dimensions in §3 (16 registered 2026-11-28): add `855034430252-compute@developer.gserviceaccount.com` (Cloud Functions runtime) as **Editor** in GA4 Admin → Property access management, then run `scripts/ga4-custom-dimensions.sh`. (GA4 Editor granted 2026-11-28; `processAnalyticsDeletions` deployed the same day.)
 - [x] Link BigQuery (§3) before launch (2026-11-08, daily, region `us`).
-- [ ] Data deletion: honor "delete my data" requests with GA4 *Data deletion requests* (by user ID) and BigQuery `DELETE … WHERE user_id = …`.
+- [x] Data deletion is automatic: `deleteAccount` queues `analytics_deletions/{uid}`; the daily `processAnalyticsDeletions` (04:00 UTC) waits 4 days for the export to settle, then submits GA4 user deletions for the UID and every browser (`user_pseudo_id` = client ID) it used, and deletes those rows from every `events_*` table. Failed batches keep their queue doc (`attempts`, `lastError`) and retry the next day. Needs the same GA4 Editor grant as above. For an emailed request without an account, run the same steps by hand (GA4 Admin → Data deletion requests, BigQuery `DELETE`).
 
 ### International transfers (EU/UK users, US servers)
 
