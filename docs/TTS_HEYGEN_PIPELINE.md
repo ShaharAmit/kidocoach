@@ -112,6 +112,20 @@ Both of these were tried on `pack_backpack` and rejected:
   watch for a few seconds. Rerolls with identical inputs produce near-identical
   motion (there is no seed), so retrying doesn't fix it.
 - **Avatar III**: lip-sync only, with almost no motion.
+- **Avatar 6 Pro (`heygen-avatar-6`) + `motionPrompt`** is the way to get
+  *scripted* hand gestures (sample: `make_bed/option_a/avatar6_gesture_sample`,
+  2026-11). It lip-syncs natively to our WAV and follows beat-by-beat gesture
+  prompts with bare hands. It holds the last gesture to the end, though (a
+  thumbs-up or raised fists), so keep Part 1's prompt "hands stay down, no hand
+  gestures" and end Part 2's prompt with "hands lower out of frame, still".
+  It trims about 0.12 s of trailing silence, so mux the original WAV back in
+  and pad the video to the WAV length. Start every prompt with "static locked
+  camera, no zoom"; Part 1 still pushes in slightly (seam SSIM 0.76).
+- **`image_to_video` + `create_lipsync`** (scripted gestures from the Becky
+  still, tried on `make_bed`, 2026-11): the generator exaggerated her into
+  bulging eyes, a gaping mouth and frantic arm waving, which looks creepy to
+  kids. It also baked in its own mouth motion, so lip-sync over it stayed off.
+  It's acceptable for ad B-roll only, never for activity videos.
 
 If a `motionPrompt` is ever needed on Avatar V, the avatar's group must contain
 a digital twin. Keep the prompt free of script objects (backpack, toothbrush…),
